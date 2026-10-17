@@ -93,5 +93,10 @@ describe('describeStep', () => {
     expect(describeStep({ start: { target: 'x' } })).toBe('起動: x');
     expect(describeStep({ latency: { input: '/a', output: '/b', for: 2, p95_ms: 40, match: 'order' } }))
       .toBe('処理時間: /a → /b の p95 ≤ 40 ms (2 秒、受信順の近似)');
+    expect(describeStep({ resources: { node: '/busy', cpu_max: 40, mem_max_mb: 300, for: 5 } }))
+      .toBe('負荷: /busy が CPU 平均 ≤ 40%、メモリ ≤ 300 MB (5 秒)');
+    expect(describeStep({ resources: { node: '/busy', mem_max_mb: 300 } })).toBe('負荷: /busy が メモリ ≤ 300 MB (5 秒)');
+    expect(describeStep({ mem_growth: { node: '/busy', max_mb_per_min: 5, for: 10 } }))
+      .toBe('メモリの増え方: /busy が 5 MB/分以下 (10 秒)');
   });
 });

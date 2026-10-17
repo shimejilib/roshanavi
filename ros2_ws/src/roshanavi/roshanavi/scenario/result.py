@@ -59,6 +59,13 @@ def summarize(entry: StepEntry) -> str:
                           (('p50', s.p50_ms), ('p95', s.p95_ms), ('最大', s.max_ms)) if v is not None)
         mode = '' if s.match == 'header.stamp' else ' (受信順の近似)'
         return f'{s.input} → {s.output} の処理時間 {limits} ({_s(s.for_)} 秒){mode}'
+    if k == 'resources':
+        limits = '、'.join(text for text, v in ((f'CPU 平均 ≤ {_s(s.cpu_max or 0)}%', s.cpu_max),
+                                                (f'メモリ ≤ {_s(s.mem_max_mb or 0)} MB',
+                                                 s.mem_max_mb)) if v is not None)
+        return f'{s.node} の負荷が {limits} ({_s(s.for_)} 秒)'
+    if k == 'mem_growth':
+        return f'{s.node} のメモリの増え方が {_s(s.max_mb_per_min)} MB/分以下 ({_s(s.for_)} 秒)'
     return k
 
 

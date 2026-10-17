@@ -60,10 +60,13 @@ export function GraphTab({ active }: { active: boolean }) {
     [live.graph, query, hideHidden, isolation],
   );
   const elements = useMemo(
-    () => (filtered ? buildElements(filtered, live.traffic, live.receivedAt || Date.now()) : []),
-    [filtered, live.traffic, live.receivedAt],
+    () => (filtered ? buildElements(filtered, live.traffic, live.receivedAt || Date.now(), live.resources?.nodes) : []),
+    [filtered, live.traffic, live.receivedAt, live.resources],
   );
-  const diagnostics = live.graph?.diagnostics ?? [];
+  const diagnostics = useMemo(
+    () => [...(live.graph?.diagnostics ?? []), ...(live.resources?.diagnostics ?? [])],
+    [live.graph, live.resources],
+  );
   const commands = useMemo(() => ({ fit: () => setFitSignal((n) => n + 1), relayout: () => setLayoutSignal((n) => n + 1) }), []);
 
   const focusDiagnostic = (d: Diagnostic) => {

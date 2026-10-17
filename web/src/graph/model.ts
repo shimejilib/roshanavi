@@ -4,6 +4,8 @@ import type { Diagnostic, GraphEdge, GraphSnapshot, RateBasis, Role, TrafficEntr
 import { t } from '../i18n';
 import { ageSec, edgeLabel, formatHz, formatRate } from '../lib/format';
 import { isHiddenTopic } from '../lib/topics';
+import type { NodeBadge } from '../api/resourceTypes';
+import { badgeLabel, loadLevel, type LoadLevel } from '../resources/model';
 import { qosReasonText } from './diagnosticsText';
 
 export const STALE_AFTER_SEC = 3;
@@ -23,6 +25,10 @@ export interface NodeData {
   border: number;
   state: EdgeState | 'none';
   warn: boolean;
+  /** CPU load of the node's process (resource monitoring); 'none' when unknown / topics. */
+  load: LoadLevel;
+  /** The node's memory keeps growing (leak suspicion). */
+  leak: boolean;
 }
 
 export interface EdgeData {
@@ -198,28 +204,45 @@ function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, now
   return edges;
 }
 
-/** Full element list for the current (already filtered) snapshot. */
-export function buildElements(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, nowMs: number): Element[] {
+function nodeLabel(n: GraphSnapshot['nodes'][number], badge: NodeBadge | undefined): string {
+  // Virtual inject-job sources show the job id; real (persistent) dummies their name.
+  const base = n.job_id ? `${n.name}\n${n.job_id}` : n.id;
+  const extra = badgeLabel(badge);
+  return extra ? `${base}\n${extra}` : base;
+}
+
+/** Full element list for the current (already filtered) snapshot. ``resources``: per-node
+ *  CPU / memory badges (resource monitoring), keyed by node id. */
+export function buildElements(
+  snap: GraphSnapshot,
+  traffic: Map<string, TrafficEntry>,
+  nowMs: number,
+  resources: Readonly<Record<string, NodeBadge>> = {},
+): Element[] {
   // Endpoints can briefly reference nodes the node list does not have yet (graph race).
   const known = new Set(snap.nodes.map((n) => n.id));
   const edges = buildEdges(snap, traffic, nowMs).filter((e) => known.has(e.node));
   const nodeBw = new Map<string, number>();
   for (const e of edges) nodeBw.set(e.node, (nodeBw.get(e.node) ?? 0) + e.bw);
   const warnTopics = new Set(snap.diagnostics.map((d) => d.topic));
-  const elements: Element[] = snap.nodes.map((n) => ({
-    group: 'nodes',
-    data: {
-      id: nodeElementId(n.id),
-      // Virtual inject-job sources show the job id; real (persistent) dummies their name.
-      label: n.job_id ? `${n.name}\n${n.job_id}` : n.id,
-      kind: 'node',
-      role: n.role,
-      ref: n.id,
-      border: borderWidth(nodeBw.get(n.id) ?? 0),
-      state: 'none',
-      warn: false,
-    },
-  }));
+  const elements: Element[] = snap.nodes.map((n) => {
+    const badge = n.job_id ? undefined : resources[n.id];
+    return {
+      group: 'nodes',
+      data: {
+        id: nodeElementId(n.id),
+        label: nodeLabel(n, badge),
+        kind: 'node',
+        role: n.role,
+        ref: n.id,
+        border: borderWidth(nodeBw.get(n.id) ?? 0),
+        state: 'none',
+        warn: false,
+        load: loadLevel(badge?.cpu_pct),
+        leak: badge?.leak?.suspect === true,
+      },
+    };
+  });
   for (const tp of snap.topics) {
     const entry = traffic.get(tp.name);
     elements.push({
@@ -233,6 +256,8 @@ export function buildElements(snap: GraphSnapshot, traffic: Map<string, TrafficE
         border: borderWidth(entry?.bytes_per_sec ?? 0),
         state: edgeState(entry, nowMs),
         warn: warnTopics.has(tp.name),
+        load: 'none',
+        leak: false,
       },
     });
   }

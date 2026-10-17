@@ -78,6 +78,11 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='recording: stop automatically below this (MiB, default 256)')
     parser.add_argument('--record-stop-free-pct', type=float, default=1.0,
                         help='recording: stop automatically below this %% free (default 1)')
+    parser.add_argument('--no-resources', action='store_true',
+                        help='turn off resource monitoring (CPU / memory / disk / network / GPU, '
+                             'docs/design/resources.md)')
+    parser.add_argument('--no-reverse-dns', action='store_true',
+                        help='do not look up host names of remote addresses in the connection list')
     parser.add_argument('--log-level', default='info',
                         choices=['debug', 'info', 'warning', 'error'])
     # `ros2 run` may append --ros-args ...; ignore anything we do not know.
@@ -125,7 +130,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                                              args.record_stop_free_pct),
               probe=args.probe, tracing=args.tracing,
               trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024,
-              examples_dir=examples_dir, generate_samples=not args.no_sample_media).start()
+              examples_dir=examples_dir, generate_samples=not args.no_sample_media,
+              resources=not args.no_resources, reverse_dns=not args.no_reverse_dns).start()
     atexit.register(lab.launcher.close)
     atexit.register(lab.tracing.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))

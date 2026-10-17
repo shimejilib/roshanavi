@@ -2,7 +2,9 @@
 
 import type { Condition, Op, StepKind, StepRaw } from '../api/scenarioTypes';
 
-export const STEP_KINDS: StepKind[] = ['send', 'start', 'stop', 'play', 'wait', 'expect', 'always', 'never', 'rate', 'throughput', 'latency'];
+export const STEP_KINDS: StepKind[] = [
+  'send', 'start', 'stop', 'play', 'wait', 'expect', 'always', 'never', 'rate', 'throughput', 'latency', 'resources', 'mem_growth',
+];
 export const OPS: Op[] = ['eq', 'ne', 'lt', 'le', 'gt', 'ge', 'range', 'approx', 'regex', 'contains', 'exists', 'len_eq', 'len_range'];
 
 /** Numeric settings shown for each kind, in order. */
@@ -13,6 +15,8 @@ export const NUMBER_FIELDS: Partial<Record<StepKind, string[]>> = {
   rate: ['for', 'min_hz', 'max_hz'],
   throughput: ['for', 'min_ratio'],
   latency: ['for', 'p50_ms', 'p95_ms', 'max_ms'],
+  resources: ['for', 'cpu_max', 'mem_max_mb'],
+  mem_growth: ['for', 'max_mb_per_min'],
 };
 export const TOPIC_FIELDS: Partial<Record<StepKind, string[]>> = {
   send: ['topic'],
@@ -22,6 +26,9 @@ export const TOPIC_FIELDS: Partial<Record<StepKind, string[]>> = {
   rate: ['topic'],
   throughput: ['input', 'output'],
   latency: ['input', 'output'],
+  // not a topic: the node whose process is measured (resource monitoring)
+  resources: ['node'],
+  mem_growth: ['node'],
 };
 export const WHERE_KINDS: StepKind[] = ['expect', 'always', 'never'];
 
@@ -178,5 +185,13 @@ export function describeStep(step: StepRaw): string {
       return `件数の比: ${String(b.input)} → ${String(b.output)} が ${String(b.min_ratio)} 以上 (${String(b.for)} 秒)`;
     case 'latency':
       return `処理時間: ${String(b.input)} → ${String(b.output)} の p95 ≤ ${String(b.p95_ms)} ms (${String(b.for)} 秒${b.match === 'order' ? '、受信順の近似' : ''})`;
+    case 'resources': {
+      const limits = [b.cpu_max != null ? `CPU 平均 ≤ ${String(b.cpu_max)}%` : '', b.mem_max_mb != null ? `メモリ ≤ ${String(b.mem_max_mb)} MB` : '']
+        .filter(Boolean)
+        .join('、');
+      return `負荷: ${String(b.node)} が ${limits} (${String(b.for ?? 5)} 秒)`;
+    }
+    case 'mem_growth':
+      return `メモリの増え方: ${String(b.node)} が ${String(b.max_mb_per_min)} MB/分以下 (${String(b.for)} 秒)`;
   }
 }

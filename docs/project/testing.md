@@ -415,3 +415,30 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | P-08 | 手で動かしたノードの位置はトポロジーが変わっても固定 (#8) | ドラッグした位置を記録しレイアウトで戻す。プロジェクトごとに localStorage へ保存 (壊れた JSON・形の崩れ・保存先なし・例外でも動く、件数に上限)。「整列し直す」で全部外れる。E2E: talker をドラッグ → 入力ノードを足してもそのまま → 再読み込みしてもそのまま → 整列し直すで動く | ✅ (vitest `graph/pins.test.ts`、E2E `e2e/ux.spec.ts`) |
 | P-09 | 最後に開いたプロジェクトを再起動後も覚える (#9) | `<data_dir>/last_project.json` に `id` を保存・起動時に一覧と照合 (サンプルは通常の「開く」と同じくコピー)。壊れた JSON・型違い・一覧に無い id・消えたファイル・書き込めない data_dir は無視して `--project` に戻る。Lab を作り直す (= 再起動) と記憶したプロジェクトで始まり、ファイルを消すと `--project` に戻る。API で切り替えると保存され、失敗した切り替えでは変わらない | ✅ (`test_project_catalog.py`) |
 | P-10 | 変換ノードのプレビューは切り詰めない値で計算 (#10) | `EchoManager.latest_sample` は 32 個を超える配列も全部返し、サイズの上限を超えると `capped` で表示用の値に戻る。`GET /api/echo/{topic}/sample` (エコー前は `msg: null`)。UI は切り詰めの検出 (配列・文字列・深い所) と全体への差し替え、切り詰めが残るときだけ注意書き。E2E: 40 要素の配列で `len(msg.data)` が 40、注意書きなし | ✅ (pytest `test_integration_ros.py::test_echo_sample_is_not_truncated_up_to_the_size_cap` / `test_server.py::test_echo_sample_endpoint`、vitest `transform/sampleTruncation.test.ts`、E2E `e2e/transform.spec.ts`) |
+
+### Q. リソース監視 (Lv1, #32)
+
+仕様は [resources.md](../design/resources.md)。busy_demo の比較とサンプラーの負荷は実時間の測定 (テスト方針のとおり、余裕を大きくとり、空回りが再現しない環境では理由を付けて飛ばす)。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| Q-01 | 最小二乗の傾きとリーク判定 (時刻を注入) | 直線・平らな値の傾き、MB/分への換算。起動から 60 秒は判定しない (起動時刻から数える)、120 秒分たまるまで傾きなし、+1 MB/分 超えが 60 秒続いてから「疑い」、±5 MB の揺れや +0.5 MB/分は疑わない、増えるのが止まると疑いが消える、逐次の和が 3 日動いたプロセスでも全体の当てはめと一致、終了したプロセスを忘れる | ✅ (`test_resources_unit.py`) |
+| Q-02 | ノード ⇄ プロセスの対応づけと区分 | Launcher の exact は実行ファイルのプロセス、コンテナの 2 ノードは同じプロセスを共有、他のノードは argv の `__node:=` (ラッパーでなく本体、推定)、argv は Launcher の時刻による推定より優先、プログラム名は 1 つだけのときのみ (他 PC のノードは対応づけない)、Launcher が起動設定しか知らなければ起動設定全体。区分: サーバー (とその `ros2 run` ラッパー)・計測ノード・ビルド・補助・入力ノード (roshanavi 自身)、起動設定 (ROS ノード)、LTTng はトレース中だけ自身 | ✅ (`test_resources_unit.py`) |
+| Q-03 | 内訳とノードの値 | PC 全体の CPU を ROS / 自身 / その他に分け、その他の上位の名前、その他は負にならない、起動設定全体の合計と範囲 (`scope`) | ✅ (`test_resources_unit.py`) |
+| Q-04 | `/proc` の読み取り (偽の `/proc`) | `stat` の名前に空白や括弧があっても読める、CPU 時間・起動時刻・RSS、自分のユーザーだけ / root は全部、CPU% は差分、I/O の速さ、USS (`smaps_rollup`)、`python3 スクリプト` / `-m モジュール` / 15 文字で切れた名前の表示名 | ✅ (`test_resources_unit.py`) |
+| Q-05 | `/proc/net/snmp` と PC 全体 | UDP のカウンタの読み取り、壊れた・無いファイル。コアごとの CPU、loopback を除いた NIC の速さ・取りこぼし、メモリ、ボリュームのデバイス (最長一致、tmpfs は不明)、UDP の直近 60 秒の増加 | ✅ (`test_resources_unit.py`) |
+| Q-06 | 診断 (ディスク・UDP・リーク) | 録画と同じしきい値で警告 / 不足 (割合でも)、録画中かどうか。UDP 溢れ + 大きなトピックの取りこぼしで `udp_rcvbuf` (トラフィックは溢れたときだけ読む)、取りこぼしが無ければ診断にしない (件数はリソースタブだけ)、リークの疑いの項目 | ✅ (`test_resources_unit.py`) |
+| Q-07 | 接続先 (偽の `/proc`) | アドレスの復号 (IPv4 / IPv6)、LISTEN と未接続の UDP は数だけ、fd とソケットの突き合わせ、表の読み直しはソケットが変わったときと 5 秒ごとだけ、fd のリンク先の読み直しは fd が変わったときと 5 秒ごとだけ、開始・終了のイベント (最初の 1 回は基準)、中身のフィールドを持たない。逆引きは待たずに返し、キャッシュ (失敗もキャッシュ)、loopback は問い合わせない、止められる | ✅ (`test_resources_unit.py`) |
+| Q-08 | GPU (偽の NVML) | pynvml が無い / ドライバが無いときは理由付きで無効、デバイスの値とプロセスごとの GPU メモリ、プロセスごとの一覧が空 (WSL2) | ✅ (`test_resources_unit.py`)。実機の NVML は未確認 👀 (Docker には GPU を渡していない) |
+| Q-09 | シナリオの `resources` / `mem_growth` (スキーマと判定) | 既定値・相対ノード名・往復、上限が無い / 名前が不正 / 未知のキー / `for` が 10 秒未満は行番号付きの誤り。CPU は平均 (一瞬の負荷では落ちず、最大も報告)、メモリは最大、見つからない、推定の注記、再起動をまたぐ CPU、増え方の合否、途中の再起動は判定しない、要約の文 | ✅ (`test_resources_scenario_unit.py`) |
+| Q-10 | 実ノード: Launcher の起動設定が exact で CPU > 0 | `busy_demo_driver` を名前付きで起動 → `/api/resources` で exact・launcher・CPU > 0・スレッド・fd・RSS、ラッパーも同じ起動設定、UDP ソケットの数、自身の区分、履歴と `/ws/live` のバッジ | ✅ (`test_resources_ros.py`) |
+| Q-11 | 実ノード: busy_demo の CPU を監視で見る | multi + default と multi + off を順に起動し、1 Hz の値の中央値を比べる: off < 50%、default ≥ 30% かつ off の 3 倍以上 (実測 93% と 8%)。空回りが再現しなければ理由付きで飛ばす | ✅ (`test_resources_ros.py`) |
+| Q-12 | サンプラーの負荷 | 50 プロセス (すべて詳しく見る最悪の場合) で 1 コアの 4% 未満 (目標 2% 未満。実測 1.5% 前後。デモのラボでは 0.2%) | ✅ (`test_resources_ros.py`) |
+| Q-13 | API と WebSocket はミドルウェアの内側 | 不正な Host は 403、`/ws/resources` は不正な Origin / Host で切断、正しい接続でスナップショットが届く、`scope` の検査 (422)、空のノード名 (400) | ✅ (`test_resources_ros.py`) |
+| Q-14 | 実ノード: シナリオの判定 | CLI: talker で `resources` と `mem_growth` が成功 (exact)、`mem_max_mb: 1` で失敗、いないノードは「見つかりませんでした」。サーバー: セットアップのプロセスは exact。サンプル `busy_cpu.yaml` が成功し、`qos_events: default` にすると「CPU が上限を超えました」で失敗 (空回りが再現しなければ飛ばす) | ✅ (`test_resources_ros.py`) |
+| Q-15 | 画面の純ロジック (vitest) | 負荷の色分け (40% / 80%)、バッジの文 (推定)、増え方の文、プロセス・接続の持ち主の文、グループ分けと並び、内訳の帯 (100% を超えない)、スパークラインの値、地図の要素に `load` / `leak`、バッジの行が増えたら配置し直し (数字が変わるだけならしない)、`/ws/live` の `resources` を保持、診断の文 (リーク・ディスク・UDP) と選ぶ対象、シナリオのステップの文とラベル | ✅ (`resources/model.test.ts`、`graph/diff.test.ts`、`scenarios/editSteps.test.ts`、`scenarios/messages.test.ts`) |
+| Q-16 | E2E: 地図のバッジとリソースタブ | busy_demo の multi + default を起動 → 地図のノードのラベルに `CPU` (推定ではない)、空回りが出れば光の色が mid / high → ノードを選ぶと右ペインに CPU・RSS・スパークライン → リソースタブに PC 全体・「この PC だけ」・ディスク (/data)・GPU・内訳・ROS ノードの行・サーバー本体・計測の負荷 → ノード名で地図に戻る | ✅ (`e2e/resources.spec.ts`、[resources-map.png](../images/resources-map.png)、[resources-tab.png](../images/resources-tab.png)) |
+| Q-17 | E2E: リソースのシナリオ | シナリオタブでサンプル `busy_cpu` を実行 → 3 ステップ成功、CPU の平均と MB/分 の説明 | ✅ (`e2e/resources.spec.ts`、[resources-scenario.png](../images/resources-scenario.png)) |
+| Q-18 | メモリリークの疑いが地図・診断パネルに出る (実プロセス) | 5 分以上メモリを増やし続けるノードで「リークの疑い」 | ⬜ (判定は Q-01 の単体テストのみ。実時間で 3 分以上かかるため自動テストなし) |
+| Q-19 | UDP 受信バッファ溢れの案内 (実環境) | 大きな画像を `--monitor-heavy` で監視し、受信バッファを小さくして溢れさせると `net.core.rmem_max` の案内 | ⬜ (判定は Q-06 の単体テストのみ。E2E のコンテナでは RcvbufErrors が実際に増え、リソースタブに橙色で出ることを目視で確認 👀) |
+| Q-20 | 自分以外のユーザーのプロセスを一覧しない (非 root) | 非 root で起動すると他のユーザーのプロセスが一覧に出ない | 🟡 (単体テストの読み取り関数で確認。Docker は root で動くため実機は未確認 👀) |

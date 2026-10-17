@@ -1,6 +1,7 @@
 // Shapes of the roshanavi REST / WebSocket API (docs/design/api.md).
 
 import type { PortKind } from '../datakind/kinds';
+import type { ResourceLive } from './resourceTypes';
 import type { SubscriberTrace, TracingStatus } from './tracingTypes';
 import type { MediaOptions, RecordingStatus } from './mediaTypes';
 import type { TransformSpec } from './transformTypes';
@@ -50,7 +51,12 @@ export type DiagnosticCode =
   | 'no_subscriber'
   | 'no_publisher'
   | 'similar_names'
-  | 'type_mismatch';
+  | 'type_mismatch'
+  // resource monitoring (docs/design/resources.md)
+  | 'mem_leak'
+  | 'gpu_mem_leak'
+  | 'disk_low'
+  | 'udp_rcvbuf';
 
 export interface QosReason {
   policy: 'reliability' | 'durability' | 'deadline' | 'liveliness' | 'liveliness_lease';
@@ -70,6 +76,21 @@ export interface Diagnostic {
     published?: string;
     subscribed?: string;
     types?: string[];
+    // resource diagnostics
+    pid?: number;
+    name?: string | null;
+    label?: string | null;
+    slope_mb_per_min?: number | null;
+    span_sec?: number | null;
+    rss?: number | null;
+    free?: number | null;
+    path?: string | null;
+    free_pct?: number | null;
+    level?: string;
+    recording?: boolean;
+    rcvbuf_recent?: number;
+    recent_sec?: number | null;
+    topics?: { topic: string; avg_size: number; dropped: number; drop_ratio: number }[];
   };
 }
 
@@ -222,6 +243,7 @@ export interface LiveMessage {
   server_time?: number;
   measurement?: Measurement;
   tracing?: TracingStatus;
+  resources?: ResourceLive;
 }
 
 // ---- Launcher (docs/design/launcher.md) ------------------------------------------------

@@ -8,6 +8,7 @@ import { NodeIO } from './NodeIO';
 import { NodeLifecycle } from './NodeLifecycle';
 import { NodeLauncher } from './NodeLauncher';
 import { NodeLinks } from './NodeLinks';
+import { NodeResources } from './NodeResources';
 import { NodeTracing } from './NodeTracing';
 
 export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnapshot | null }) {
@@ -15,7 +16,7 @@ export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnap
   const { live } = useLive();
   const node = graph?.nodes.find((n) => n.id === nodeId);
   const edges = graph?.edges.filter((e) => e.node === nodeId) ?? [];
-  const diags = graph?.diagnostics.filter((d) => d.nodes.includes(nodeId)) ?? [];
+  const diags = [...(graph?.diagnostics ?? []), ...(live.resources?.diagnostics ?? [])].filter((d) => d.nodes.includes(nodeId));
   const role = node?.role ?? 'other';
   return (
     <div className="detail-body">
@@ -40,6 +41,7 @@ export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnap
       )}
       <NodeIO nodeId={nodeId} graph={graph} traffic={live.traffic} />
       <NodeTracing nodeId={nodeId} traffic={live.traffic} tracing={live.tracing} />
+      {node && !node.job_id && <NodeResources nodeId={nodeId} />}
       <NodeLauncher node={node} />
       <details className="qos-details">
         <summary>{t('io.qosDetails')}</summary>

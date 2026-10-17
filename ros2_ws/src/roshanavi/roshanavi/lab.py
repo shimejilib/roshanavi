@@ -1,4 +1,4 @@
-"""Composition root: runtime + graph + traffic + injector + echo + launcher + media.
+"""Composition root: runtime + graph + traffic + injector + echo + launcher + media + resources.
 
 A single 1 s housekeeping timer (executor thread) collects the ROS graph,
 updates the graph snapshot, syncs traffic subscriptions and ticks the hz
@@ -25,13 +25,15 @@ from .media.recorder import Recorder
 from .media.viewer import MediaViewer
 from .lifecycle import LifecycleService
 from .params import ParamService
+from .resources.attribution import SelfPids
+from .resources.service import ResourceContext, ResourceService
 from .ros_runtime import RosRuntime
 from .scenario.service import ScenarioService
 from .traffic import DEFAULT_WINDOW_SEC
 from .traffic_backend import PROBE_OFF, TrafficService
 from .tracing import merge as trace_merge
 from .tracing.config import DEFAULT_RT_PER_CPU
-from .tracing.service import TRACING_OFF, TracingService
+from .tracing.service import LTTNG_DAEMONS, TRACING_OFF, TracingService
 
 LOG = logging.getLogger(__name__)
 
@@ -55,7 +57,8 @@ class Lab:
                  autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None,
                  disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF,
                  tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU,
-                 examples_dir: Optional[str] = None, generate_samples: bool = False):
+                 examples_dir: Optional[str] = None, generate_samples: bool = False,
+                 resources: bool = True, reverse_dns: bool = True):
         self.data_dir = data_dir
         self.examples_dir = examples_dir
         self._generate_samples = generate_samples
@@ -81,6 +84,10 @@ class Lab:
         self.params = ParamService(self.runtime)
         self.lifecycle = LifecycleService(self.runtime)
         self.recorder = Recorder(data_dir, DiskGuard(data_dir, disk_thresholds))
+        # Resource monitoring (docs/design/resources.md): own 1 Hz thread, same disk thresholds.
+        self.resources = ResourceService(self._resource_context, data_dir,
+                                         DiskGuard(data_dir, disk_thresholds),
+                                         reverse_dns=reverse_dns, enabled=resources)
         self._period = period_sec
         self._timer: Any = None
         self.housekeeping_runs = 0
@@ -96,6 +103,7 @@ class Lab:
         # Before the first housekeeping: the Launcher's autostart must find the init capture on.
         self.tracing.start()
         self._timer = self.runtime.create_timer(self._period, self.housekeeping)
+        self.resources.start()
         return self
 
     def housekeeping(self) -> None:
@@ -112,6 +120,22 @@ class Lab:
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')
+
+    def _resource_context(self) -> ResourceContext:
+        """Read by the resource sampler thread once per second (all calls are thread-safe)."""
+        snapshot, _ = self.graph.snapshot()
+        manager = self.launcher.manager
+        active = self.recorder.status()['active']
+        tracing_on = bool(self.tracing.status().get('active'))
+        own = SelfPids(server=os.getpid(), probe=self.traffic.status().get('pid'),
+                       tracing=self.tracing.worker_pid(),
+                       recorder=active.get('pid') if active else None,
+                       lttng_names=LTTNG_DAEMONS if tracing_on else ())
+        return ResourceContext(
+            nodes=tuple(n['id'] for n in snapshot['nodes'] if not n.get('job_id')),
+            launcher=self.launcher.mapper.mapping(), targets=tuple(manager.process_refs()),
+            roles=manager.roles(), own=own, traffic=self.traffic.snapshot,
+            recording=bool(active))
 
     def traffic_view(self, window_sec: Optional[float] = None) -> List[Dict[str, Any]]:
         """Traffic entries (rates over ``window_sec``) plus per-publisher rates for the map."""
@@ -145,6 +169,7 @@ class Lab:
         return self.tracing_status()
 
     def stop(self) -> None:
+        self.resources.close()  # idempotent; only reads, so it can go first
         self.scenarios.close()  # cancel a running scenario first: its teardown uses the rest
         self.launcher.close()  # idempotent; child processes go first
         self.tracing.close()  # idempotent; the worker destroys its LTTng sessions

@@ -7,6 +7,7 @@ import { InjectTab } from '../inject/InjectTab';
 import { LauncherTab } from '../launcher/LauncherTab';
 import { NodeListTab } from '../nodelist/NodeListTab';
 import { RecordingsTab } from '../recordings/RecordingsTab';
+import { ResourcesTab } from '../resources/ResourcesTab';
 import { ScenariosTab } from '../scenarios/ScenariosTab';
 import { TrafficTab } from '../traffic/TrafficTab';
 
@@ -29,6 +30,8 @@ export const TABS: readonly TabDefinition[] = [
   { id: 'recordings', label: 'tab.recordings', keepMounted: false, render: () => <RecordingsTab /> },
   // Kept mounted: the record-mode screen keeps its expectations while you operate other tabs.
   { id: 'scenarios', label: 'tab.scenarios', keepMounted: true, fullWidth: true, render: () => <ScenariosTab /> },
+  // Not kept mounted: its 1 Hz full snapshot socket only runs while the tab is open.
+  { id: 'resources', label: 'tab.resources', keepMounted: false, fullWidth: true, render: () => <ResourcesTab /> },
 ];
 
 export const DEFAULT_TAB = 'graph';

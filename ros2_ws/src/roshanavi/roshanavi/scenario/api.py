@@ -47,11 +47,11 @@ def run_loaded(scenario: Scenario, runtime: RosRuntime, data_dir: str, setup: Se
                cancel: Optional[threading.Event] = None,
                progress: Optional[Callable[[Dict[str, Any]], None]] = None,
                extra_roots: tuple = (), result: Optional[Result] = None,
-               settle_sec: Optional[float] = None) -> Result:
+               settle_sec: Optional[float] = None, node_probe: Any = None) -> Result:
     result = result or new_result(scenario, file, scenario_id)
     ctx = RunContext(runtime=runtime, data_dir=data_dir, setup=setup, targets=targets,
                      extra_roots=extra_roots, cancel=cancel or threading.Event(),
-                     progress=progress)
+                     progress=progress, node_probe=node_probe)
     if settle_sec is not None:
         ctx.settle_sec = settle_sec
     return ScenarioRunner(scenario, ctx, result).run()

@@ -29,6 +29,16 @@ describe('diffElements', () => {
     expect(patch).toEqual({ added: [], removed: [], updated: [], topologyChanged: false });
   });
 
+  it('relayouts when a node label gains the resource badge line, not when only its numbers change', () => {
+    const badge = { cpu_pct: 5, cpu_norm_pct: 0.2, rss: 1e7, confidence: 'exact' as const, shared: [], scope: 'process' as const, pid: 1, leak: null };
+    const withBadge = buildElements(graph, new Map([['/chatter', entry('/chatter')]]), NOW_MS, { '/talker': badge });
+    expect(diffElements(indexElements(base), withBadge).topologyChanged).toBe(true);
+    const busier = buildElements(graph, new Map([['/chatter', entry('/chatter')]]), NOW_MS, { '/talker': { ...badge, cpu_pct: 90 } });
+    const patch = diffElements(indexElements(withBadge), busier);
+    expect(patch.topologyChanged).toBe(false);
+    expect(patch.updated.map((e) => e.data.id)).toEqual(['n:/talker']);
+  });
+
   it('detects removed topics', () => {
     const smaller = { ...graph, topics: graph.topics.slice(0, 1), edges: graph.edges.slice(0, 2) };
     const patch = diffElements(indexElements(base), buildElements(smaller, new Map(), NOW_MS));

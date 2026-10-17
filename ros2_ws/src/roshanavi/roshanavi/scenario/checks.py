@@ -375,6 +375,9 @@ def make_check(kind: str, spec: Any, t0: float) -> Check:
         return ThroughputCheck(spec, t0)
     if kind == 'latency':
         return LatencyCheck(spec, t0)
+    if kind in ('resources', 'mem_growth'):
+        from .resource_checks import make_resource_check  # imports this module
+        return make_resource_check(kind, spec, t0)
     raise ValueError(f'not a check step: {kind}')
 
 

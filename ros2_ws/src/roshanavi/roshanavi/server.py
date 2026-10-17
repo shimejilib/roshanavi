@@ -21,8 +21,8 @@ from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (data_kinds, msgutil, security, server_functions, server_launch_import,
-               server_launcher, server_media, server_nodes, server_scenarios, server_tracing,
-               server_transforms)
+               server_launcher, server_media, server_nodes, server_resources, server_scenarios,
+               server_tracing, server_transforms)
 from .api_errors import ApiError, parse_window
 from .echo import MAX_SAMPLE_BYTES, EchoError
 from .files import FileAccessError, list_files
@@ -251,7 +251,8 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
                                        'build': lab.launcher.builder.status(),
-                                       'recording': lab.recorder.status()['active']}
+                                       'recording': lab.recorder.status()['active'],
+                                       'resources': lab.resources.live()}
             if digest != state['hash']:
                 payload['graph'] = {**snapshot, 'hash': digest}
                 state['hash'] = digest
@@ -296,6 +297,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_transforms.register(app, lab)
     server_functions.register(app, lab)
     server_scenarios.register(app, lab)
+    server_resources.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -313,6 +315,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
                             '/api/functions', '/api/media/types',
                             '/api/scenarios', '/api/scenario-runs', '/api/scenario-record',
                             '/api/recordings', '/api/nodes/{node}/parameters',
+                            '/api/resources', '/api/resources/history', '/ws/resources',
                             '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',
                             '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}',
                             '/ws/scenarios']}

@@ -4,12 +4,13 @@
 
 ## フロントエンド (タブ構成)
 
-タブ: **Graph** / **ノード一覧** / **Traffic** / **お試し送信** (旧 Inject) / **Launcher** / **録画** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
+タブ: **Graph** / **ノード一覧** / **Traffic** / **お試し送信** (旧 Inject) / **Launcher** / **録画** / **Scenarios** / **リソース**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
 - Graph (**ライブ通信マップ**, [ui.md#ライブ通信マップ](ui.md#ライブ通信マップ-graph-タブ))
 - Traffic: ソート可能な表 + 行内 uPlot スパークライン。停止トピック (last_seen > 3 s) を強調。
 - Inject: トピック選択 → 型自動入力 → テンプレ YAML エディタ → mode 別フォーム → 開始。実行中ジョブ一覧と停止ボタン。
 - **シナリオ** (Scenarios): プロジェクトとサンプルのシナリオの一覧 / 実行 / ステップ別の結果 / 編集 / 削除 / 記録モード ([ui.md#実装メモ (P6: シナリオ)](ui.md#実装メモ-p6-シナリオ))。
 - Launcher ([ui.md#実装メモ (P3: Launcher)](ui.md#実装メモ-p3-launcher)): パッケージ選択 → 起動設定 → 起動対象の一覧・ログ・ビルド。
+- **リソース**: この PC の CPU・メモリ・ディスク・ネットワーク・GPU、ROS ノード / roshanavi 自身 / その他の内訳、役割ごとのプロセスの表、外部との接続先 ([ui.md#実装メモ (リソース監視)](ui.md#実装メモ-リソース監視))。
 - **チュートリアル**: ⚙ 設定の一覧と初回の案内から始まる、画面上のガイドツアー ([ui.md#実装メモ (アプリ内チュートリアル)](ui.md#実装メモ-アプリ内チュートリアル))。
 
 ## ライブ通信マップ (Graph タブ)
@@ -146,7 +147,7 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 
 ## 実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)
 **ノード一覧タブ** (`nodelist/`): リストとチェックボックスで、ノードを一括で ON/OFF する。`GET /api/node-list` をタブ表示中だけ 2 秒ごとに取る。
-- 列: チェックボックス、ノード名、役割 (自分 / 依存 / ダミー / 外部)、状態 (lifecycle ノードは状態と「状態を変える」)、起動元、PID、対応づけ (確実 / 推定 / ノード未確認)。(P8 以降: CPU・メモリ)
+- 列: チェックボックス、ノード名、役割 (自分 / 依存 / ダミー / 外部)、状態 (lifecycle ノードは状態と「状態を変える」)、起動元、PID、対応づけ (確実 / 推定 / ノード未確認)。(CPU・メモリはリソースタブと地図のバッジで見る)
 - 検索 (名前・パッケージ・実行ファイル・launch ファイル・取り込み元、空白区切りで AND)、役割と状態 (動いている / 止まっている / 問題あり) での絞り込み、全選択 (表示中の操作できる行だけ。一部選択は indeterminate)、グループ単位の選択。純ロジック `nodelist/model.ts`。
 - グループ: launch の起動設定と composable container などのプロセスは見出し行の下にまとめ、「この N 個のノードはまとめて止まります」と書く。
 - 一括の起動・停止・再起動 (`nodelist/bulk.ts`): 起動設定ごとに 1 回だけ既存の `POST /api/targets/{id}/start|stop|restart` を呼ぶ。止める起動設定の全ノードを地図と同じ規則 (`graph/nodeControl.affectedNodes`) で求め、**選択していないのに一緒に止まるノード** も確認ダイアログに列挙する。状態が合わないもの (止まっているものの停止など) は「対象外」として理由を出す。
@@ -186,6 +187,15 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - 編集 (`ScenarioEditor.tsx`): ステップのフォーム (トピック・秒数・しきい値・`where` の条件 (フィールド / 比べ方 / 値 / 許す差)・送る値、並べ替え・削除・追加)。開始・停止・再生の細かい設定とセットアップ・ガードは、詳細設定モードの YAML (検査は保存前に `POST /api/scenarios/validate`、誤りは行番号付き) で変える。純ロジック `editSteps.ts`。
 - 記録モード (`RecordView.tsx`、`FieldPicker.tsx`、純ロジック `record.ts`): 見張るトピックを選んで開始 → 上部に「● シナリオを記録中」のバッジ (`RecordingBadge`、クリックで記録の画面へ) → ほかのタブの操作とメッセージが時刻付きのタイムラインに並ぶ (操作は青い行) → メッセージをクリックして「これが来るはず」(フィールドのチェックボックス・値・何秒以内) / Shift+クリックで区間を選んで「ずっと条件どおり・来ないはず・周期・件数の比・処理時間」→ 期待のカード (種類・数値を変えられる) → 「できるステップ」の一覧を見ながら名前を付けて保存。記録のタイムラインと状態は `ScenarioLiveProvider` (`/ws/scenarios`) が持つ。
 - i18n: `i18n/messagesScenario.ts`。スタイル: `styles-scenario.css`。スクリーンショット: [`scenario-record.png`](../images/scenario-record.png)、[`scenario-result.png`](../images/scenario-result.png) (`e2e/scenario.spec.ts`)。
+
+## 実装メモ (リソース監視)
+仕様は [resources.md](resources.md)。
+- **地図のバッジ** (`graph/model.ts` の `buildElements(..., resources)`): ノードのラベルの 2 行目に `CPU 12% · 45 MB` (推定なら「(推定)」)。`load` (none / low / mid / high、1 コアの 40% / 80%) と `leak` をデータに持ち、`style.ts` が光 (underlay) の色にする。凡例に「CPU やや高め / 高い」。2 行目が現れたり消えたりしたときは配置をやり直し (`diff.ts`)、dagre の配置はラベルの大きさを含める (`nodeDimensionsIncludeLabels`)。
+- **診断パネル**: `/ws/live` の `resources.diagnostics` を地図の診断と並べる (`diagnosticsText.ts` が文を作る。リークはノードを、UDP はトピックを選ぶ)。
+- **右ペイン** (`detail/NodeResources.tsx`): ノードを選ぶと「リソース」の節 (確実 / 推定 / n ノードで共有 / 起動設定全体のバッジ、CPU・RSS・USS・増え方・I/O・スレッド・ファイル・GPU メモリ、5 分のスパークライン、接続先)。`GET /api/resources/history?node=` を 2 秒ごと。
+- **リソースタブ** (`resources/ResourcesTab.tsx`、`fullWidth`、開いている間だけ `/ws/resources`): 「この PC だけ」の注記と一覧の範囲 (自分のユーザー / root ならコンテナ全体)、PC 全体のカード (`HostOverview.tsx`)、内訳の帯 (`ProcessTable.tsx` の `BreakdownView`)、プロセスの表 (ROS ノード / roshanavi 自身 / その他。`ros2 run` のラッパーは薄く。ノード名で地図へ)、接続先とタイムライン (`ConnectionsView.tsx`、この PC 内の接続は既定で隠す)、計測そのものの負荷。純ロジック `resources/model.ts`。
+- シナリオのステップ `resources` / `mem_growth` の表示と編集 (ノード名と上限の欄) は `editSteps.ts`。
+- i18n: `i18n/messagesResources.ts`。スタイル: `styles-resources.css`。スクリーンショット: [`resources-tab.png`](../images/resources-tab.png)、[`resources-map.png`](../images/resources-map.png)、[`resources-scenario.png`](../images/resources-scenario.png) (`e2e/resources.spec.ts`)。
 
 ## 実装メモ (アプリ内チュートリアル)
 ROS を知らない人の最初の一歩のために、画面の一部を強調して吹き出しで「ここを押してください」と案内する (Issue #41)。詳しい説明は文書へ誘導する (オフラインでは GitHub の文書に届かないため、文書名はリポジトリ内のパスで短く示すだけ)。

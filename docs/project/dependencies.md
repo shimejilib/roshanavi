@@ -40,7 +40,7 @@
 | `python3-websockets` | WebSocket (画面のリアルタイム更新) | BSD-3-Clause |
 | `python3-pydantic` | API 入力とプロジェクトファイルの検証 (Ubuntu 24.04 の 1.10 系) | MIT |
 | `python3-yaml` | プロジェクトファイル、シナリオ、テンプレート | MIT |
-| `python3-psutil` | プロセス管理、ノードとプロセスの対応づけ、(P8) リソース監視 | BSD-3-Clause |
+| `python3-psutil` | プロセス管理、ノードとプロセスの対応づけ、リソース監視 (PC 全体の CPU・メモリ・ディスク・NIC。プロセスごとの値は `/proc` を直接読む) | BSD-3-Clause |
 | `python3-numpy` | 音声の PCM 変換 | BSD-3-Clause |
 | `python3-pil` (Pillow) | メモリ上の JPEG 変換 (ブラウザのカメラ、画像ビューア) | MIT-CMU (HPND) |
 | `ffmpeg` | 動画・音声ファイルのデコード (別プロセスとして起動) | LGPL-2.1+ / GPL-2+ (Ubuntu のビルド) |
@@ -52,7 +52,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 |---|---|---|
 | `audio_common_msgs` | 音声の注入先として AudioData 系の型が選べなくなる (std_msgs の配列型は使える) | `sudo apt install ros-jazzy-audio-common-msgs` |
 | `colcon` (`python3-colcon-common-extensions`) | ビルドボタンが無効になる | `sudo apt install python3-colcon-common-extensions` |
-| `pynvml` (P8, 予定) | GPU の監視が無効になる | rosdep キーを実装時に確認する |
+| `python3-pynvml` (pynvml、BSD-3-Clause。rosdep キー `python3-pynvml` は debian / ubuntu にあり、Ubuntu 24.04 は 12.535.133) | GPU の監視が無効になる (リソースタブに理由と導入方法を出す。他の機能は動く)。NVIDIA のドライバ (NVML) も必要。任意のため `package.xml` と Docker イメージには入れていない (Docker では `--gpus` も要る) | `sudo apt install python3-pynvml` |
 | `lttng-tools`, `liblttng-ust1t64` (`ros-jazzy-tracetools` の依存で通常は導入済み), `python3-bt2` | 詳細計測モード (トレース) が無効になる。トグルに導入方法を表示する | `sudo apt install lttng-tools python3-bt2` |
 
 ## 3. 開発・テスト用 (利用者には不要)

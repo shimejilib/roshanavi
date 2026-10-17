@@ -1,0 +1,30 @@
+# CPU とメモリを判定するシナリオ: MultiThreadedExecutor の空回り (docs/design/measurement.md の
+# 「CPU が高い」) を回避した構成 (multi + off) なら CPU が低いことを確かめる。
+#   ros2 run roshanavi scenario run examples/scenarios/busy_cpu.yaml
+# qos_events を 'default' にする (問題の構成 multi + default) と、CPU が 1 コア近くになり
+# resources ステップが「CPU が上限を超えました」で失敗する。
+version: 1
+name: busy_cpu
+description: 'busy_demo の回避構成 (multi + off) は CPU 40% 未満・メモリ 300 MB 未満で、メモリも増え続けない'
+setup:
+  # 入力: /busy_demo/in に 100 Hz
+  - run:
+      package: roshanavi_examples
+      executable: busy_demo_driver
+      name: busy_cpu_driver
+      params: {rate_hz: 100.0}
+    wait_for_node: /busy_cpu_driver
+  # 判定する相手: MultiThreadedExecutor + QoS イベント通知なし ('off' は引用符が必要)
+  - run:
+      package: roshanavi_examples
+      executable: executor_busy_demo
+      name: busy_cpu_target
+      params: {executor: multi, qos_events: 'off', work_ms: 5.0, num_threads: 4,
+               stats_topic: /busy_cpu/stats}
+    wait_for_node: /busy_cpu_target
+steps:
+  - wait: {seconds: 3.0, label: 起動直後の負荷が落ち着くまで待つ}
+  # CPU は for の間の平均 (1 コア = 100%)、メモリは RSS の最大値
+  - resources: {node: /busy_cpu_target, cpu_max: 40, mem_max_mb: 300, for: 5.0}
+  # メモリの増え方 (MB/分、最小二乗の傾き)。10 秒以上必要
+  - mem_growth: {node: /busy_cpu_target, max_mb_per_min: 5, for: 10.0}

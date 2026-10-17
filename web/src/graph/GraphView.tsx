@@ -63,6 +63,8 @@ function runLayout(cy: Core, animate: boolean, pins: Pins): void {
     nodeSep: 18,
     rankSep: 90,
     edgeSep: 8,
+    // Labels sit below the vertex and may have two lines (node + resource badge): keep them apart.
+    nodeDimensionsIncludeLabels: true,
     animate,
     animationDuration: LAYOUT_MS,
     fit: !animate,

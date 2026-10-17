@@ -58,11 +58,13 @@ roshanavi/
       server_media.py  # メディア型の判定・ブラウザ入力・ビューア・録画の REST + WS
       launcher/        # docs/design/launcher.md: discovery / validate / command / process / target / manager /
                        #   build / env / schema / project / dummy_config / service
-      process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース計測でも使う)
+      process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース監視でも使う)
+      resources/       # リソース監視 Lv1: 1 Hz のサンプラー、対応づけ、リーク判定、接続先、GPU (docs/design/resources.md)
       dummy_node.py    # エントリ: `ros2 run roshanavi dummy --config <yaml>` (恒久ダミーノード)
       scenario/        # docs/design/scenarios.md: schema / fields (where) / checks (判定) / buffers (事前購読) /
                        #   runner / procs (setup・起動設定) / hints / result / junit / cli / api / store / service / recorder
       server_scenarios.py # シナリオ・記録モードの REST + /ws/scenarios
+      server_resources.py # リソース監視の GET + /ws/resources
       server.py        # FastAPI アプリ (REST + WS)
       server_launcher.py # Launcher / プロジェクト / ビルド / ダミーの REST + /ws/logs
       params.py        # ノードのパラメータサービス (list/describe/get/set) のクライアント (docs/design/launcher.md)

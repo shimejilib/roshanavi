@@ -1,0 +1,105 @@
+/* Resource monitoring (docs/design/resources.md). Colour carries meaning only:
+   load low / mid / high (CPU 40 % / 80 % of one core), ROS / roshanavi / other shares. */
+
+:root {
+  --res-ros: #16a34a;
+  --res-self: #7c3aed;
+  --res-other: #94a3b8;
+  --res-idle: var(--surface-2);
+  --res-mid: #eab308;
+  --res-high: #dc2626;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --res-ros: #22c55e;
+    --res-self: #a78bfa;
+    --res-other: #64748b;
+    --res-mid: #facc15;
+    --res-high: #f87171;
+  }
+}
+
+.resources-tab { padding: 14px 18px 28px; overflow: auto; height: 100%; display: flex; flex-direction: column; gap: 16px; }
+.res-head { display: flex; align-items: baseline; gap: 10px; }
+.res-head h2 { font-size: 18px; }
+.res-scope-note {
+  margin: 0; padding: 8px 12px; border-left: 3px solid var(--accent); background: var(--surface);
+  border-radius: 0 var(--radius) var(--radius) 0; font-size: 13px;
+}
+.res-host h3, .res-breakdown h3, .res-proc-groups h3, .res-conns-view h3 { font-size: 14px; margin-bottom: 8px; }
+
+/* host cards: CPU / memory / disk / GPU, the network card spans two columns */
+.res-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
+.res-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px 12px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.res-card header { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
+.res-card h4 { font-size: 12px; color: var(--muted); font-weight: 600; }
+.res-card-wide { grid-column: span 2; }
+.res-card.disk-warn { border-color: var(--res-mid); }
+.res-card.disk-stop { border-color: var(--res-high); box-shadow: inset 3px 0 0 var(--res-high); }
+.disk-level-warn { color: var(--warn); border-color: currentColor; }
+.disk-level-stop { color: var(--error); border-color: currentColor; }
+.res-big { font-size: 22px; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.res-meter { height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.res-meter span { display: block; height: 100%; background: var(--res-ros); transition: width 400ms ease-out; }
+.res-meter.lv-mid span { background: var(--res-mid); }
+.res-meter.lv-high span { background: var(--res-high); }
+.res-cores { display: flex; align-items: flex-end; gap: 2px; height: 34px; padding-top: 2px; }
+.res-cores span { flex: 1; min-width: 2px; background: var(--res-ros); opacity: 0.8; border-radius: 1px 1px 0 0; transition: height 400ms ease-out; }
+.res-cores span.lv-mid { background: var(--res-mid); }
+.res-cores span.lv-high { background: var(--res-high); }
+.res-nics { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; }
+.res-nics li { display: grid; grid-template-columns: 90px 1fr auto; gap: 8px; align-items: baseline; }
+.res-udp { font-size: 13px; }
+
+/* breakdown: stacked share bars */
+.res-breakdown { display: flex; flex-direction: column; gap: 6px; }
+.res-share-row { display: grid; grid-template-columns: 60px minmax(160px, 1fr) auto; gap: 10px; align-items: center; }
+.res-share-label { font-size: 12px; color: var(--muted); }
+.res-share { display: flex; height: 14px; border-radius: 7px; overflow: hidden; background: var(--res-idle); border: 1px solid var(--border); }
+.res-share .seg { display: block; height: 100%; transition: width 400ms ease-out; }
+.seg-ros { background: var(--res-ros); }
+.seg-self { background: var(--res-self); }
+.seg-other { background: var(--res-other); }
+.seg-idle { background: transparent; }
+.res-share-legend { font-size: 12px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-variant-numeric: tabular-nums; }
+.res-share-legend .key { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-left: 8px; }
+
+/* process / connection tables */
+.res-procs { margin-bottom: 10px; }
+.res-procs h4 { font-size: 12px; color: var(--muted); margin: 6px 0; }
+.res-table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--surface); }
+.res-table th, .res-table td { padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: left; vertical-align: top; }
+.res-table th { font-size: 11px; color: var(--muted); font-weight: 600; }
+.res-table .num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.res-table tr.lv-mid td:nth-child(3) { color: var(--warn); font-weight: 600; }
+.res-table tr.lv-high td:nth-child(3) { color: var(--error); font-weight: 700; }
+.res-table tr.lv-high { box-shadow: inset 3px 0 0 var(--res-high); }
+.res-table tr.leak { box-shadow: inset 3px 0 0 var(--warn); }
+.res-table tr.wrapper td { color: var(--muted); }
+.res-table .link + .link { margin-left: 6px; }
+.res-estimated { color: var(--warn); border-color: currentColor; border-style: dashed; }
+.res-timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 3px; font-size: 13px; max-height: 260px; overflow: auto; }
+.res-timeline li { padding: 2px 0; border-bottom: 1px dashed var(--border); }
+.ev-badge-open { color: var(--ok); border-color: currentColor; }
+.ev-badge-close { color: var(--muted); }
+
+/* right pane section */
+.node-resources { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; }
+.node-resources h4 { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.res-grid { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 0; font-size: 13px; }
+.res-grid dt { color: var(--muted); }
+.res-grid dd { margin: 0; font-variant-numeric: tabular-nums; }
+.res-sparks { display: flex; flex-direction: column; gap: 4px; }
+.res-sparks > div { display: grid; grid-template-columns: 80px auto; align-items: center; gap: 6px; }
+.res-conn-list { list-style: none; margin: 0; padding: 0; }
+
+/* map legend swatch for the load glow */
+.sw-glow { width: 14px; height: 9px; border-radius: 3px; background: transparent; box-shadow: 0 0 0 3px currentColor; opacity: 0.7; }
+
+@media (max-width: 900px) {
+  .res-card-wide { grid-column: span 1; }
+  .res-share-row { grid-template-columns: 1fr; }
+}

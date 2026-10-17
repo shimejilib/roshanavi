@@ -1,5 +1,6 @@
 // REST client. Every failure becomes an ApiError with the server's error code.
 
+import type { NodeHistoryResponse, ResourceSnapshot } from './resourceTypes';
 import type { TracingStatus } from './tracingTypes';
 import type {
   Measurement,
@@ -190,6 +191,10 @@ export const api = {
   scenarioRecord: (since = 0) =>
     request<RecordStatus & { events: RecordEvent[] }>('GET', `/api/scenario-record?since=${since}`),
   measureRecord: (req: MeasureRequest) => request<Measurement>('POST', '/api/scenario-record/measure', req),
+  // resource monitoring (docs/design/resources.md)
+  resources: () => request<ResourceSnapshot>('GET', '/api/resources'),
+  resourceHistory: (node: string) =>
+    request<NodeHistoryResponse>('GET', `/api/resources/history?node=${encodeURIComponent(node)}`),
 };
 
 /** `/ns/talker` -> `/api/nodes/ns/talker` (segments encoded). */

@@ -10,6 +10,7 @@ import threading
 from typing import Any, Callable, Dict, List, Optional
 
 from ..launcher.manager import ProcessManager
+from ..resources.node_probe import NodeProbe
 from .procs import SetupProcesses, TargetController
 from .recorder import ScenarioRecorder
 from .result import Result, new_result, schema_error_result
@@ -73,8 +74,12 @@ class ScenarioService:
         try:
             setup = SetupProcesses(ProcessManager(workspace, lab.data_dir))
             targets = TargetController(lab.launcher.manager)
+            resources = getattr(lab, 'resources', None)
+            probe = NodeProbe(resolver=resources.resolve if resources else None,
+                              owned=lambda: [*setup.pids(), *targets.pids()])
             run_loaded(scenario, lab.runtime, lab.data_dir, setup, targets, cancel=cancel,
-                       progress=self._publish, extra_roots=(workspace.root,), result=result)
+                       progress=self._publish, extra_roots=(workspace.root,), result=result,
+                       node_probe=probe)
         except Exception as exc:  # the runner handles its own errors; this is a last resort
             LOG.exception('scenario run failed')
             result.status, result.message = 'error', f'{type(exc).__name__}: {exc}'

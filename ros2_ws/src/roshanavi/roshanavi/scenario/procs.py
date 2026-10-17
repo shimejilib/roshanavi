@@ -172,6 +172,16 @@ class TargetController:
     def nodes(self, target_id: str) -> List[str]:
         return node_names(self._manager.target(target_id).spec)
 
+    def pids(self) -> List[int]:
+        """Processes of the targets this scenario touched (exact node <-> process)."""
+        pids: List[int] = []
+        for target_id in list(self._initial):
+            try:
+                pids += self._manager.target(target_id).to_dict()['pids']
+            except LauncherError:
+                continue
+        return pids
+
     def status(self, target_id: str) -> str:
         return self._manager.target(target_id).status()
 

@@ -1,6 +1,7 @@
 // Pure reducer for /ws/live frames (unit-tested).
 
 import type { RecordingStatus } from '../api/mediaTypes';
+import type { ResourceLive } from '../api/resourceTypes';
 import type { TracingStatus } from '../api/tracingTypes';
 import type { BuildStatus, GraphSnapshot, Job, LiveMessage, Measurement, Target, TrafficEntry } from '../api/types';
 
@@ -13,6 +14,8 @@ export interface LiveData {
   recording: RecordingStatus | null;
   measurement: Measurement | null;
   tracing: TracingStatus | null;
+  /** Per-node CPU / memory for the map badges, plus resource warnings (docs/design/resources.md). */
+  resources: ResourceLive | null;
   /** Increments on every applied frame (drives particle pulses). */
   tick: number;
   receivedAt: number;
@@ -27,6 +30,7 @@ export const EMPTY_LIVE: LiveData = {
   recording: null,
   measurement: null,
   tracing: null,
+  resources: null,
   tick: 0,
   receivedAt: 0,
 };
@@ -48,6 +52,7 @@ export function applyLive(prev: LiveData, msg: LiveMessage, nowMs: number): Live
     recording: msg.recording === undefined ? prev.recording : msg.recording,
     measurement: msg.measurement ?? prev.measurement,
     tracing: msg.tracing ?? prev.tracing,
+    resources: msg.resources ?? prev.resources,
     tick: prev.tick + 1,
     receivedAt: nowMs,
   };

@@ -36,7 +36,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 
 **子プロセスとしての管理** (`probe_process.py`): サーバーの起動時 (`Lab.start`) に `ament_index` で `lib/roshanavi_probe/probe` を探し、`ros2 run` を介さず直接、新しいセッションで起動する。housekeeping (1 秒) で終了を検出し、1 → 2 → 4 → 8 → 16 → 30 秒の間隔で再起動する。起動から 30 秒以上動いて統計が届いていれば失敗回数を 0 に戻す (起動直後に毎回落ちる場合も数え続ける)。5 回続けて終了したら諦め、Python の計測に切り替える (`reason: crashed`)。プロセスは生きているのに統計が 15 秒届かない (固まった) ときは SIGKILL して、同じ再起動の流れに乗せる。停止は SIGTERM (3 秒) → SIGKILL。計測ノードは毎秒 `getppid()` を確かめ、親 (サーバー) が変わったら自分で終了する (サーバーが SIGKILL されても残らない)。統計が 3.5 秒届かない間は、監視中のトピックを `status: error` / `error: probe_unavailable` (UI は「計測ノードから統計が届いていません (再起動中)」) にする。
 
-**経路の選択と状態** (`traffic_backend.TrafficService`): `--probe auto` (既定) / `off`。auto でも計測ノードが見つからなければ `reason: not_built`、`roshanavi_msgs` を import できなければ `unavailable` で Python の経路。`GET /api/traffic` と `/ws/live` に `measurement: {mode: probe|python, reason, state, pid, restarts, receiving, cpu_percent, rss_bytes, rmw, gid_resolution: matched|unmatched|unknown}` を付ける。トラフィックタブのツールバーに「計測: C++ 計測ノード (CPU 0.4%)」、Python の経路では理由 (「計測ノードがビルドされていないため、Python で計測しています。送信元ごとの値は推定になります。」など) を出す (`traffic/measurement.ts`)。計測ノードの CPU は計測ノード自身が `getrusage` で測って送る (観測者効果の確認、[resources.md](../planned/resources.md))。
+**経路の選択と状態** (`traffic_backend.TrafficService`): `--probe auto` (既定) / `off`。auto でも計測ノードが見つからなければ `reason: not_built`、`roshanavi_msgs` を import できなければ `unavailable` で Python の経路。`GET /api/traffic` と `/ws/live` に `measurement: {mode: probe|python, reason, state, pid, restarts, receiving, cpu_percent, rss_bytes, rmw, gid_resolution: matched|unmatched|unknown}` を付ける。トラフィックタブのツールバーに「計測: C++ 計測ノード (CPU 0.4%)」、Python の経路では理由 (「計測ノードがビルドされていないため、Python で計測しています。送信元ごとの値は推定になります。」など) を出す (`traffic/measurement.ts`)。計測ノードの CPU は計測ノード自身が `getrusage` で測って送る (観測者効果の確認、[resources.md](resources.md))。
 
 **性能** (Docker、24 論理 CPU の WSL2、20 秒平均の CPU 使用率。100% = 1 コア。publisher は rclpy、計算期間 5 秒):
 | 条件 | 経路 | 計測ノード CPU | サーバー CPU | 合計 | Hz (真値) | 帯域 |
@@ -133,7 +133,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 
 **原因**: `MultiThreadedExecutor` + Fast DDS (`rmw_fastrtps_cpp`、Jazzy 既定) + rclpy 既定の QoS イベント通知の組み合わせ。購読のコールバックを実行中、その購読は executor の待ち受けから外れるが、QoS イベントの待ち受けは残っていて同じ「データ到着」の目印を見ているため、`wait()` が「何かあった」とすぐ戻り続ける (ros2/rmw_fastrtps#929、関連 ros2/rclpy#1223)。詳細と数え方は [nodes.md の executor_busy_demo](nodes.md#executor_busy_demo--multithreadedexecutor-の空回りを体験する-40)。
 
-**確かめる**: サンプル `examples/busy_demo` (⚙ のプロジェクト切り替え) で 3 つの構成を 1 つずつ起動して `/busy_demo/*/stats` (1 秒ごとの JSON、ログにも 1 行) を比べる。自分のノードで試すなら `executor_busy_demo.py` の `PassCounter` が使える。
+**確かめる**: サンプル `examples/busy_demo` (⚙ のプロジェクト切り替え) で 3 つの構成を 1 つずつ起動して `/busy_demo/*/stats` (1 秒ごとの JSON、ログにも 1 行) を比べる。地図ではリソース監視のバッジで、空回りしているノードが赤く光り `CPU 90% 前後` と出る (リソースタブ・右ペインでも同じ値。[resources.md#busy_demo で確かめる](resources.md#busy_demo-で確かめる))。シナリオでは `resources: {node, cpu_max}` で確かめられる (`examples/scenarios/busy_cpu.yaml`)。自分のノードで試すなら `executor_busy_demo.py` の `PassCounter` が使える。
 
 実測 (Docker の PC、24 コア、`rmw_fastrtps_cpp` 8.4.4、`work_ms` 5、送信 100 Hz、MultiThreaded は 4 スレッド、6 秒間の中央値。同じ測定を別の実行で 3 回やって、空回りの構成は 7,900〜8,300 回/秒・CPU 85〜89% で変わらなかった):
 

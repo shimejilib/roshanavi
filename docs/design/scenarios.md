@@ -19,6 +19,10 @@
 | `rate` | `for` 秒間の周期が `min_hz..max_hz` に入る | `topic`、`for`、`min_hz` / `max_hz` (片方でも可) |
 | `throughput` | 入力の件数に対する出力の件数の比が `min_ratio` 以上 (`max_ratio` 以下) | `input`、`output`、`for` (5)、`min_ratio` |
 | `latency` | 入力と出力を対応づけ、処理時間の `p50_ms` / `p95_ms` / `max_ms` を上限で判定 | `input`、`output`、`match`、`for` (5)、`min_samples` (3) |
+| `resources` | `for` 秒間のノードの **CPU の平均** (1 コア = 100%) が `cpu_max` 以下、**RSS の最大** が `mem_max_mb` 以下 (片方でも可) | `node`、`for` (5)、`cpu_max`、`mem_max_mb` |
+| `mem_growth` | `for` 秒間 (10 秒以上) のノードの RSS の増え方 (最小二乗の傾き) が `max_mb_per_min` MB/分以下 (メモリリークの確認) | `node`、`for`、`max_mb_per_min` |
+
+`resources` / `mem_growth` はトピックではなくノードのプロセスを測る ([resources.md#シナリオ連携](resources.md#シナリオ連携))。ノードはこの PC の同じユーザーのプロセスとして見つかる必要があり (argv の `__node:=`、サーバーではリソース監視の対応づけ)、シナリオ自身が起動したプロセスなら「確実」、それ以外は結果に「推定」と書く。0.5 秒ごとに `/proc` を読む。`mem_growth` にはウォームアップが無いので、起動直後の確保を除くなら前に `wait` を置く。
 
 判定のステップ (`expect`〜`latency`) と guards には任意で `type` / `kind` を書ける (そのトピックをシナリオの最初から型付きで購読する。記録モードは自動で書く)。全ステップに任意の `label`。
 
@@ -68,7 +72,20 @@ steps:
   - never: {topic: /scenario/camera/detections, for: 1.0}    # 入力が止まれば出力も止まる
 ```
 
-サンプル (`examples/scenarios/`): `chatter_smoke` (talker の出力と周期、`cmd`)、`state_machine` (guards)、`perception` (throughput + latency を header.stamp で)、`perception_order` (`keep_stamp:=false` の image_filter を `match: order` で)、`function_shout` (関数ノード `shout`: `/chatter` → `/shouted` が大文字)。launch_pytest からの使い方は `examples/launch_pytest/`。
+```yaml
+# 負荷とメモリ (examples/scenarios/busy_cpu.yaml の要約): busy_demo の回避構成 (multi + off)
+setup:
+  - run: {package: roshanavi_examples, executable: busy_demo_driver, name: busy_cpu_driver, params: {rate_hz: 100.0}}
+  - run: {package: roshanavi_examples, executable: executor_busy_demo, name: busy_cpu_target,
+          params: {executor: multi, qos_events: 'off', work_ms: 5.0, num_threads: 4, stats_topic: /busy_cpu/stats}}
+steps:
+  - wait: {seconds: 3.0, label: 起動直後の負荷が落ち着くまで待つ}
+  - resources: {node: /busy_cpu_target, cpu_max: 40, mem_max_mb: 300, for: 5.0}   # 実測 平均 7% 前後
+  - mem_growth: {node: /busy_cpu_target, max_mb_per_min: 5, for: 10.0}
+```
+`qos_events` を `'default'` (問題の構成 multi + default) にすると CPU が 1 コア近く (実測 平均 85〜87%) になり、`resources` が「CPU が上限を超えました」で失敗する ([measurement.md#CPU が高い](measurement.md#cpu-が高い-multithreadedexecutor-の空回り))。
+
+サンプル (`examples/scenarios/`): `chatter_smoke` (talker の出力と周期、`cmd`)、`state_machine` (guards)、`perception` (throughput + latency を header.stamp で)、`perception_order` (`keep_stamp:=false` の image_filter を `match: order` で)、`function_shout` (関数ノード `shout`: `/chatter` → `/shouted` が大文字)、`busy_cpu` (`resources` / `mem_growth`)。launch_pytest からの使い方は `examples/launch_pytest/`。
 
 ## ファイルの形式と検査 (`schema.py`)
 - `version: 1` (省略時 1。ほかの値は拒否)、`name`、`description?`、`setup`、`guards`、`steps` (1〜500 個)。pydantic (v1) で検査し、**未知のキーは拒否**。ステップ・ガード・セットアップの各項目は「種類: 内容」の 1 キー。

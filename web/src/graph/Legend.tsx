@@ -20,6 +20,8 @@ export function Legend({ palette }: { palette: Palette }) {
     { key: 'graph.legend.drops', className: 'sw-line', color: palette.drops },
     { key: 'graph.legend.notMonitored', className: 'sw-line dotted', color: palette.stale },
     { key: 'graph.legend.qosBad', className: 'sw-line dashed', color: palette.qosBad },
+    { key: 'res.load.mid', className: 'sw-glow', color: palette.loadMid },
+    { key: 'res.load.high', className: 'sw-glow', color: palette.loadHigh },
   ];
   return (
     <ul className="legend" aria-label="legend" data-tour="legend">

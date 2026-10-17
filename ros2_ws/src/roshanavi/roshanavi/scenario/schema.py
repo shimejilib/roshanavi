@@ -329,13 +329,61 @@ class LatencyStep(_Pair):
         return values
 
 
+NODE_NAME_RE = re.compile(r'^/?[A-Za-z_~][A-Za-z0-9_/]*\Z')
+MIN_GROWTH_SEC = 10.0
+
+
+def check_node(value: str) -> str:
+    """A node name, absolute (``/ns/name``) or relative to ``/`` (``name``)."""
+    if not isinstance(value, str) or not NODE_NAME_RE.match(value) or '//' in value \
+            or len(value) > 256 or (len(value) > 1 and value.endswith('/')):
+        raise ValueError(f'ノード名は /my_node のように書いてください: {value!r}')
+    return value if value.startswith('/') else '/' + value
+
+
+class ResourcesStep(_Strict):
+    """CPU (average over ``for``, 100 = one core) and memory (peak RSS) of one node."""
+    node: str
+    cpu_max: Optional[confloat(gt=0, le=100000)] = None
+    mem_max_mb: Optional[confloat(gt=0, le=10_000_000)] = None
+    for_: Seconds = Field(5.0, alias='for')  # type: ignore[valid-type]
+    label: Optional[constr(max_length=200)] = None
+
+    _node = validator('node', allow_reuse=True)(check_node)
+
+    @root_validator(skip_on_failure=True)
+    def _limits(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values.get('cpu_max') is None and values.get('mem_max_mb') is None:
+            raise ValueError('cpu_max か mem_max_mb (または両方) が必要です')
+        return values
+
+
+class MemGrowthStep(_Strict):
+    """Memory growth (least-squares slope of RSS, MB/min) of one node over ``for``."""
+    node: str
+    max_mb_per_min: confloat(ge=0, le=1_000_000)
+    for_: Seconds = Field(..., alias='for')  # type: ignore[valid-type]
+    label: Optional[constr(max_length=200)] = None
+
+    _node = validator('node', allow_reuse=True)(check_node)
+
+    @validator('for_')
+    def _long_enough(cls, value: float) -> float:
+        if value < MIN_GROWTH_SEC:
+            raise ValueError(f'増え方を測るには for を {MIN_GROWTH_SEC:g} 秒以上にしてください')
+        return value
+
+
 STEP_MODELS: Dict[str, Type[BaseModel]] = {
     'send': SendStep, 'start': StartStep, 'stop': StopStep, 'play': PlayStep, 'wait': WaitStep,
     'expect': ExpectStep, 'always': AlwaysStep, 'never': NeverStep, 'rate': RateStep,
-    'throughput': ThroughputStep, 'latency': LatencyStep,
+    'throughput': ThroughputStep, 'latency': LatencyStep, 'resources': ResourcesStep,
+    'mem_growth': MemGrowthStep,
 }
 INPUT_STEPS = ('send', 'start', 'stop', 'play')
-CHECK_STEPS = ('expect', 'always', 'never', 'rate', 'throughput', 'latency')
+CHECK_STEPS = ('expect', 'always', 'never', 'rate', 'throughput', 'latency', 'resources',
+               'mem_growth')
+RESOURCE_STEPS = ('resources', 'mem_growth')  # read a node's process, not topics
 
 
 # ---- guards / setup -------------------------------------------------------------------------
@@ -456,6 +504,8 @@ def check_topics(entry: StepEntry) -> List[str]:
     spec = entry.spec
     if entry.kind in ('throughput', 'latency'):
         return [spec.input, spec.output]
+    if entry.kind in RESOURCE_STEPS:
+        return []
     if entry.kind in CHECK_STEPS or isinstance(spec, (AlwaysGuard, NeverGuard)):
         return [spec.topic]
     return []
@@ -707,6 +757,8 @@ def step_to_raw(entry: StepEntry) -> Dict[str, Any]:
         return {'stop': spec.id}
     if entry.kind in ('throughput', 'latency'):
         return {entry.kind: _keep(spec, 'input', 'output', 'for')}
+    if entry.kind in RESOURCE_STEPS:
+        return {entry.kind: _keep(spec, 'node', 'for')}
     if entry.kind == 'start':
         body = _keep(spec, 'id')
         if body.get('id') in (spec.target, spec.topic):

@@ -6,7 +6,7 @@
 
 - [overview/vision.md](overview/vision.md): 出発点・対象ユーザー・ユーザー体験 (ノード単体開発者の 1 日)・ゴールと非ゴール。**最初に読む**。
 - [overview/architecture.md](overview/architecture.md): 技術選定、リポジトリ構成、サーバー・計測ノード・トレース解析・子ノード・web のつながり。コードのどこに何があるか知りたいとき。
-- [overview/roadmap.md](overview/roadmap.md): フェーズ (P1〜P7) と状態。いま何が済んでいて何が残っているかを知りたいとき (未完了の作業は GitHub Issues)。
+- [overview/roadmap.md](overview/roadmap.md): フェーズ (P1〜P8) と状態。いま何が済んでいて何が残っているかを知りたいとき (未完了の作業は GitHub Issues)。
 
 ## design — 設計 (仕様と決定事項)
 
@@ -19,10 +19,10 @@
 - [design/api.md](design/api.md): REST / WebSocket の一覧、既定ポート、入力検証、Host / Origin / Content-Type の検査。API を足すとき。
 - [design/security.md](design/security.md): セキュリティ上の判断の索引 (ネットワーク・式・パス・サブプロセス・他人のプロセス)。新しい機能を足す前の確認に。
 - [design/scenarios.md](design/scenarios.md): シナリオ (P6): ファイルの形式・判定のルール・CLI / Python API・サーバー・記録モード。
+- [design/resources.md](design/resources.md): リソース監視 (Lv1, 同じ PC): ノード ⇄ プロセスの対応づけ、CPU・メモリ・ディスク・ネットワーク・GPU、メモリリークと UDP 受信バッファ溢れの診断、シナリオの `resources` / `mem_growth`。負荷やリークを調べる機能を触るとき。
 
 ## planned — 未実装の設計
 
-- [planned/resources.md](planned/resources.md): CPU・メモリ・ディスク・ネットワークの監視の設計メモ (優先度低)。
 - [planned/remote-access.md](planned/remote-access.md): 別マシンからのアクセス (デバイスのペアリング) の設計。
 
 ## project — 開発の運用

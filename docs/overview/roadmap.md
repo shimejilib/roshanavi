@@ -16,3 +16,4 @@
 6a. ✅ P5.5 初心者向け: データの種類と詳細設定モード ([nodes.md#データの種類](../design/nodes.md#データの種類-ros-のメッセージ型を意識させないp55))・関数ノード ([nodes.md#関数ノード](../design/nodes.md#関数ノード-ふつうの関数をそのままノードにするp55))
 7. ✅ P6 シナリオ: runner / CLI / JUnit / Python API (launch_pytest) / 記録モード / Scenarios タブ ([scenarios.md](../design/scenarios.md)、[ui.md#実装メモ (P6: シナリオ)](../design/ui.md#実装メモ-p6-シナリオ))
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF
+9. ✅ P8 リソース監視 Lv1 (#32): 同じ PC の CPU・メモリ・ディスク・ネットワーク・GPU、ノード ⇄ プロセスの対応づけ、メモリリークと UDP 受信バッファ溢れの診断、地図のバッジ・リソースタブ、シナリオの `resources` / `mem_growth` ([resources.md](../design/resources.md))。Lv2 (複数 PC・コンテナ) は将来の課題

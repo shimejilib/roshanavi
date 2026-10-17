@@ -51,9 +51,12 @@
 | GET / POST | `/api/recordings` | 録画の一覧 + 状態 / 開始 `{topics[], name}` ([input-and-media.md#録画](input-and-media.md#録画-p4)) |
 | POST | `/api/recordings/stop` | 録画の停止 (SIGINT で bag を確定) |
 | DELETE | `/api/recordings/{name}` | 録画の削除 (recordings ディレクトリの直下のみ) |
+| GET | `/api/resources` | リソース監視の最新の全体 ([resources.md](resources.md)): `{available, reason?, hostname, ncpu, own_user_only, host{cpu, mem, disk, nics, udp, gpu}, breakdown, processes[], others[], nodes{node: {pid, pids, confidence, source, shared, scope, cpu_pct, rss, uss, threads, fds, read_bps, write_bps, gpu_mem, leak}}, connections[], events[], diagnostics[], sampler}`。停止中は `available: false` + `reason: starting\|off` |
+| GET | `/api/resources/history?node=\|scope=self\|host` | 直近 5 分 (1 秒ごと) の `{t, cpu_pct, rss, read_bps, write_bps, gpu_mem, connections}`。`node` を付けると `current` (そのノードの今の値) と `connections` (接続先) も返す |
+| WS | `/ws/resources` | リソースタブ用。1 秒ごとに `/api/resources` と同じ全体を push |
 
 - 記録モードの間、`POST /api/inject`・`DELETE /api/inject/{id}`・`POST /api/targets/{id}/start|stop|restart` は成功した操作を記録に足す ([scenarios.md#UI での作り方: 記録モード](scenarios.md#ui-での作り方-記録モード-主軸))。
-- `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null) も毎秒送る。
+- `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null)、`resources` (地図のバッジ用: ノードごとの `cpu_pct`・`rss`・`confidence`・`shared`・`scope`・`leak`、PC 全体、roshanavi 自身、リソースの診断) も毎秒送る。
 - traffic の各エントリ (REST / WS 共通) には `publishers[]` (送信者ごとの値と根拠, rates.py)、`subscribers[]` (受信者ごとの理論値, [map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b))、`rate_window_sec` / `rate_note` ([map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b)) が付く。
 
 ## 既定ポート・入力検証・エラー形式

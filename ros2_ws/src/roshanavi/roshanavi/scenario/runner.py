@@ -26,7 +26,9 @@ from ..injector import Injector
 from ..jobs import InjectError, InjectSpec
 from ..ros_runtime import RosRuntime
 from .buffers import Subscriptions
+from ..resources.node_probe import NodeProbe
 from .checks import Check, Verdict, make_check, make_guard
+from .resource_checks import NodeResourceCheck
 from .fields import short
 from .hints import hints as graph_hints
 from .procs import DEAD_STATES, SetupError, SetupProcesses, TargetController, wait_nodes
@@ -69,6 +71,7 @@ class RunContext:
     progress: Optional[Callable[[Dict[str, Any]], None]] = None
     clock: Callable[[], float] = time.monotonic
     settle_sec: float = SETTLE_SEC
+    node_probe: Optional[NodeProbe] = None  # resources / mem_growth (default: by cmdline)
 
 
 def _type_hints(scenario: Scenario) -> Dict[str, str]:
@@ -101,6 +104,8 @@ class ScenarioRunner:
         self._sent_topics: List[str] = []
         self._t_begin = 0.0
         self._last_progress = 0.0
+        self._probe = ctx.node_probe or NodeProbe(
+            owned=lambda: [*ctx.setup.pids(), *ctx.targets.pids()], clock=ctx.clock)
 
     # ---- public ------------------------------------------------------------------------
     def run(self) -> Result:
@@ -370,6 +375,8 @@ class ScenarioRunner:
         check = make_check(entry.kind, entry.spec, t0)
         while True:
             self._tick(check)
+            if isinstance(check, NodeResourceCheck) and check.wants_sample(self.ctx.clock()):
+                check.feed_sample(self._probe.sample(check.node), self.ctx.clock())
             verdict = check.poll(self.ctx.clock())
             if verdict is not None:
                 return verdict

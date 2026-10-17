@@ -11,7 +11,9 @@ export type StepKind =
   | 'never'
   | 'rate'
   | 'throughput'
-  | 'latency';
+  | 'latency'
+  | 'resources'
+  | 'mem_growth';
 
 export type Op =
   | 'eq'

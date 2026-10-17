@@ -47,7 +47,7 @@ function Details({ step }: { step: StepResult }) {
 }
 
 function StepRow({ step, label }: { step: StepResult; label: string }) {
-  const showMessage = step.message && (step.status !== 'passed' || ['rate', 'throughput', 'latency'].includes(step.kind));
+  const showMessage = step.message && (step.status !== 'passed' || ['rate', 'throughput', 'latency', 'resources', 'mem_growth'].includes(step.kind));
   return (
     <li className={`scn-step scn-row-${step.status}`} data-testid={`scn-step-${label}`} data-status={step.status}>
       <div className="scn-step-head">

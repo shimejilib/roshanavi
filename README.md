@@ -25,6 +25,7 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | 関数ノード | 普通の Python 関数を、そのまま ROS ノードとして動かす |
 | 録画・再生 | bag に録って、次から同じ入力で再現 |
 | シナリオ | 「入力したら、○秒以内にこう出る」を記録して、UI と CLI で自動判定 |
+| リソース監視 | ノードごとの CPU・メモリ (地図にバッジ)、PC 全体の CPU・メモリ・ディスク・ネットワーク・GPU、外部との接続先、メモリリークの疑いと UDP 受信バッファ溢れの診断 (この PC のみ) |
 | チュートリアル | 画面の見方・入力ノード・QoS の直し方・関数ノード・シナリオを、画面上で操作を案内しながら学べる (⚙ 設定からいつでも) |
 
 ![関数ノードの作成](docs/images/function-dialog.png)
@@ -65,8 +66,8 @@ cd roshanavi && docker compose up -d --build lab demo
 | [docs/design/api.md](docs/design/api.md) | REST / WebSocket API |
 | [docs/design/security.md](docs/design/security.md) | 安全対策 (式評価、パス検査、サブプロセス、launch のサンドボックス、Host/Origin 検査) |
 | [docs/design/scenarios.md](docs/design/scenarios.md) | シナリオと記録モード |
+| [docs/design/resources.md](docs/design/resources.md) | リソース監視 (CPU・GPU・メモリ・ディスク・ネットワーク)、メモリリーク検出 |
 | **設計済み・未実装** | |
-| [docs/planned/resources.md](docs/planned/resources.md) | CPU・GPU・メモリ・ディスク・ネットワークの監視、メモリリーク検出 |
 | [docs/planned/remote-access.md](docs/planned/remote-access.md) | 別マシンからのアクセス (デバイスのペアリングと権限) |
 | **開発・運用** | |
 | [docs/project/testing.md](docs/project/testing.md) | テスト方針、テストの実行方法、テスト項目一覧 |
