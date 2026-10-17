@@ -46,6 +46,8 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await page.getByTestId('nodes-status').selectOption('stopped');
   await page.getByTestId('node-check-target:talker').check();
   await page.getByTestId('node-check-target:listener').check();
+  await expect(page.getByTestId('nodes-selected')).toContainText('2 個選択');
+  await expect(page.getByTestId('nodes-bulk-start')).toBeEnabled();
   await page.getByTestId('nodes-bulk-start').click();
   await confirm(page);
   await page.getByTestId('nodes-status').selectOption('all');

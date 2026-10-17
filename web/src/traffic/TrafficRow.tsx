@@ -5,6 +5,7 @@ import { STALE_AFTER_SEC } from '../graph/model';
 import { t, type MessageKey } from '../i18n';
 import { ageSec, formatBytes, formatHz, formatMs, formatPercent, formatRate } from '../lib/format';
 import { hzBasisHelp, hzBasisNote, rateText } from '../timing/timing';
+import { trafficErrorText } from './measurement';
 import { Sparkline } from './Sparkline';
 
 export function isStale(entry: TrafficEntry, nowMs: number): boolean {
@@ -22,13 +23,13 @@ function lastSeenText(entry: TrafficEntry, nowMs: number): string {
 function StatusBadge({ entry, stale }: { entry: TrafficEntry; stale: boolean }) {
   if (entry.status !== 'ok') {
     const key = `traffic.status.${entry.status}` as MessageKey;
-    return <span className="badge muted-badge" title={entry.error ?? undefined}>{t(key)}</span>;
+    return <span className="badge muted-badge" title={trafficErrorText(entry.error)}>{t(key)}</span>;
   }
   return stale ? <span className="badge stale-badge">{t('traffic.stale')}</span> : null;
 }
 
 export function HzValue({ entry }: { entry: TrafficEntry }) {
-  const note = entry.rate_note ? null : hzBasisNote(entry.hz_basis);
+  const note = entry.rate_note ? null : hzBasisNote(entry.hz_basis, entry.hz, entry.stale);
   return (
     <>
       {entry.rate_note ? <span data-testid={`rate-note-${entry.rate_note}`}>{rateText(entry)}</span> : formatHz(entry.hz)}

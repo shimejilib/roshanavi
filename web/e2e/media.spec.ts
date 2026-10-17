@@ -2,9 +2,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Requires `docker compose up -d lab demo`. Chromium runs with a fake mic / camera.
+// Run via scripts/e2e.sh (isolated lab-e2e + demo-e2e). Chromium runs with a fake mic / camera.
 const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
-const DATA = fileURLToPath(new URL('../../data/e2e/', import.meta.url));
+// Under scripts/e2e.sh this is a volume shared with lab-e2e (mounted at its /data/e2e).
+const DATA = process.env.E2E_MEDIA_DIR ? `${process.env.E2E_MEDIA_DIR}/` : fileURLToPath(new URL('../../data/e2e/', import.meta.url));
 
 /** A short VP8 clip recorded in the browser (MediaRecorder on an animated canvas). */
 async function makeClip(page: Page): Promise<Buffer> {
@@ -107,7 +108,7 @@ test('record /chatter, see it in the list, delete it', async ({ page }) => {
   await page.getByTestId('rec-name').fill('e2e');
   await page.getByTestId('rec-start').click();
   await expect(page.getByTestId('rec-active')).toContainText('録画中', { timeout: 10_000 });
-  await page.waitForTimeout(2500);
+  await page.waitForTimeout(5000);
   await page.getByTestId('rec-stop').click();
   const row = page.locator('[data-testid^="recording-"]').filter({ hasText: '_e2e' }).first();
   await expect(row).toContainText('/chatter', { timeout: 15_000 });

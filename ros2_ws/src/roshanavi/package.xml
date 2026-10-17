@@ -29,6 +29,9 @@
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>launch_xml</exec_depend>
   <exec_depend>launch_yaml</exec_depend>
+  <!-- measurement probe (C++); without it traffic is measured in Python (DESIGN 4.3) -->
+  <exec_depend>roshanavi_msgs</exec_depend>
+  <exec_depend>roshanavi_probe</exec_depend>
 
   <test_depend>python3-pytest</test_depend>
   <test_depend>python3-httpx</test_depend>

@@ -94,19 +94,15 @@ test('topic menu shows the type definition; node click shows its I/O data', asyn
 });
 
 test('first-run guide appears with an empty launch list and starts talker', async ({ page }) => {
+  // The fresh lab-e2e project starts with the demo launch list; empty it to see the guide.
   const original = (await (await page.request.get('/api/project')).json()).project;
-  try {
-    for (const target of original.targets ?? []) await page.request.delete(`/api/targets/${target.id}`);
-    await page.goto('/');
-    await page.getByTestId('tab-launcher').click();
-    const guide = page.getByTestId('first-run-guide');
-    await expect(guide).toBeVisible();
-    await page.screenshot({ path: `${SHOTS}launcher-guide.png` });
-    await guide.getByTestId('guide-try-talker').click();
-    await expect(page.getByTestId('target-status-talker')).toHaveAttribute('data-status', /starting|running/, { timeout: 10_000 });
-    await expect(guide).toHaveCount(0);
-  } finally {
-    await page.request.put('/api/project', { data: original });
-    for (const target of original.targets ?? []) await page.request.post(`/api/targets/${target.id}/start`);
-  }
+  for (const target of original.targets ?? []) await page.request.delete(`/api/targets/${target.id}`);
+  await page.goto('/');
+  await page.getByTestId('tab-launcher').click();
+  const guide = page.getByTestId('first-run-guide');
+  await expect(guide).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}launcher-guide.png` });
+  await guide.getByTestId('guide-try-talker').click();
+  await expect(page.getByTestId('target-status-talker')).toHaveAttribute('data-status', /starting|running/, { timeout: 10_000 });
+  await expect(guide).toHaveCount(0);
 });

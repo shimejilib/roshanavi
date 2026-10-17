@@ -90,6 +90,9 @@ def data_dir(tmp_path):
 
 
 WS_ROOT = os.environ.get('ROSHANAVI_TEST_WS', '/ws')
+# Traffic backend of the shared ``lab`` fixture: off = Python monitor (default), auto = the
+# C++ probe when built (ROSHANAVI_TEST_PROBE=auto runs the whole suite through the probe).
+LAB_PROBE = os.environ.get('ROSHANAVI_TEST_PROBE', 'off')
 
 
 @pytest.fixture
@@ -97,7 +100,7 @@ def lab(data_dir, tmp_path):
     from roshanavi.lab import Lab
     instance = Lab(data_dir=str(data_dir), period_sec=0.2, workspace=WS_ROOT,
                    project_path=str(tmp_path / 'project' / 'roshanavi.yaml'),
-                   stop_timeouts=(3.0, 2.0)).start()
+                   stop_timeouts=(3.0, 2.0), probe=LAB_PROBE).start()
     yield instance
     instance.stop()
 

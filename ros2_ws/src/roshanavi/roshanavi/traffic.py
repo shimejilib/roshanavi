@@ -6,30 +6,21 @@ with ``raw=True`` and feeds stats. Callbacks only append to ring buffers.
 """
 
 import logging
-import re
 import threading
 import time
 from typing import Any, Dict, List, Mapping, Optional, Sequence
 
 from rclpy.callback_groups import ReentrantCallbackGroup
-from rclpy.qos import ReliabilityPolicy
 
-from .graph import RawGraph, topic_is_live
+from .graph import RawGraph
 from .msgutil import MsgUtilError, resolve_type
 from .ros_runtime import RosRuntime, compatible_sub_qos
 from .stats import (Clock, DEFAULT_WINDOW_SEC, HISTORY_LEN, MAX_SAMPLES,  # noqa: F401
                     WINDOWS_SEC, Sample, TopicStats, compute_stats)
+from .traffic_select import (DEFAULT_COLLAPSED, HEAVY_TYPES, TopicSelector,  # noqa: F401
+                             reliabilities, wants_best_effort)
 
 LOG = logging.getLogger(__name__)
-
-DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$')
-# Types that are costly to subscribe to; monitored only on explicit opt-in.
-HEAVY_TYPES = (
-    'sensor_msgs/msg/Image',
-    'sensor_msgs/msg/CompressedImage',
-    'sensor_msgs/msg/PointCloud2',
-    'sensor_msgs/msg/PointCloud',
-)
 EMPTY_STATS: Dict[str, Any] = {
     'hz': 0.0, 'hz_basis': 'receive', 'hz_recv': 0.0, 'hz_source': None,
     'bytes_per_sec': 0.0, 'avg_size': 0.0, 'jitter_ms': 0.0, 'jitter_recv_ms': 0.0,
@@ -57,41 +48,28 @@ class TrafficMonitor:
     def __init__(self, runtime: RosRuntime, window_sec: float = DEFAULT_WINDOW_SEC,
                  exclude: Sequence[str] = (), collapsed: Sequence[str] = DEFAULT_COLLAPSED,
                  clock: Clock = time.monotonic, wall_clock: Clock = time.time,
-                 monitor_heavy: bool = False, heavy_types: Sequence[str] = HEAVY_TYPES):
-        self._monitor_heavy = monitor_heavy
-        self._heavy_types = frozenset(heavy_types)
-        self._overrides: Dict[str, bool] = {}
+                 monitor_heavy: bool = False, heavy_types: Sequence[str] = HEAVY_TYPES,
+                 selector: Optional[TopicSelector] = None):
+        self.selector = selector or TopicSelector(exclude, collapsed, monitor_heavy, heavy_types)
         self._runtime = runtime
         self._window = window_sec
-        self._exclude = [re.compile(p) for p in exclude]
-        self._collapsed = [re.compile(p) for p in collapsed]
         self._clock, self._wall = clock, wall_clock
         self._lock = threading.Lock()
         self._topics: Dict[str, _Tracked] = {}
         self._group = ReentrantCallbackGroup()
 
     def is_monitored(self, topic: str, type_name: str) -> bool:
-        """Per-topic override wins; otherwise heavy types need ``monitor_heavy``."""
-        with self._lock:
-            override = self._overrides.get(topic)
-        if override is not None:
-            return override
-        return self._monitor_heavy or type_name not in self._heavy_types
+        return self.selector.is_monitored(topic, type_name)
 
     def set_monitored(self, topic: str, enabled: bool) -> None:
         """Record an override; the subscription follows on the next ``sync``."""
-        with self._lock:
-            self._overrides[topic] = enabled
-        LOG.info('traffic: monitoring of %s %s', topic, 'enabled' if enabled else 'disabled')
-
-    def _excluded(self, topic: str) -> bool:
-        return any(p.search(topic) for p in self._exclude)
+        self.selector.set_monitored(topic, enabled)
 
     def sync(self, raw: RawGraph) -> None:
         """Subscribe new live topics, drop vanished ones. Runs on the executor thread."""
         with self._lock:
             known = set(self._topics)
-        wanted = {t for t in raw.topics if topic_is_live(raw, t) and not self._excluded(t)}
+        wanted = self.selector.wanted(raw)
         for topic in sorted(wanted - known):
             self._add(topic, raw)
         for topic in sorted(known - wanted):
@@ -112,7 +90,7 @@ class TrafficMonitor:
         if self.is_monitored(topic, tracked.type_name) != tracked.monitored:
             return True
         return tracked.subscription is not None and (
-            _wants_best_effort(raw, topic) != tracked.best_effort)
+            wants_best_effort(raw, topic) != tracked.best_effort)
 
     def _add(self, topic: str, raw: RawGraph) -> None:
         types = raw.topics.get(topic, [])
@@ -131,8 +109,8 @@ class TrafficMonitor:
             self._store(topic, _Tracked(type_name, None, None, 'not_monitored', monitored=False))
             return
         stats = TopicStats(self._window, self._clock, self._wall)
-        best_effort = _wants_best_effort(raw, topic)
-        qos = compatible_sub_qos(_reliabilities(raw, topic))
+        best_effort = wants_best_effort(raw, topic)
+        qos = compatible_sub_qos(reliabilities(raw, topic))
         try:
             sub = self._runtime.create_subscription(
                 msg_type, topic, _recorder(stats), qos, raw=True,
@@ -169,7 +147,7 @@ class TrafficMonitor:
             entry: Dict[str, Any] = {
                 'topic': topic, 'type': tracked.type_name, 'status': tracked.status,
                 'monitored': self.is_monitored(topic, tracked.type_name),
-                'collapsed': any(p.search(topic) for p in self._collapsed)}
+                'collapsed': self.selector.collapsed(topic), 'measurement': 'python'}
             if tracked.stats is not None:
                 entry.update(tracked.stats.snapshot(window))
             else:
@@ -190,13 +168,3 @@ def _recorder(stats: TopicStats) -> Any:
     def on_message(data: bytes, info: Optional[Mapping[str, Any]]) -> None:
         stats.record(len(data), info)
     return on_message
-
-
-def _reliabilities(raw: RawGraph, topic: str) -> List[Any]:
-    names = {'best_effort': ReliabilityPolicy.BEST_EFFORT, 'reliable': ReliabilityPolicy.RELIABLE}
-    return [names.get(ep.qos.get('reliability'), ReliabilityPolicy.RELIABLE)
-            for ep in raw.publishers.get(topic, [])]
-
-
-def _wants_best_effort(raw: RawGraph, topic: str) -> bool:
-    return ReliabilityPolicy.BEST_EFFORT in _reliabilities(raw, topic)

@@ -4,8 +4,10 @@
 #          /external/chatter, and the lifecycle node lc_talker which starts
 #          unconfigured); the demo talker / listener are started by `lab` itself
 #          from examples/demo_project (copied to ./data/roshanavi.yaml if absent)
-#   test : build + full pytest suite (exit code = result)
-#   e2e  : Playwright smoke test against a running `lab` + `demo` (profile e2e)
+#   test : build + C++ probe unit tests (gtest) + full pytest suite (exit code = result)
+#   lab-e2e / demo-e2e / e2e (profile e2e): an isolated copy of the stack for Playwright, on its
+#          own ROS_DOMAIN_ID with a fresh tmpfs /data (nothing mounted from ./data), not published.
+#          Run it all with scripts/e2e.sh
 
 x-ros: &ros
   build:
@@ -53,17 +55,71 @@ services:
     volumes:
       - ./ros2_ws/src:/ws/src:ro
       - ./examples:/examples:ro
-    command: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/ws/src/roshanavi/test"]
+    command: ["bash", "-c",
+              "/ws/build/roshanavi_probe/test_stats --gtest_brief=1 &&
+               python3 -m pytest -p no:cacheprovider -q /ws/src/roshanavi/test"]
+
+  lab-e2e:
+    <<: *ros
+    profiles: ["e2e"]
+    environment:
+      <<: *ros-env
+      ROS_DOMAIN_ID: ${E2E_ROS_DOMAIN_ID:-77}
+      ROSHANAVI_BUILD: "1"
+    volumes:
+      - ./ros2_ws/src:/ws/src:ro
+      - ./examples:/examples:ro
+      - e2e-media:/data/e2e   # clips the media test writes; shared with the e2e runner
+    tmpfs:
+      - /data                 # fresh project / recordings every run, seeded from the template
+    expose: ["6871"]          # compose network only, never published to the host
+    command: ["ros2", "run", "roshanavi", "server", "--host", "0.0.0.0", "--port", "6871",
+              "--data-dir", "/data", "--project", "/data/roshanavi.yaml",
+              "--project-template", "/examples/demo_project/roshanavi.yaml",
+              "--allowed-host", "lab-e2e"]
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:6871/api/health"]
+      interval: 3s
+      timeout: 3s
+      retries: 60
+      start_period: 10s
+
+  demo-e2e:
+    <<: *ros
+    profiles: ["e2e"]
+    environment:
+      <<: *ros-env
+      ROS_DOMAIN_ID: ${E2E_ROS_DOMAIN_ID:-77}
+    command: ["bash", "-c",
+              "ros2 run demo_nodes_cpp talker --ros-args -r __node:=external_talker
+               -r chatter:=/external/chatter &
+               ros2 run demo_nodes_cpp listener --ros-args -r __node:=external_listener
+               -r chatter:=/external/chatter &
+               ros2 run lifecycle lifecycle_talker & wait"]
 
   e2e:
     profiles: ["e2e"]
     image: mcr.microsoft.com/playwright:v1.63.0-noble
-    network_mode: host  # reaches the lab UI published on 127.0.0.1:6871
     user: "${UID:-1000}:${GID:-1000}"
+    # Share lab-e2e's network namespace: the UI is then http://localhost:6871, a secure context
+    # (browser mic / camera capture needs one; http://lab-e2e would not be).
+    network_mode: "service:lab-e2e"
+    depends_on:
+      lab-e2e:
+        condition: service_healthy
+      demo-e2e:
+        condition: service_started
     environment:
       HOME: /tmp
       ROSHANAVI_URL: ${ROSHANAVI_URL:-http://localhost:6871}
+      E2E_MEDIA_DIR: /e2e-media
     working_dir: /repo/web
     volumes:
       - .:/repo
+      - e2e-media:/e2e-media
     command: ["npx", "playwright", "test"]
+
+volumes:
+  e2e-media:
+    driver: local
+    driver_opts: {type: tmpfs, device: tmpfs, o: "mode=1777"}

@@ -96,10 +96,21 @@ test('talker + dummy on /chatter: each publisher edge shows its own rate', async
 
   await page.getByTestId('tab-graph').click();
   const outline = page.getByTestId('graph-outline');
-  // talker (1 Hz) is estimated from the total (≈2 Hz) minus the dummy's counted 1 Hz.
-  await expect(outline.locator('[data-id="e:pub:/talker:/chatter"]')).toContainText(/(0\.[89]\d|1\.[01]\d) Hz.*推定/, { timeout: 20_000 });
+  // The C++ probe counts each publisher (gid) on its own: talker is measured, not estimated.
+  const talkerEdge = outline.locator('[data-id="e:pub:/talker:/chatter"]');
+  await expect(talkerEdge).toContainText(/(0\.9\d|1\.0\d) Hz/, { timeout: 20_000 });
+  await expect(talkerEdge).not.toContainText('推定');
   await expect(outline.locator('li[data-id^="e:pub:dummy:"][data-id$=":/chatter"]')).toContainText(/(0\.9\d|1\.0\d) Hz/);
   await expect(outline.locator('[data-id="t:/chatter"]')).toContainText('送信元 2');
+
+  await page.getByTestId('tab-traffic').click();
+  await expect(page.getByTestId('traffic-measurement')).toContainText('C++ 計測ノード');
+  await page.getByTestId('expand-/chatter').click();
+  const talker = page.getByTestId('endpoint-/chatter-pub-/talker');
+  await expect(talker).toContainText(/(0\.9\d|1\.0\d) Hz/, { timeout: 15_000 });
+  await expect(talker).toContainText('実測');
+  const dummy = page.locator('[data-testid^="endpoint-/chatter-pub-dummy:"]');
+  await expect(dummy).toContainText(/(0\.9\d|1\.0\d) Hz/);
 
   await page.getByTestId('tab-inject').click();
   const running = page.getByTestId('job').filter({ hasText: '/chatter' }).filter({ hasText: '実行中' });

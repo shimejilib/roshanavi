@@ -114,10 +114,44 @@ export interface TrafficEntry {
   publishers?: PublisherRate[];
   /** Subscribers and their theoretical rate (sum of QoS-compatible publishers, backend sub_rates.py). */
   subscribers?: SubscriberRate[];
+  /** probe = C++ measurement node (per publisher), python = fallback monitor (per topic). */
+  measurement?: 'probe' | 'python';
+  /** Probe only: one row per publisher gid (node is null when the RMW gid did not match). */
+  endpoints?: ProbeEndpoint[];
 }
 
-/** exact = counted by roshanavi, configured = dummy node setting, measured = the only
- * publisher (topic total), estimated = total minus known, unknown = cannot split. */
+export interface ProbeEndpoint {
+  gid: string;
+  node: string | null;
+  resolved: boolean;
+  hz: number;
+  bps: number;
+  count: number;
+  bytes: number;
+  dropped: number | null;
+  stale: boolean;
+  rate_note: 'extended' | 'too_few' | null;
+}
+
+/** How traffic is measured right now (GET /api/traffic `measurement`, /ws/live). */
+export interface Measurement {
+  mode: 'probe' | 'python';
+  /** python only: why the probe is not used. */
+  reason: 'disabled' | 'not_built' | 'crashed' | 'unavailable' | null;
+  state: 'running' | 'restarting' | 'stopped' | 'failed' | null;
+  pid: number | null;
+  restarts: number;
+  receiving: boolean;
+  cpu_percent: number | null;
+  rss_bytes: number | null;
+  rmw: string | null;
+  /** matched = publisher gids map to graph nodes; unmatched = this RMW cannot tell them apart. */
+  gid_resolution: 'matched' | 'unmatched' | 'unknown';
+}
+
+/** exact = counted by roshanavi, configured = dummy node setting, measured = counted per
+ * publisher by the probe (or the only publisher: topic total), estimated = total minus
+ * known, unknown = cannot split. */
 export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown';
 
 /** theoretical = what compatible publishers send (not measured inside the subscriber);
@@ -179,6 +213,7 @@ export interface LiveMessage {
   recording?: RecordingStatus | null;
   /** Server clock (epoch seconds) when the frame was built. */
   server_time?: number;
+  measurement?: Measurement;
 }
 
 // ---- Launcher (DESIGN §4.9) ------------------------------------------------

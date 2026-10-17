@@ -59,8 +59,16 @@ DEFAULT_DEPTH = 10
 NO_SUBSCRIPTION_EVENTS = SubscriptionEventCallbacks(use_default_callbacks=False)
 
 
+# Internal topics between the server and its measurement probe (never shown or measured).
+SELF_TOPIC_PREFIX = '/roshanavi/_probe/'
+
+
 def is_self_node(name: str) -> bool:
     return name.lstrip('/').split('/')[-1].startswith(SELF_NODE_PREFIX)
+
+
+def is_self_topic(topic: str) -> bool:
+    return topic.startswith(SELF_TOPIC_PREFIX)
 
 
 def make_qos(reliability: str = 'reliable', durability: str = 'volatile',

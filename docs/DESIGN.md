@@ -65,16 +65,26 @@ ROS 2 システムの「通信の可視化」「ダミー入力の注入」「�
 ```
 roshanavi/
   docker/Dockerfile            # ros:jazzy-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
+                               # (C++ の計測ノードのビルドに要る ament_cmake / rosidl / rclcpp / gtest は ros-base に含まれる)
   docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
   examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, §4.14)
   docs/DESIGN.md
+  ros2_ws/src/roshanavi_msgs/  # ament_cmake: 計測ノードとの内部 msg (ProbeConfig / ProbeStats ほか, §4.3.1)
+  ros2_ws/src/roshanavi_probe/ # ament_cmake (C++17, rclcpp): 計測ノード (§4.3.1)
+    include/roshanavi_probe/   # stats.hpp (純粋な統計, ROS 非依存) / probe_node.hpp
+    src/                       # stats.cpp / stats_msg.cpp (msg への変換) / probe_node.cpp / main.cpp
+    test/test_stats.cpp        # gtest (統計の計算)
   ros2_ws/src/roshanavi/       # ament_python パッケージ
     roshanavi/
       ros_runtime.py   # rclpy ノード + MultiThreadedExecutor を専用スレッドで回す。スレッド安全な facade
       graph.py         # グラフスナップショット
       qos_compat.py    # pub × sub の QoS 互換判定 (純関数)
       diagnostics.py   # 初心者向け診断 (純関数)
-      traffic.py       # 全トピック raw 購読 + 統計
+      traffic.py       # Python の計測 (計測ノードが無いときの代替): 全トピック raw 購読 + 統計
+      traffic_select.py # 計測するトピックの選択 (除外・重い型の opt-in・トピックごとの切替。両方の経路で共有)
+      traffic_backend.py # 計測の経路の選択 (C++ 計測ノード / Python) と切り替え (§4.3.1)
+      probe_traffic.py # 計測ノードへの設定の送信と統計の受信 (TrafficMonitor と同じ形のエントリ)
+      probe_process.py # 計測ノードの子プロセス管理 (起動・再起動・停止)
       msgutil.py       # 型解決 / テンプレ生成 / dict⇄msg / 表示用切り詰め
       expr.py          # AST ホワイトリスト式評価器 (eval 禁止)
       injector.py      # 注入ジョブ管理
@@ -122,9 +132,10 @@ roshanavi/
 - 1 秒周期でスナップショットを更新し、変化時のみ WS 送信 (ハッシュ比較)。
 
 ### 4.3 traffic
+- **計測の経路**: 既定 (`--probe auto`) は C++ の計測ノード `roshanavi_probe` (§4.3.1) が測り、送信元ノードごとの値も出す。計測ノードがビルドされていない・繰り返し異常終了する・`--probe off` のときは、この節の Python の計測 (`TrafficMonitor`) を使う。どちらもエントリの形は同じで、`measurement: "probe" | "python"` で区別する。以下の統計の意味は両方に共通 (C++ 側は `stats.py` と同じ計算を移植)。
 - 新規トピックを 1 秒周期で検出し `create_subscription(msg_type, topic, cb, qos, raw=True)` で購読 (デシリアライズしない)。
 - QoS 互換: 当該トピックの publisher に BEST_EFFORT が 1 つでもあれば BEST_EFFORT で購読、それ以外 RELIABLE。durability は VOLATILE、depth 10。
-- 購読コールバックは 2 引数 `(data, info)` で、rclpy Jazzy が `raw=True` でも渡す `MessageInfo` (dict: `source_timestamp`, `received_timestamp` [ns], `publication_sequence_number`, `reception_sequence_number`) を使う。`publisher_gid` は Jazzy では公開されないため gid は常に none (publisher 別集計は gid が取れる場合のみ)。サンプルは (受信 monotonic 時刻, size, source_ts, received_ts, gid, seq)。純粋な統計計算は `stats.py` (時計注入可)。
+- 購読コールバックは 2 引数 `(data, info)` で、rclpy Jazzy が `raw=True` でも渡す `MessageInfo` (dict: `source_timestamp`, `received_timestamp` [ns], `publication_sequence_number`, `reception_sequence_number`) を使う。`publisher_gid` は rclpy Jazzy では公開されないため gid は常に none (publisher 別集計は C++ の計測ノードだけ)。サンプルは (受信 monotonic 時刻, size, source_ts, received_ts, gid, seq)。純粋な統計計算は `stats.py` (時計注入可)。
 - **計算期間 (P4.5a)**: サンプルは最長の 10 秒分を保持し、`GET /api/traffic?window=1|5|10`・`/ws/live?window=…` で指定した期間の平均を返す (各エントリに `window_sec`)。それ以外の値は 400 `invalid_window` (WS はエラーを送って close 1008)。UI は選んだ期間を「直近 5 秒の平均」のように表示する。
 - **止まったら即 0 (P4.5a, `stats.is_silent`)**: 最後の受信から max(3 × 期待周期, 1 秒) 何も届かなければ、`hz` / `hz_recv` / `hz_source` / `bytes_per_sec` を 0 にし `stale: true` を付ける (期間平均の残留で、止まったトピックが数秒間動いて見えるのをなくす)。期待周期は保持中のサンプルの平均受信間隔 (選んだ期間によらない)。サイズ・ジッタ・遅延は最後の値のまま。1 秒ごとの hz 履歴も 0 になる。
 - 統計 (スライディングウィンドウ既定 5 秒): `hz`, `hz_basis` (`"source"`|`"receive"`), `hz_recv`, `hz_source`, `bytes_per_sec`, `avg_size`, `jitter_ms`, `jitter_recv_ms`, `dropped`, `drop_ratio`, `latency_ms`, `last_seen`, `total_count`。スパークライン用に 1 秒刻みの hz 履歴を 60 点保持。
@@ -135,10 +146,61 @@ roshanavi/
 - 重い型 (`sensor_msgs/msg/Image`, `CompressedImage`, `PointCloud2`, `PointCloud`。LaserScan は含まない) は既定で購読せず `status:"not_monitored"`, `monitored:false` で一覧に残す (グラフ情報は表示)。`--monitor-heavy` で全て監視、`PUT /api/traffic/{topic}/monitor` `{"enabled": bool}` でトピック単位に実行時切替 (既定より優先、任意のトピックを無効化も可)。購読の張り替えは次回の housekeeping (<=1 s) で反映され、`monitored` は即時に更新される。
 - 除外: 正規表現リスト (既定で `/rosout`, `/parameter_events` は統計対象だが UI で畳む)。型解決できないトピックは `unsupported` として記録し購読しない。
 - 消えたトピックは購読解除。
-- **送信元ごとの値 (`rates.py`, 純関数)**: 統計はトピック単位で、rclpy Jazzy の `MessageInfo` には publisher gid がないため、受信したサンプルの送信元は区別できない。そこで roshanavi が正確に分かる値から地図のエッジ用に分ける。`/api/traffic` と `/ws/live` の各エントリに `source_count` と `publishers:[{node, hz, bps, basis}]` を付ける。
+- **送信元ごとの値 (`rates.py`, 純関数)**: `/api/traffic` と `/ws/live` の各エントリに `source_count` と `publishers:[{node, hz, bps, basis}]` を付ける。
+  - **計測ノードの経路** (`measurement: "probe"` で、全 publisher の gid がグラフと対応づいたとき): 各送信ノードの値は計測ノードが数えた値 (`"measured"`、同じノードの publisher が複数あれば合計)。注入ジョブ (`dummy:<id>`) は送った件数から求めた値 (`"exact"`) のまま。送った件数がまだ無いジョブが 1 つだけなら、roshanavi 自身のノードの実測値をそのジョブに当てる。グラフにいるのに何も届いていない送信者は `0 Hz` の `"measured"` (計測ノードは QoS を全送信者に合わせて購読するので、届かない = 送っていない)。
+  - **Python の経路**、または gid が対応づかない RMW (§4.3.1) では、統計はトピック単位で受信したサンプルの送信元は区別できない。そこで roshanavi が正確に分かる値から地図のエッジ用に分ける。
   - 注入ジョブ (`dummy:<id>`): 実際に送った件数から求めた送信レート (`Job.send_rate`、直近 5 秒、bytes/s は最初のメッセージのシリアライズ後サイズ × Hz) → `basis:"exact"`。恒久ダミーノード: 設定の `rate_hz` → `"configured"`。
   - それ以外の送信元が 1 つだけ: ダミーが無ければトピック合計そのもの (`"measured"`)、あれば `max(0, 合計 − ダミーの合計)` (`"estimated"`、UI に「推定」と説明)。bytes/s はダミー全員のサイズが分かるときだけ分ける。
   - それ以外の送信元が 2 つ以上: 分けられないので `"unknown"` (エッジに数値を出さず、トピックに「合計 X Hz / 送信元 N」)。受信側のエッジ (topic → sub) は常にトピック合計。
+
+### 4.3.1 C++ 計測ノード (`roshanavi_probe`, P4.6)
+トラフィックを **「ノード × トピック × 向き (送信 / 受信)」** の単位で出す。地図の線 1 本ごとに、その線自身の値を付ける。
+
+| 向き | 方式 | 精度 | 既定 |
+|---|---|---|---|
+| 送信 (ノード → トピック) | C++ 計測ノード (この節) | 実測 (`basis: measured`) | 有効 |
+| 受信 (トピック → ノード) | 理論値: QoS が互換な送信元の実測値の合計 (§4.17) | 推定 (BEST_EFFORT の取りこぼしは不明) | 有効 |
+| 受信・処理 (トピック → ノード) | トレース計測 (MEASUREMENT.md §3) | 実測 | 未実装 (詳細計測モード) |
+
+**パッケージ**
+- `roshanavi_msgs` (ament_cmake, rosidl): `ProbeTopic {topic, type, best_effort}`、`ProbeConfig {instance, windows_sec[], topics[]}`、`EndpointStats {publisher_gid (uint8[16]), resolved, node_name, node_namespace, count, bytes, hz, bps, dropped, rate_note, stale, first/last_source_stamp}`、`TopicStats` (トピック × 計算期間 1 つ分。`stats.py` の全項目 + `status` / `error` / `endpoints[]`)、`ProbeStats {header, instance, rmw_implementation, cpu_percent, rss_bytes, topics[]}`。null は浮動小数点が NaN、整数が -1。Jazzy の `RMW_GID_STORAGE_SIZE` は 16。
+- `roshanavi_probe` (ament_cmake, C++17, rclcpp): 実行ファイル `probe`。統計の計算は ROS に依存しない `stats.hpp/.cpp` (gtest で検証)。
+
+**購読と記録**
+- トピックごとに `create_generic_subscription(topic, type, qos, cb, options)`。コールバックは `void(std::shared_ptr<const rclcpp::SerializedMessage>, const rclcpp::MessageInfo &)` (Jazzy の `any_subscription_callback.hpp` の `SharedConstPtrSerializedMessageWithInfoCallback`)。`MessageInfo::get_rmw_message_info()` から `publisher_gid`・`source_timestamp`・`received_timestamp`・`publication_sequence_number` (`RMW_MESSAGE_INFO_SEQUENCE_NUMBER_UNSUPPORTED` は 0 = 非対応として扱う)、`SerializedMessage::size()` を取り、トピックのリングバッファ (最長の計算期間 10 秒分、最大 20000 件) に積む。型のライブラリ (`rosidl_typesupport_cpp`) が無い型は `status: unsupported` (Python の型が無くても C++ の型があれば測れる)。
+- QoS は Python の経路と同じ (BEST_EFFORT の送信者が 1 つでもいれば BEST_EFFORT、VOLATILE、depth 10)。**QoS イベントのコールバックは購読・設定・統計のどれにも登録しない** (`use_default_callbacks = false`。§4.1 の rclpy の busy loop と同じ理由で、不要な起床をなくす)。
+- 実行は `SingleThreadedExecutor` 1 本 (受信・設定・1 秒タイマーが同じスレッドなのでロック不要。購読のコールバックとタイマーは `shared_ptr<TopicState>` を共有し、状態は購読を持たないので循環しない)。EventsExecutor も測ったが、小さいメッセージで CPU がわずかに減る一方、画像 30 Hz で約 2 倍になったため使わない。
+
+**統計** (`stats.cpp`, `stats.py` と同じ意味): トピック全体の値 (`hz` は publisher ごとの source_timestamp の周期の合計、連番が単調なら落ちた分も送信数に数える、`hz_recv`、`jitter`、`dropped` / `drop_ratio`、`latency_ms`、止まったら 0 (`stale`)、遅いトピックは 10 秒で計算 (`rate_note`)) に加え、**publisher (gid) ごと** に同じ計算をその gid のサンプルだけで行う (`endpoints[]`)。gid ごとの `stale` も個別に判定するので、2 つの送信者の片方が止まると、その送信者だけ即 0 になる。計算期間は `ProbeConfig.windows_sec` (1 / 5 / 10 秒) の全部を毎秒計算して送る (UI の期間切り替えにそのまま答えられる)。
+
+**送信元ノードの特定 (RMW ごとの確認結果)**: 毎秒 `get_publishers_info_by_topic()` の `endpoint_gid` と、受信した `MessageInfo.publisher_gid` を突き合わせる。
+| RMW | `publisher_gid` と `endpoint_gid` | 連番 | 結果 |
+|---|---|---|---|
+| `rmw_fastrtps_cpp` (Jazzy 既定) | 一致 (どちらも DDS の writer GUID 16 バイト) | 対応 | ノードごとに `measured` |
+| `rmw_cyclonedds_cpp` | 不一致 (`publisher_gid` は writer のインスタンスハンドル 8 バイト + 0 埋め、`endpoint_gid` は GUID) | 非対応 (`dropped` は null) | gid ごとには分かれるがノードに対応づかない (`resolved: false`) → トピック合計にフォールバック (従来の `rates.py` の分割、送信元 2 以上は `unknown`)。UI に「この RMW では送信元のノードを区別できない」と出す |
+Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時的に `ros-jazzy-rmw-cyclonedds-cpp` を apt で入れ、`RMW_IMPLEMENTATION=rmw_cyclonedds_cpp` で C++ と Python の talker を計測。イメージには入れていない)。自動テストは Fast DDS のみ、フォールバックの判定は unit test。
+
+**制御 (どのトピックを測るか)**: 選択の規則 (重い型の opt-in、トピックごとの切替、除外) は roshanavi 本体に残し (`traffic_select.TopicSelector`、両方の経路で共有するので経路が切り替わっても切替は保たれる)、結果だけを `/roshanavi/_probe/config` (`ProbeConfig`、RELIABLE + **TRANSIENT_LOCAL**、depth 1) で送る。毎回トピック集合全体を送り、計測ノードは差分で購読を張り替える (型・reliability が変われば作り直す)。集合が変わったときだけ送る。TRANSIENT_LOCAL なので、再起動した計測ノードは最後の設定を自動で受け取る (再送の仕組みが要らない)。パラメータサービスより単純で、rclpy の非同期クライアントも要らない。
+- 同じドメインに roshanavi が複数いても混ざらないよう、サーバーは起動ごとにランダムな `instance` を作って計測ノードに `-p instance:=…` で渡す。計測ノードは自分の `instance` の設定だけを受け入れ、統計にも `instance` を付ける (サーバーは自分のもの以外を捨てる)。
+- 統計は `/roshanavi/_probe/stats` (`ProbeStats`、RELIABLE、VOLATILE) に 1 Hz。サーバー側は受け取った最新の 1 通を dict に変換して保持し、`snapshot(window)` はそこから選んだ期間のエントリを返す。スパークライン用の 1 秒ごとの履歴 (既定の 5 秒の値) はサーバー側で積む。
+- `/roshanavi/_probe/...` は自分用のトピック (`ros_runtime.is_self_topic`) で、地図・診断・トラフィックに出さず、Python の経路でも購読しない。計測ノードのノード名 `roshanavi_probe` は自分自身 (`roshanavi*`) として地図から隠れる。
+
+**子プロセスとしての管理** (`probe_process.py`): サーバーの起動時 (`Lab.start`) に `ament_index` で `lib/roshanavi_probe/probe` を探し、`ros2 run` を介さず直接、新しいセッションで起動する。housekeeping (1 秒) で終了を検出し、1 → 2 → 4 → 8 → 16 → 30 秒の間隔で再起動する。起動から 30 秒以上動いて統計が届いていれば失敗回数を 0 に戻す (起動直後に毎回落ちる場合も数え続ける)。5 回続けて終了したら諦め、Python の計測に切り替える (`reason: crashed`)。プロセスは生きているのに統計が 15 秒届かない (固まった) ときは SIGKILL して、同じ再起動の流れに乗せる。停止は SIGTERM (3 秒) → SIGKILL。計測ノードは毎秒 `getppid()` を確かめ、親 (サーバー) が変わったら自分で終了する (サーバーが SIGKILL されても残らない)。統計が 3.5 秒届かない間は、監視中のトピックを `status: error` / `error: probe_unavailable` (UI は「計測ノードから統計が届いていません (再起動中)」) にする。
+
+**経路の選択と状態** (`traffic_backend.TrafficService`): `--probe auto` (既定) / `off`。auto でも計測ノードが見つからなければ `reason: not_built`、`roshanavi_msgs` を import できなければ `unavailable` で Python の経路。`GET /api/traffic` と `/ws/live` に `measurement: {mode: probe|python, reason, state, pid, restarts, receiving, cpu_percent, rss_bytes, rmw, gid_resolution: matched|unmatched|unknown}` を付ける。トラフィックタブのツールバーに「計測: C++ 計測ノード (CPU 0.4%)」、Python の経路では理由 (「計測ノードがビルドされていないため、Python で計測しています。送信元ごとの値は推定になります。」など) を出す (`traffic/measurement.ts`)。計測ノードの CPU は計測ノード自身が `getrusage` で測って送る (観測者効果の確認、RESOURCES.md)。
+
+**性能** (Docker、24 論理 CPU の WSL2、20 秒平均の CPU 使用率。100% = 1 コア。publisher は rclpy、計算期間 5 秒):
+| 条件 | 経路 | 計測ノード CPU | サーバー CPU | 合計 | Hz (真値) | 帯域 |
+|---|---|---|---|---|---|---|
+| (a) String 64 B × 10 トピック × 100 Hz | C++ 計測ノード | 8.9% | 0.6% | **9.5%** | 100.00 (全トピック) | — |
+| (a) 同上 | Python | — | 32.3% | 32.3% | 99.99〜100.00 | — |
+| (b) Image 1280×720 rgb8 × 30 Hz (重い型を有効化) | C++ 計測ノード | 11.4% | 0.4% | **11.8%** | 30.00 | 82.9 MB/s |
+| (b) 同上 | Python | — | 17.4% | 17.4% | 30.00 | 82.9 MB/s |
+- 既知の改善余地: 毎秒、トピックごとに `get_publishers_info_by_topic()` を呼び、計算期間ごとにサンプルを gid で分け直している (20000 件 × 3 期間のコピー)。上の条件では問題にならないが、トピック数・頻度がさらに大きいときはグラフ変化時だけの照合と、1 回の分割の使い回しにする。
+- 何も流れていないときの計測ノードは CPU 約 0.1〜0.4%、常駐メモリ約 30 MB (busy loop なし)。
+- (a) は 1 メッセージあたり約 90 µs (DDS の受信スレッドと rclcpp の take を含む) で、Python の約 1/3。サーバーの CPU がほぼゼロになるので、API・WebSocket・注入のタイミングが統計の負荷に影響されなくなる。(b) の計測ノードの CPU の大半は、受信ごとの約 2.7 MB の SerializedMessage のコピー。
+- Hz の精度はどちらも送信時刻ベースなので同等 (±0.01%)。違いは、送信元ごとに分けられること。
+- 測り方: test イメージの中で publisher と `roshanavi server --probe auto|off` を起動し、15 秒待ってから 20 秒間 psutil で各プロセスの CPU を測り、`/api/traffic?window=5` の Hz を読む。
 
 ### 4.4 msgutil
 - `resolve_type("std_msgs/msg/String")` → クラス (`rosidl_runtime_py.utilities.get_message`)。
@@ -438,7 +500,7 @@ watch_topics: [/chat]
 
 ### 4.17 ノード一覧の集約・送受信ごとのトラフィック・遅いトピック (P4.5b)
 - **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
-- **受信者ごとの理論値** (`sub_rates.py`, 純関数): トラフィックはトピック単位でしか測れない (§6.1)。受信者の値は、QoS が合う送信者が送っている量 = 届くはずの量: 全送信者が合う → トピック全体の実測、一部だけ → 合う送信者の値 (rates.py の分割) の和 (分けられなければ null)、1 つも合わない → 0 と `delivered: false`。`basis` は `theoretical` / `not_delivered` (将来トレースで測れたら `measured`)。
+- **受信者ごとの理論値** (`sub_rates.py`, 純関数): 受信側のノードの中で実際に受け取った量は外から測れない (§6.1)。受信者の値は、QoS が合う送信者が送っている量 = 届くはずの量: 全送信者が合う → トピック全体の実測、一部だけ → 合う送信者の値 (rates.py の分割) の和 (分けられなければ null)、1 つも合わない → 0 と `delivered: false`。計測ノードの経路 (§4.3.1) では、全送信者が合うときも送信者ごとの実測値の和を使う (止まった送信者の分がすぐ消える)。同じノードが同じトピックに複数の publisher を持っていても 1 回だけ数える。`basis` は `theoretical` / `not_delivered` (将来トレースで測れたら `measured`)。
 - **遅いトピック**: 計算期間 (1 / 5 / 10 秒) より遅いトピックは、期間内のメッセージが 2 個未満になり 0 Hz と誤読される。生きている (`stale` でない) のに 2 個未満なら最長の 10 秒で計算し直し `rate_note: extended`、`rate_window_sec: 10` を付ける。10 秒でも 2 個未満なら `rate_note: too_few` (hz は 0、UI は「—」)。
 
 ## 5. シナリオ (G4)
@@ -552,7 +614,7 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 - 名前フィルタ、`/rosout` 等の非表示トグル、一時停止 (スナップショットを固定して観察する)。
 
 **計測の限界 (UI に明記する)**
-- 帯域や Hz は **トピック単位** の値である。subscriber ごとに実際に届いた量は、外部からは測れない。必要なら対象ノード側の Topic Statistics かトレースを使う (将来対応)。
+- 帯域や Hz は、送信側は送信ノードごとの実測 (C++ 計測ノード, §4.3.1。Python の経路ではトピック単位)。subscriber ごとに実際に届いた量は、外部からは測れない (理論値, §4.17)。必要なら対象ノード側の Topic Statistics かトレースを使う (将来対応、MEASUREMENT.md §3)。
 - 更新は 1 秒周期。流れのアニメーションは見た目の表現であり、1 粒 = 1 メッセージではない。
 
 **バックエンドへの追加要件**
@@ -593,9 +655,15 @@ docker compose up -d --build lab demo        # http://localhost:6871
 cd web && npm ci && npm run dev              # http://localhost:5173
 # テスト
 cd web && npm test                           # vitest (純粋ロジック)
-docker compose --profile test run --rm test  # バックエンド pytest
-docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中に)。スクリーンショットは docs/screenshots/
+docker compose --profile test run --rm test  # 計測ノードの gtest + バックエンド pytest
+# (ROSHANAVI_TEST_PROBE=auto を -e で渡すと、共通の lab fixture も計測ノードの経路で動く)
+scripts/e2e.sh                               # Playwright を隔離スタックで一括実行 (下記)。スクリーンショットは docs/screenshots/
 ```
+**E2E の隔離**: `scripts/e2e.sh` は profile `e2e` の `lab-e2e` / `demo-e2e` / `e2e` を build → 起動 → 実行 → 後片付けまで 1 コマンドで行う (等価: `docker compose --profile e2e up --build --abort-on-container-exit --exit-code-from e2e lab-e2e demo-e2e e2e`。ただし後片付けと下記の検査はスクリプトだけ)。
+- `lab-e2e` は利用中の `lab` と別の `ROS_DOMAIN_ID` (既定 77, `E2E_ROS_DOMAIN_ID` で変更)、`/data` は tmpfs (毎回空から `examples/demo_project/roshanavi.yaml` で初期化)。`./data` はマウントしない。ポートはホストに公開しない (`--allowed-host lab-e2e`)。healthcheck は `GET /api/health`。
+- `e2e` ランナーは `lab-e2e` のネットワークを共有し `http://localhost:6871` で UI を開く (ブラウザのマイク / カメラ取り込みは secure context が必要で、`http://lab-e2e` では使えないため)。メディアテストの素材は `lab-e2e` の `/data/e2e` と共有する揮発ボリューム `e2e-media` に書く。
+- スクリプトは前後で `lab` の `/data/roshanavi.yaml` の sha256 を比べ、変わっていたら失敗する。後片付けは e2e のサービスとボリュームだけを消す (`docker compose down` は使わない: `lab` / `demo` まで止まるため)。
+
 
 ### 6.3 実装メモ (P3: Launcher)
 - **Launcher タブ** (`src/launcher/`): 左にパッケージ一覧 (検索、ワークスペースのパッケージを先頭、「ワークスペース」「システム」「未ビルド」「未 source」バッジ、ビルドボタン)、中央に起動設定フォーム・ビルド結果・起動対象のカード、右にログビューア。上部のプロジェクトバーに保存先、未保存バッジ、保存・読み直しボタン (P4.5a で自動保存と設定メニューに変更、§6.5)。
@@ -670,7 +738,9 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 ### 6.7 トラフィックの送受信ごとの表示 (P4.5b)
 - トラフィックタブの各トピック行は ▸ で展開でき (既定は折りたたみ、「すべて展開」で全部)、送信ノードごとの行 (Hz・帯域・根拠: 実測 / 推定 / 設定値 / 分けられない、`publishers[]`) と受信ノードごとの行 (理論値。ⓘ に「受信側のノードの中で数えた値ではない」。QoS が合わなければ「届いていません」、`subscribers[]`) を出す。
 - 「トピック別 / ノード別」の切り替え: ノード別は同じ行をノードごとにまとめ (送信 → 受信、トピック順)、「このノードが何を送って何を受けているか」を見る。純ロジック `traffic/endpoints.ts`。
-- 地図の受信側エッジの値も同じ理論値を使う (一部の送信者だけ QoS が合うときに表と地図がずれない)。将来トレース (C++ probe) を使うと、送信側は実測、受信側は計測値 (`basis: measured`) に置き換わる。スクリーンショット: `traffic-endpoints.png`, `traffic-by-node.png` (`e2e/smoke.spec.ts`)。
+- 地図の受信側エッジの値も同じ理論値を使う (一部の送信者だけ QoS が合うときに表と地図がずれない)。C++ 計測ノード (§4.3.1) が動いていれば送信側は送信ノードごとの実測 (`実測` バッジ、ⓘ に「このノードが送った分だけ数えた値」)。受信側を実測 (`basis: measured`) にするのは将来のトレース計測 (MEASUREMENT.md §3)。
+- Hz の後ろの「(受信時刻で概算)」は、止まったトピック (hz 0 / `stale`) には付けない (`timing.hzBasisNote`)。
+- ツールバーに計測の経路 (C++ 計測ノードの CPU、または Python で測っている理由) を出す (`data-testid="traffic-measurement"`)。スクリーンショット: `traffic-endpoints.png`, `traffic-by-node.png` (`e2e/smoke.spec.ts`)。
 
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
@@ -685,6 +755,7 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 5. ✅ P4 メディア注入 (§4.6.1, §4.11) + ブラウザ入力 + 録画 (§4.12) + 画像ビューア・音声の波形と再生
 5a. ✅ P4.5a デモ体験・入力ノード・ランチャーの改善・右クリックメニュー・パラメータ・ノードの入出力・更新タイミング (§4.13-4.14, §6.5)
 5b. ✅ P4.5b ノード一覧タブ・launch の分解取り込み・lifecycle・送受信ごとのトラフィック (§4.15-4.17, §6.6-6.7)
+5c. ✅ P4.6 C++ 計測ノード (`roshanavi_msgs` / `roshanavi_probe`): 送信ノードごとの実測、Python の計測は代替経路に (§4.3.1)
 6. P5 サンプルノード (`roshanavi_examples`)
 7. P6 シナリオ (runner / CLI / JUnit / 記録モード / Scenarios タブ)
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF

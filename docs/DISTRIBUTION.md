@@ -28,7 +28,7 @@ ros2 run roshanavi app          # ブラウザが開く
 ## 3. パッケージ構成 (予定)
 - `roshanavi`: 本体 (Python。サーバー、ダミーノード、シナリオ CLI)
 - `roshanavi_msgs`: 内部用の msg (計測ノードの統計など)
-- `roshanavi_probe`: C++ 計測ノード (MEASUREMENT.md §2)
+- `roshanavi_probe`: C++ 計測ノード (DESIGN.md §4.3.1)
 - `roshanavi_examples`: サンプルノード (P5)
 
 依存はすべて rosdep キーで解決できるものに限る (python3-fastapi、python3-uvicorn、python3-psutil、ffmpeg など)。追加の pip パッケージは使わない。

@@ -6,6 +6,7 @@ import { useLive } from '../state/LiveProvider';
 import { LastUpdateBadge } from '../timing/LastUpdate';
 import { WindowSelect } from '../timing/WindowSelect';
 import { toggleAllTopics, toggleTopic } from './endpoints';
+import { measurementNote } from './measurement';
 import { EndpointRows } from './EndpointRows';
 import { NodeTrafficView } from './NodeTrafficView';
 import { sortTraffic, toggleSort, type SortKey, type SortState } from './sort';
@@ -33,6 +34,7 @@ export function TrafficTab() {
   const [view, setView] = useState<View>('topic');
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const nowMs = live.receivedAt || Date.now();
+  const note = measurementNote(live.measurement);
 
   const rows = useMemo(() => {
     const all = [...live.traffic.values()].filter((e) => showCollapsed || !e.collapsed);
@@ -60,6 +62,10 @@ export function TrafficTab() {
           </button>
         )}
         <WindowSelect />
+        {note && (
+          <span className={note.level === 'warn' ? 'measurement-note warn-text small' : 'measurement-note muted small'}
+            title={note.help} data-testid="traffic-measurement">{note.text}</span>
+        )}
         <span className="spacer" />
         <LastUpdateBadge />
       </div>

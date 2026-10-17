@@ -1,11 +1,11 @@
 import { defineConfig, devices } from '@playwright/test';
 
-// Smoke E2E against a running stack: `docker compose up -d lab demo` (UI on :6871).
+// E2E against the isolated lab-e2e stack: run scripts/e2e.sh.
 export default defineConfig({
   testDir: './e2e',
   timeout: 60_000,
   retries: 0,
-  // One worker: some tests change the shared lab (the first-run guide empties the launch list).
+  // One worker: tests share one lab-e2e (the first-run guide empties its launch list).
   workers: 1,
   use: {
     baseURL: process.env.ROSHANAVI_URL ?? 'http://localhost:6871',

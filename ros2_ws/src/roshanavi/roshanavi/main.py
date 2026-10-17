@@ -36,6 +36,9 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument('--monitor-heavy', action='store_true',
                         help='subscribe to heavy topics too (images, point clouds); '
                              'default is opt-in per topic via the API')
+    parser.add_argument('--probe', choices=['auto', 'off'], default='auto',
+                        help='measure traffic with the C++ probe (roshanavi_probe) when it is '
+                             'built (auto, default) or always in Python (off)')
     parser.add_argument('--allowed-host', action='append', default=[], metavar='HOST',
                         help='extra Host header value to accept (repeatable); localhost, '
                              '127.0.0.1 and [::1] are always allowed')
@@ -102,7 +105,8 @@ def main(argv: Optional[List[str]] = None) -> int:
               project_path=args.project, autostart=not args.no_autostart,
               disk_thresholds=DiskThresholds(args.record_warn_free_mb, args.record_warn_free_pct,
                                              args.record_stop_free_mb,
-                                             args.record_stop_free_pct)).start()
+                                             args.record_stop_free_pct),
+              probe=args.probe).start()
     atexit.register(lab.launcher.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     try:

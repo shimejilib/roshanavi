@@ -53,8 +53,12 @@ export function lastUpdate(receivedAtMs: number, nowMs: number, paused = false):
   };
 }
 
-/** Shown next to Hz only when it fell back to receive times (less accurate). */
-export function hzBasisNote(basis: 'source' | 'receive' | undefined): string {
+/**
+ * Shown next to Hz only when it fell back to receive times (less accurate). Not for a
+ * stopped topic (hz 0 / stale): there is no rate to qualify.
+ */
+export function hzBasisNote(basis: 'source' | 'receive' | undefined, hz?: number, stale?: boolean): string {
+  if (stale || hz === 0) return '';
   return basis === 'receive' ? t('timing.basisReceive') : '';
 }
 
@@ -63,7 +67,7 @@ export function hzBasisHelp(basis: 'source' | 'receive' | undefined): string {
   return basis === 'receive' ? t('traffic.basis.receiveHelp') : t('traffic.basis.sourceHelp');
 }
 
-type RateFields = Pick<TrafficEntry, 'hz' | 'hz_basis' | 'rate_note' | 'rate_window_sec' | 'window_sec'>;
+type RateFields = Pick<TrafficEntry, 'hz' | 'hz_basis' | 'rate_note' | 'rate_window_sec' | 'window_sec' | 'stale'>;
 
 /**
  * Hz with its notes. A live topic slower than the window is measured over the
@@ -74,5 +78,5 @@ export function rateText(entry: RateFields): string {
   if (entry.rate_note === 'too_few') return t('timing.tooFew', { n: entry.window_sec ?? '?' });
   const base = formatHz(entry.hz);
   if (entry.rate_note === 'extended') return `${base} ${t('timing.extended', { n: entry.rate_window_sec ?? '?' })}`;
-  return `${base} ${hzBasisNote(entry.hz_basis)}`.trim();
+  return `${base} ${hzBasisNote(entry.hz_basis, entry.hz, entry.stale)}`.trim();
 }

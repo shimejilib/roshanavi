@@ -37,6 +37,11 @@ def test_allowed_host_flag(lab):
         assert c.get('/api/traffic', headers={'Host': 'evil.com'}).status_code == 403
 
 
+def test_health_endpoint_ok_but_still_host_checked(client):
+    assert client.get('/api/health').json() == {'status': 'ok'}
+    assert client.get('/api/health', headers={'Host': 'evil.com'}).status_code == 403
+
+
 def test_ws_foreign_host_closed_1008(client):
     with pytest.raises(WebSocketDisconnect) as exc:
         with client.websocket_connect('ws://localhost/ws/live', headers={'Host': 'evil.com'}):

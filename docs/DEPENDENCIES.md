@@ -19,8 +19,18 @@
 | `ros2run`, `ros2launch` | ランチャー (`ros2 run` / `ros2 launch` の実行) |
 | `rcl_interfaces` | パラメータの表示・変更 (パラメータサービスのクライアント) |
 | `lifecycle_msgs` | lifecycle ノードの状態取得と状態遷移 |
+| `rosidl_default_runtime` | `roshanavi_msgs` の実行時サポート |
 | `launch_xml`, `launch_yaml` | XML / YAML 形式の launch ファイルの取り込み (分解) |
 | `ros2bag` (+ `rosbag2_storage_default_plugins`) | bag 再生、録画 (mcap 形式) |
+
+### C++ 計測ノード (`roshanavi_probe`) と内部メッセージ (`roshanavi_msgs`) のビルド
+| パッケージ | 用途 |
+|---|---|
+| `ament_cmake`, `rosidl_default_generators` | ビルド、内部メッセージの生成 |
+| `rclcpp`, `rmw`, `builtin_interfaces`, `std_msgs` | 計測ノード本体 |
+| `ament_cmake_gtest` (テストのみ) | C++ の単体テスト |
+
+いずれも `ros:jazzy-ros-base` と ROS 2 の標準インストールに含まれる。C++ コンパイラ (build-essential) が必要。
 
 ### システム・Python (apt / rosdep キー)
 | rosdep キー | 用途 | ライセンス |
@@ -54,6 +64,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `python3-httpx` | FastAPI の TestClient |
 | `ros-jazzy-demo-nodes-cpp`, `ros-jazzy-demo-nodes-py`, `ros-jazzy-example-interfaces` | テストとデモの相手役ノード |
 | `ros-jazzy-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
+| `ros-jazzy-rmw-cyclonedds-cpp` (任意、未導入) | Cyclone DDS での計測の自動テスト (現在は手動確認のみ) |
 
 ### Web UI (ビルド時のみ。配布物にはビルド済みの静的ファイルを同梱し、利用者に npm を要求しない)
 バージョンは `web/package.json` で固定。ホストの npm 設定により、公開から約 2 週間未満のバージョンは使わない。

@@ -22,7 +22,8 @@ from .media.viewer import MediaViewer
 from .lifecycle import LifecycleService
 from .params import ParamService
 from .ros_runtime import RosRuntime
-from .traffic import DEFAULT_WINDOW_SEC, TrafficMonitor
+from .traffic import DEFAULT_WINDOW_SEC
+from .traffic_backend import PROBE_OFF, TrafficService
 
 LOG = logging.getLogger(__name__)
 
@@ -37,14 +38,14 @@ class Lab:
                  clock: Callable[[], float] = time.monotonic,
                  workspace: Optional[str] = None, project_path: Optional[str] = None,
                  autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None,
-                 disk_thresholds: DiskThresholds = DiskThresholds()):
+                 disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF):
         self.data_dir = data_dir
         self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
         self.importer = LaunchImporter(self.launcher, data_dir)
         self.runtime = RosRuntime(node_name)
         self.graph = graph.GraphMonitor(show_self=show_self)
-        self.traffic = TrafficMonitor(self.runtime, window_sec=window_sec,
+        self.traffic = TrafficService(self.runtime, probe=probe, window_sec=window_sec,
                                       exclude=traffic_exclude, clock=clock,
                                       monitor_heavy=monitor_heavy)
         self.injector = Injector(self.runtime, data_dir, clock=clock,
@@ -60,6 +61,7 @@ class Lab:
 
     def start(self) -> 'Lab':
         self.runtime.start()
+        self.traffic.start()
         self._timer = self.runtime.create_timer(self._period, self.housekeeping)
         return self
 

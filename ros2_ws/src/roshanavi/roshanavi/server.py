@@ -116,6 +116,10 @@ def _cached_types() -> List[str]:
 
 
 def _register_rest(app: FastAPI, lab: Lab) -> None:
+    @app.get('/api/health')
+    def get_health() -> Dict[str, Any]:
+        return {'status': 'ok'}
+
     @app.get('/api/graph')
     def get_graph() -> Dict[str, Any]:
         snapshot, digest = lab.graph.snapshot()
@@ -123,7 +127,8 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.get('/api/traffic')
     def get_traffic(window: Optional[str] = None) -> Dict[str, Any]:
-        return {'topics': lab.traffic_view(parse_window(window))}
+        return {'topics': lab.traffic_view(parse_window(window)),
+                'measurement': lab.traffic.status()}
 
     @app.put('/api/traffic/{topic:path}/monitor')
     def put_monitor(topic: str, req: MonitorRequest) -> Dict[str, Any]:
@@ -207,6 +212,7 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
         async def push() -> None:
             snapshot, digest = lab.graph.snapshot()
             payload: Dict[str, Any] = {'traffic': lab.traffic_view(window),
+                                       'measurement': lab.traffic.status(),
                                        'server_time': time.time(),
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
@@ -262,7 +268,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
         @app.get('/')
         def index() -> Dict[str, Any]:
             return {'name': 'roshanavi', 'ui': None,
-                    'api': ['/api/graph', '/api/traffic', '/api/types', '/api/inject',
+                    'api': ['/api/health', '/api/graph', '/api/traffic', '/api/types', '/api/inject',
                             '/api/files', '/api/targets', '/api/workspace', '/api/build',
                             '/api/project', '/api/dummies', '/api/media/types',
                             '/api/recordings', '/api/nodes/{node}/parameters',

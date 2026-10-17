@@ -28,6 +28,10 @@ describe('timing labels', () => {
     expect(hzBasisNote('source')).toBe('');
     expect(hzBasisNote(undefined)).toBe('');
     expect(hzBasisNote('receive')).toBe('(受信時刻で概算)');
+    // a stopped topic has no rate to qualify
+    expect(hzBasisNote('receive', 0)).toBe('');
+    expect(hzBasisNote('receive', 3, true)).toBe('');
+    expect(hzBasisNote('receive', 3, false)).toBe('(受信時刻で概算)');
   });
 });
 
@@ -47,5 +51,7 @@ describe('paused view and slow topics', () => {
     expect(rateText({ ...base, hz: 0, rate_note: 'too_few', rate_window_sec: 1 })).toBe('— (1 秒窓では測定不可)');
     expect(rateText({ ...base, hz: 10, rate_note: null, rate_window_sec: 1 })).toBe('10.0 Hz');
     expect(rateText({ ...base, hz: 10, hz_basis: 'receive' })).toBe('10.0 Hz (受信時刻で概算)');
+    expect(rateText({ ...base, hz: 0, hz_basis: 'receive', rate_note: null })).toBe('0 Hz');
+    expect(rateText({ ...base, hz: 0, hz_basis: 'receive', rate_note: null, stale: true })).toBe('0 Hz');
   });
 });

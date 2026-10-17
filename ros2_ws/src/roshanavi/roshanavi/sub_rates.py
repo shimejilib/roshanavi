@@ -9,6 +9,10 @@ is what the QoS-compatible publishers send:
   ``None`` when one of them cannot be split out;
 * none compatible -> 0 with ``delivered: false`` (``not_delivered``).
 
+With the C++ probe every publisher is measured on its own, so the value is
+the sum of the compatible publishers' measured rates even when all of them
+are compatible (``prefer_sum``; a stopped publisher drops out at once).
+
 ``basis`` is a plain string so a later tracing probe can report ``measured``.
 """
 
@@ -31,17 +35,19 @@ def _sum(values: Sequence[Optional[float]]) -> Optional[float]:
 
 def subscriber_rate(sub_qos: Mapping[str, Any], pub_edges: Sequence[Mapping[str, Any]],
                     pub_rates: Mapping[str, Mapping[str, Any]], total_hz: Optional[float],
-                    total_bps: Optional[float]) -> Dict[str, Any]:
+                    total_bps: Optional[float], prefer_sum: bool = False) -> Dict[str, Any]:
     """``{hz, bps, basis, delivered, sources}`` for one subscriber of one topic."""
-    sources = [e['node'] for e in pub_edges if not incompatibilities(e.get('qos') or {}, sub_qos)]
+    compatible = [e for e in pub_edges if not incompatibilities(e.get('qos') or {}, sub_qos)]
+    sources = list(dict.fromkeys(e['node'] for e in compatible))  # a node may publish twice
     if pub_edges and not sources:
         return {'hz': 0.0, 'bps': 0.0, 'basis': BASIS_NOT_DELIVERED, 'delivered': False,
                 'sources': []}
-    if len(sources) == len(pub_edges):
+    summed_hz = _sum([pub_rates.get(n, {}).get('hz') for n in sources])
+    summed_bps = _sum([pub_rates.get(n, {}).get('bps') for n in sources])
+    if len(compatible) == len(pub_edges) and not (prefer_sum and summed_hz is not None):
         hz, bps = total_hz, total_bps
     else:
-        hz = _sum([pub_rates.get(n, {}).get('hz') for n in sources])
-        bps = _sum([pub_rates.get(n, {}).get('bps') for n in sources])
+        hz, bps = summed_hz, summed_bps
     return {'hz': _round(hz, 3), 'bps': _round(bps, 1), 'basis': BASIS_THEORETICAL,
             'delivered': True, 'sources': sources}
 
@@ -62,5 +68,6 @@ def topic_subscribers(entry: Mapping[str, Any], edges: Iterable[Mapping[str, Any
             continue
         seen.add(edge['node'])
         result.append({'node': edge['node'], **subscriber_rate(
-            edge.get('qos') or {}, pub_edges, pub_rates, total_hz, total_bps)})
+            edge.get('qos') or {}, pub_edges, pub_rates, total_hz, total_bps,
+            prefer_sum=entry.get('measurement') == 'probe')})
     return result

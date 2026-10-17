@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .diagnostics import diagnose
-from .ros_runtime import RosRuntime, is_self_node, qos_to_dict
+from .ros_runtime import RosRuntime, is_self_node, is_self_topic, qos_to_dict
 
 LOG = logging.getLogger(__name__)
 
@@ -72,8 +72,11 @@ def topic_is_live(raw: RawGraph, topic: str) -> bool:
 
     Our own subscriptions (traffic/echo) must not keep a topic alive, otherwise
     a vanished topic would never be unsubscribed. Our own publishers (inject
-    jobs) do count, so injected topics show up in traffic.
+    jobs) do count, so injected topics show up in traffic. The server <-> probe
+    topics (``/roshanavi/_probe/...``) never matter.
     """
+    if is_self_topic(topic):
+        return False
     if raw.publishers.get(topic):
         return True
     return any(not is_self_node(e.node) for e in raw.subscribers.get(topic, []))

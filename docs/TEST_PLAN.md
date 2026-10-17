@@ -32,14 +32,25 @@
 |---|---|---|---|
 | B-01 | 10 Hz の publisher | hz ≈ 10 (±5%) | ✅ |
 | B-02 | BEST_EFFORT の publisher | 購読でき、hz が出る | ✅ |
-| B-03 | 送信時刻ベースの Hz (`hz_basis=source`) | 受信側が遅れても publish 側の周期を出す | ⬜ (P1.5) |
-| B-04 | 取りこぼし検出 (連番の欠け) | `dropped` / `drop_ratio` が出る。RMW 非対応なら null | ⬜ (P1.5) |
+| B-03 | 送信時刻ベースの Hz (`hz_basis=source`) | 受信側が遅れても publish 側の周期を出す。落ちた分も連番で送信数に数える | ✅ (Python: `test_traffic_rate.py`, `test_integration_ros.py`。C++: gtest `test_stats.cpp`、`test_probe_ros.py`) |
+| B-04 | 取りこぼし検出 (連番の欠け) | `dropped` / `drop_ratio` が出る。RMW 非対応なら null | ✅ (欠番・publisher ごと・連番非対応: `test_traffic_rate.py` と gtest。Fast DDS で 0 件を確認: `test_probe_ros.py`。Cyclone DDS は連番非対応で null: 👀) |
 | B-05 | publisher 停止後の扱い | `last_seen` で停止を判別でき、UI で停止表示 | 🟡 |
 | B-06 | 高頻度トピック (1 kHz) | 計測が破綻せず、CPU 負荷が許容範囲に収まる | ⬜ |
 | B-07 | 巨大メッセージ (画像 1080p 30 Hz, 点群) | 既定では非監視。有効化すると帯域が出る | ⬜ (P1.5) |
 | B-08 | 観測者効果 | roshanavi の有無で対象ノードのレイテンシ・CPU に有意差がない (heavy 除外時) | 👀 |
 | B-09 | 統計計算の決定性 | 時刻を注入した unit test で hz / 帯域 / ジッタが一致する | ✅ |
 | B-10 | 長時間稼働 (24 h) | メモリが増え続けない (リングバッファ上限) | ⬜ |
+| B-11 | 計測ノード: 1 トピックに 2 つの送信ノード (5 Hz と 2 Hz) | 送信ノードごとに 5 / 2 Hz (±5%) で `basis: measured`、トピック合計 7 Hz、`gid_resolution: matched` | ✅ (`test_probe_ros.py`) |
+| B-12 | 計測ノードの統計 (gtest) | 欠番、複数 publisher の合計、連番非対応で null、送信時刻が無ければ受信側、計算期間の選択、遅いトピックの延長・`too_few`、止まったら 0、publisher ごとの値と停止、リングバッファの上限 | ✅ (`roshanavi_probe/test/test_stats.cpp`) |
+| B-13 | 計測ノードが使えないとき | `--probe off` / 未ビルド → Python の計測 (`measurement: python`、理由付き)。繰り返し異常終了 → 5 回で Python に切り替え | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
+| B-14 | 計測ノードの異常終了 | 再起動され (1 秒後〜)、TRANSIENT_LOCAL の設定を受け取って計測を再開する | ✅ (`test_probe_ros.py`) |
+| B-15 | 自分用のトピック | `/roshanavi/_probe/*` と計測ノードは地図・診断・トラフィックに出ない | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
+| B-16 | gid がグラフと対応しない RMW | `resolved: false` ならトピック合計の分割 (`rates.py`) にフォールバック、UI に案内 | ✅ (判定は `test_probe_unit.py` / `measurement.test.ts`)、Cyclone DDS の実機は 👀 (gid 不一致・連番非対応を確認) |
+| B-17 | 送信ノードごとの値 (unit) | 送っていない送信者は 0 Hz の実測、注入ジョブは `exact` のまま、件数未確定のジョブは自分のノードの実測、受信者は実測値の和 | ✅ (`test_probe_unit.py`) |
+| B-18 | 計測ノードの負荷 | 10 トピック × 100 Hz、画像 720p 30 Hz で計測ノード + サーバーの CPU が Python の計測より小さい | 👀 (DESIGN §4.3.1 の表: 9.5% 対 32.3%、11.8% 対 17.4%) |
+| B-19 | 止まったトピックの Hz 表示 (vitest) | hz 0 / `stale` のとき「(受信時刻で概算)」を付けない | ✅ (`timing.test.ts`) |
+| B-20 | 計測の経路の表示・実測バッジ (vitest) | 「計測: C++ 計測ノード (CPU x%)」、再起動中・RMW の制限・Python の理由、`measured` は「実測」 | ✅ (`traffic/measurement.test.ts`) |
+| B-21 | E2E: talker + 1 Hz の入力ノードが /chatter | 地図の talker の辺が約 1 Hz で「推定」が付かない。トラフィックタブで talker が約 1 Hz の「実測」、入力ノードが約 1 Hz、ツールバーに「C++ 計測ノード」 | ✅ (`e2e/smoke.spec.ts`) |
 
 ## C. ダミー注入
 
@@ -91,11 +102,11 @@
 | F-02 | 200 ノード規模のグラフ | 操作が 30 fps 以上 | ✅ (`e2e/perf.spec.ts`: 180 要素 + 粒で約 60 fps, headless) |
 | F-03 | Inject フォームから全 mode を実行 | API と同等に動く | 🟡 (once/periodic は E2E、stream/bag はリクエスト生成の unit のみ) |
 | F-04 | WS の切断・再接続 | 自動で再接続し、状態を復元する | 🟡 (バックオフは unit、実接続断は 👀) |
-| F-05 | 主要フロー E2E (Playwright) | グラフ表示 → 注入 → エコーで受信を確認 | ✅ (`docker compose --profile e2e run --rm e2e`) |
+| F-05 | 主要フロー E2E (Playwright) | グラフ表示 → 注入 → エコーで受信を確認 | ✅ (`scripts/e2e.sh`: 隔離した lab-e2e / demo-e2e に対して実行。利用中の lab と ./data には触れず、前後の sha256 で確認) |
 | F-06 | 診断パネル | 平易な日本語で表示され、クリックで対象にフォーカスする | ✅ (文章化は unit、クリックは E2E) |
 | F-07 | 一時停止・フィルタ・内部トピック非表示 | 表示が固定 / 絞り込まれる | 🟡 (フィルタは unit、操作は 👀) |
 | F-08 | ライト / ダーク表示 | OS 設定に追従する | 👀 |
-| F-09 | 送信元ごとの Hz (talker + 注入ジョブが同じトピック) | 注入ジョブのエッジは実送信数、talker は「合計 − 注入」で「推定」、送信元 2 以上ならトピックに合計と送信元数 | ✅ (分配は pytest `test_rates.py`、表示は vitest、talker+ダミーは E2E) |
+| F-09 | 送信元ごとの Hz (talker + 注入ジョブが同じトピック) | 注入ジョブのエッジは実送信数。talker は計測ノードの経路では送信ノードごとの実測 (B-11, B-21)、Python の経路では「合計 − 注入」で「推定」。送信元 2 以上ならトピックに合計と送信元数 | ✅ (分配は pytest `test_rates.py` / `test_probe_unit.py`、表示は vitest、talker+ダミーは E2E) |
 
 ## G. 互換性
 
