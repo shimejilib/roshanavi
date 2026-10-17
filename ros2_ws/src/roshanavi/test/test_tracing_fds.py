@@ -63,16 +63,19 @@ def nodes():
 def test_worker_fds_stay_bounded_over_many_rotations(tmp_path, nodes):
     worker = Worker('roshanavi-fdtest',
                     str(tmp_path / 'trace'), config.DEFAULT_RT_PER_CPU, lambda _msg: None)
+    worker.parser.recycle_every = 4  # exercise the disposable parser child (issue #17)
     worker.start()
     try:
         nodes.start('demo_nodes_cpp', 'talker', '-r', '__node:=fd_talker', '-r', 'chatter:=/fd_chat')
         nodes.start('demo_nodes_cpp', 'listener', '-r', '__node:=fd_listener',
                     '-r', 'chatter:=/fd_chat')
-        samples = []
+        samples, parser_fds = [], []
         for _ in range(ROTATIONS):
             time.sleep(0.8)  # a requested rotation completes 0.3-1 s later
             worker.cycle(emit=False)
             samples.append(_fds())
+            if worker.parser.pid:
+                parser_fds.append(_fds(worker.parser.pid))
         assert worker._events_total > 0, 'no init events were parsed; the test would prove nothing'
         tail = samples[-6:]
         assert max(tail) <= min(tail) + TAIL_SLACK, f'fd count keeps growing: {samples}'
@@ -81,8 +84,13 @@ def test_worker_fds_stay_bounded_over_many_rotations(tmp_path, nodes):
         assert samples[-1] <= samples[0] + UST_STEP_PER_CPU * (os.cpu_count() or 1) + SLACK_FDS, \
             f'fd count grew too much: {samples}'
         assert _sessiond_count() == 1
+        # bt2 runs only in the parser child; it is replaced every 4 chunks, so whatever bt2
+        # leaks (a metadata fd per chunk) is bounded and nothing is closed behind its back.
+        assert worker.parser.children_started >= 2, 'the parser child was never recycled'
+        assert parser_fds and max(parser_fds) <= min(parser_fds) + 4 + TAIL_SLACK, parser_fds
     finally:
         worker.close()
+    assert worker.parser.pid is None
     wait_for(lambda: _sessiond_count() == 0, timeout=15.0)
 
 

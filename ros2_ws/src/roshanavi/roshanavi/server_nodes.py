@@ -1,4 +1,4 @@
-"""Node parameter, lifecycle, node-list and interface-definition routes (DESIGN §4.13, §4.15).
+"""Node parameter, lifecycle, node-list and interface-definition routes (docs/design/launcher.md).
 
 Parameters are read and changed through the node's own parameter services
 (:mod:`params`). Nodes roshanavi did not start (role ``other``) are read-only

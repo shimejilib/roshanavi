@@ -5,7 +5,7 @@ import { clickElement, rightClickBlank, rightClickNode } from './helpers';
 
 // P4.5a flows (requires `docker compose up -d lab demo`): map menus, input nodes,
 // parameters, node I/O pane and the Launcher's first-run guide.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const INPUT_ID = 'e2e_input';
 
 async function openMap(page: Page) {

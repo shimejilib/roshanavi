@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { DummySpec } from '../api/types';
-import { buildInputNode, defaultInputForm, filesFor, formFromDummy, idFromName, normalizeTopic, type InputForm } from './inputForm';
+import { buildInputNode, contentKindsFor, defaultInputForm, filesFor, formFromDummy, idFromName, normalizeTopic, textForKind, type InputForm } from './inputForm';
 
 const form = (patch: Partial<InputForm> = {}): InputForm => ({ ...defaultInputForm('/greeting', 'std_msgs/msg/String'), ...patch });
 
@@ -19,14 +19,43 @@ describe('create input node request', () => {
     expect(built.ok && built.value.payload).toEqual({ data: 'n=${i}' });
   });
 
-  it('uses YAML for non-String types', () => {
-    const built = buildInputNode(form({ type: 'std_msgs/msg/Int32', yaml: 'data: 7' }), []);
+  it('uses YAML for 専用の型 (kind message)', () => {
+    const built = buildInputNode(form({ kind: 'message', type: 'std_msgs/msg/Int32', yaml: 'data: 7' }), []);
     expect(built.ok && built.value.payload).toEqual({ data: 7 });
-    expect(buildInputNode(form({ type: 'std_msgs/msg/Int32', yaml: 'data: [' }), []).ok).toBe(false);
+    expect(built.ok && built.value.kind).toBe('message');
+    expect(buildInputNode(form({ kind: 'message', type: 'std_msgs/msg/Int32', yaml: 'data: [' }), []).ok).toBe(false);
+  });
+
+  it('builds the payload from the data kind without YAML', () => {
+    const payload = (patch: Partial<InputForm>) => {
+      const built = buildInputNode(form(patch), []);
+      return built.ok ? built.value.payload : built.error;
+    };
+    expect(payload({ kind: 'float', type: 'std_msgs/msg/Float64', text: '2.5' })).toEqual({ data: 2.5 });
+    expect(payload({ kind: 'int', type: 'std_msgs/msg/Int64', text: '3' })).toEqual({ data: 3 });
+    expect(payload({ kind: 'int', type: 'std_msgs/msg/Int64', text: '3.5' })).toContain('整数');
+    expect(payload({ kind: 'bool', type: 'std_msgs/msg/Bool', text: 'false' })).toEqual({ data: false });
+    expect(payload({ kind: 'numbers', type: 'std_msgs/msg/Float64MultiArray', text: '1, 2.5,3' })).toEqual({ data: [1, 2.5, 3] });
+    expect(payload({ kind: 'bytes', type: 'std_msgs/msg/UInt8MultiArray', text: '0, 255' })).toEqual({ data: [0, 255] });
+    expect(payload({ kind: 'bytes', type: 'std_msgs/msg/UInt8MultiArray', text: '256' })).toContain('バイト列');
+    expect(payload({ kind: 'json', text: '{"a": 1}' })).toEqual({ data: '{"a": 1}' });
+    expect(payload({ kind: 'json', text: '{oops' })).toContain('JSON');
+    expect(payload({ kind: 'float', type: 'std_msgs/msg/Float64', content: 'expression', text: 'sin(t)' })).toEqual({ data: '${sin(t)}' });
+    expect(payload({ kind: 'float', type: 'std_msgs/msg/Float64', content: 'expression', text: '${t}' })).toEqual({ data: '${t}' });
+  });
+
+  it('offers only the contents a kind can use and swaps starting values', () => {
+    expect(contentKindsFor('image')).toEqual(['media']);
+    expect(contentKindsFor('numbers')).toEqual(['text', 'file']);
+    expect(contentKindsFor('message')).toContain('media');
+    expect(buildInputNode(form({ kind: 'image', content: 'text' }), []).ok).toBe(false);
+    expect(textForKind('float', 'hello', 'text')).toBe('1.5');
+    expect(textForKind('float', 'my own', 'text')).toBe('my own');
+    expect(textForKind('string', '1.5', 'expression')).toBe('hello ${i}');
   });
 
   it('builds media and data-file modes', () => {
-    const media = buildInputNode(form({ type: 'sensor_msgs/msg/Image', content: 'media', source: 'clip.mp4', rateHz: '' }), []);
+    const media = buildInputNode(form({ kind: 'image', type: 'sensor_msgs/msg/Image', content: 'media', source: 'clip.mp4', rateHz: '' }), []);
     expect(media.ok && media.value.mode).toBe('media');
     expect(media.ok && media.value.rate_hz).toBeUndefined();
     const file = buildInputNode(form({ content: 'file', source: 'rows.jsonl', rateHz: '5' }), []);

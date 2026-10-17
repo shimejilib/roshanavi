@@ -1,4 +1,4 @@
-"""Node list (ノード一覧) aggregation: graph nodes ∪ registered targets (pure, DESIGN §6.6).
+"""Node list (ノード一覧) aggregation: graph nodes ∪ registered targets (pure, docs/design/ui.md).
 
 One row per running ROS node, plus one row for every launcher target or
 persistent dummy that has no node on the graph right now (stopped, crashed, or
@@ -22,9 +22,9 @@ def _origin(target: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
               'imported_from': spec.get('imported_from')}
     if target.get('kind') == 'dummy':
         origin.update(package='roshanavi', executable='dummy', topic=spec.get('topic'))
-    if target.get('kind') == 'transform':
+    if target.get('kind') in ('transform', 'function'):
         output = spec.get('output') or {}
-        origin.update(package='roshanavi', executable='transform', topic=output.get('topic'))
+        origin.update(package='roshanavi', executable=target['kind'], topic=output.get('topic'))
     return {k: v for k, v in origin.items() if v is not None}
 
 
@@ -91,7 +91,11 @@ def build_node_list(graph_nodes: Iterable[Mapping[str, Any]],
                     targets: Iterable[Mapping[str, Any]],
                     lifecycle_states: Optional[Mapping[str, Optional[str]]] = None
                     ) -> Dict[str, Any]:
-    """``{rows, groups}`` for ``GET /api/node-list``."""
+    """``{rows, groups, targets}`` for ``GET /api/node-list``.
+
+    ``targets`` is the launcher snapshot the rows were built from: the UI plans
+    bulk actions from it, so rows and plan never disagree (issue #1).
+    """
     states = lifecycle_states or {}
     by_id = {t['id']: t for t in targets}
     groups = {tid: g for tid, g in ((tid, _group_of(t)) for tid, t in by_id.items()) if g}
@@ -109,7 +113,8 @@ def build_node_list(graph_nodes: Iterable[Mapping[str, Any]],
         if tid not in seen_targets:
             rows.append(_stopped_row(target, tid if tid in groups else None))
     rows.sort(key=_sort_key)
-    return {'rows': rows, 'groups': sorted(groups.values(), key=lambda g: g['id'])}
+    return {'rows': rows, 'groups': sorted(groups.values(), key=lambda g: g['id']),
+            'targets': list(by_id.values())}
 
 
 def lifecycle_node_ids(graph_nodes: Iterable[Mapping[str, Any]]) -> List[str]:

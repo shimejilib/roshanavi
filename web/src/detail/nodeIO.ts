@@ -1,4 +1,4 @@
-// What a node receives and sends, for the right pane (pure, DESIGN §6.5).
+// What a node receives and sends, for the right pane (pure, docs/design/ui.md).
 // The data shown is what flows on the topic, not proof the node got it; a
 // QoS mismatch is called out as "not delivered to this node".
 

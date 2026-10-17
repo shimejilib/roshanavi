@@ -17,6 +17,8 @@
   <exec_depend>launch_ros</exec_depend>
   <!-- only for audio_level with input_type "stamped" (the default) -->
   <exec_depend>audio_common_msgs</exec_depend>
+  <!-- only for the image function of logic.py (function node example) -->
+  <exec_depend>python3-numpy</exec_depend>
 
   <test_depend>ament_cmake_gtest</test_depend>
 

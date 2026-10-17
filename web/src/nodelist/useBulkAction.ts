@@ -2,11 +2,10 @@
 
 import { useState } from 'react';
 import { api, describeError } from '../api/client';
-import type { NodeRow } from '../api/nodeListTypes';
+import type { NodeListResponse } from '../api/nodeListTypes';
 import type { ControlAction } from '../graph/nodeControl';
 import { t } from '../i18n';
-import { useLive } from '../state/LiveProvider';
-import { bulkConfirmText, isEmptyPlan, planBulk, type BulkPlan } from './bulk';
+import { bulkConfirmText, isEmptyPlan, planFromSnapshot, type BulkPlan } from './bulk';
 
 export interface BulkMessage {
   kind: 'ok' | 'error';
@@ -15,7 +14,8 @@ export interface BulkMessage {
 
 export interface BulkState {
   pending: { plan: BulkPlan; text: string } | null;
-  request: (action: ControlAction, rows: readonly NodeRow[]) => void;
+  /** Plan from one node-list snapshot (rows + targets of the same response). */
+  request: (action: ControlAction, snapshot: NodeListResponse, selected: ReadonlySet<string>) => void;
   confirm: () => void;
   cancel: () => void;
   busy: boolean;
@@ -33,13 +33,12 @@ async function runPlan(plan: BulkPlan): Promise<string[]> {
 }
 
 export function useBulkAction(onDone: () => void): BulkState {
-  const { live } = useLive();
   const [pending, setPending] = useState<BulkState['pending']>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<BulkMessage | null>(null);
 
-  const request = (action: ControlAction, rows: readonly NodeRow[]) => {
-    const plan = planBulk(action, rows, live.targets);
+  const request = (action: ControlAction, snapshot: NodeListResponse, selected: ReadonlySet<string>) => {
+    const plan = planFromSnapshot(action, snapshot, selected);
     if (isEmptyPlan(plan)) {
       setMessage({ kind: 'error', text: bulkConfirmText(plan) || t('nodes.bulk.nothing') });
       return;

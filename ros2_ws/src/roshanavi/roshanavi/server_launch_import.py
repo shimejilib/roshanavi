@@ -1,4 +1,4 @@
-"""Launch decomposition import routes (DESIGN §4.16).
+"""Launch decomposition import routes (docs/design/launcher.md).
 
 ``preview`` evaluates the launch file in a time-limited subprocess and returns
 the proposed targets (cached server-side under ``preview_id``); ``commit``

@@ -1,4 +1,4 @@
-// Shapes of the node parameter and interface-definition API (DESIGN §4.13).
+// Shapes of the node parameter and interface-definition API (docs/design/launcher.md).
 
 export type ParamType =
   | 'not_set'

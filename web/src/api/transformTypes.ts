@@ -1,4 +1,4 @@
-// Transform nodes (変換ノード) and project switching (DESIGN §4.18, §4.10).
+// Transform nodes (変換ノード) and project switching (docs/design/nodes.md, docs/design/launcher.md).
 
 import type { Qos } from './types';
 

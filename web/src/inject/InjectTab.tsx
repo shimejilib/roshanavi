@@ -11,6 +11,8 @@ import { ModeFields, ModeSelector, QosFields } from './ModeFields';
 import { CapturePanel } from '../media/CapturePanel';
 import { MediaFields, TypeDetection } from '../media/MediaFields';
 import { useMediaTypes } from '../media/useMediaTypes';
+import { DataKindField } from '../datakind/DataKindField';
+import type { PortKind } from '../datakind/kinds';
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 
@@ -35,12 +37,11 @@ export function InjectTab() {
   const { live } = useLive();
   const { injectTopic, openDialog } = useAppState();
   const [form, setForm] = useState<InjectForm>(DEFAULT_FORM);
-  const [typeAuto, setTypeAuto] = useState(false);
+  const [kind, setKind] = useState<PortKind | ''>('');
   const [notice, setNotice] = useState<Notice>(null);
   const [busy, setBusy] = useState(false);
   // Until the user edits the YAML, changing the type replaces it with the new template.
   const [yamlTouched, setYamlTouched] = useState(false);
-  const types = useRemoteList(api.types, true);
   const needsFiles = form.mode === 'stream' || form.mode === 'bag' || form.mode === 'media';
   const files = useRemoteList<DataFile>(() => api.files().then((r) => r.files), needsFiles, form.mode);
   const mediaTypes = useMediaTypes(form.topic, form.mode === 'media');
@@ -51,16 +52,8 @@ export function InjectTab() {
   );
   const update = (patch: Partial<InjectForm>) => setForm((prev) => ({ ...prev, ...patch }));
 
-  const setTopic = (topic: string) => {
-    const known = topicTypes.get(topic);
-    if (known && known.length === 1 && known[0]) {
-      update({ topic, type: known[0] });
-      setTypeAuto(true);
-    } else {
-      update({ topic });
-      setTypeAuto(false);
-    }
-  };
+  // The type of an existing topic is detected by DataKindField; a new topic gets a kind.
+  const setTopic = (topic: string) => update({ topic });
 
   useEffect(() => {
     if (injectTopic) setTopic(injectTopic);
@@ -132,23 +125,14 @@ export function InjectTab() {
                 ))}
               </datalist>
             </label>
-            <label>
-              {t('inject.type')}
-              <div className="row">
-                <input list="inject-types" value={form.type} placeholder={t('inject.typePlaceholder')} onChange={(e) => { update({ type: e.target.value }); setTypeAuto(false); }} data-testid="inject-type" />
-                <button type="button" onClick={() => void loadTemplate(form.type)} disabled={!templatePath(form.type)}>
-                  {t('inject.loadTemplate')}
-                </button>
-              </div>
-              <datalist id="inject-types">
-                {types.items.map((name) => (
-                  <option key={name} value={name} />
-                ))}
-              </datalist>
-              {typeAuto && <span className="muted small">{t('inject.typeAuto')}</span>}
+            <div className="inject-type-row">
+              <DataKindField testId="inject-type" label={t('kind.label')} topicTypes={topicTypes.get(form.topic) ?? []}
+                value={{ kind, type: form.type }} onChange={(port) => { setKind(port.kind); update({ type: port.type }); }} />
+              <button type="button" onClick={() => void loadTemplate(form.type)} disabled={!templatePath(form.type)}>
+                {t('inject.loadTemplate')}
+              </button>
               {form.mode === 'media' && <span className="muted small">{t('inject.typeAutoHint')}</span>}
-              {types.error && <span className="error-text small">{types.error}</span>}
-            </label>
+            </div>
           </>
         )}
         <ModeSelector form={form} onChange={update} />

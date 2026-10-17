@@ -1,0 +1,52 @@
+# roshanavi — セキュリティ
+
+roshanavi は **認証なしのローカル開発ツール** で、利用者の ROS 環境の中でノードを起動・停止し、ファイルを読み書きし、式を評価する。そのため、この文書は設計上の判断を 1 か所に集めた索引で、各項目の詳細はリンク先の節にある。新しい機能を足すときは、ここの項目に当てはまるものがないか確認する (`CLAUDE.md` の「Rules that have bitten this project」にも要約がある)。
+
+## ネットワークの入口
+
+- **ローカルだけで待ち受ける**: サーバーは既定で `127.0.0.1` に bind する。Docker では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:6871:6871` にして、ホストの外からは届かない。認証付きのリモート公開は非ゴール ([vision.md#ゴールと非ゴール](../overview/vision.md#ゴールと非ゴール))。別マシンからのアクセスは [remote-access.md](../planned/remote-access.md) に設計だけある (未実装)。詳細: [api.md#既定ポート・入力検証・エラー形式](api.md#既定ポート入力検証エラー形式)。
+- **Host / Origin / Content-Type を全ルートで検査する**: ブラウザ経由の攻撃 (DNS rebinding、WebSocket のなりすまし、CSRF) を防ぐための ASGI ミドルウェア。`Host` は許可リスト、WebSocket の `Origin` は許可リスト内のみ、ボディのある POST / PUT / PATCH / DELETE は `application/json` のみ (違反は 415)。新しい REST・WebSocket は必ずこの検査の内側に置く。詳細: [api.md#ローカル Web からの攻撃対策](api.md#ローカル-web-からの攻撃対策)。
+  - 状態を変える操作も同じ検査を通る例: 詳細計測モードの `PUT /api/tracing` ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47))、ブラウザ入力の `/ws/capture` ([input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4))、パラメータの変更 ([launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a))。
+- **入力は入口で検証する**: API の入力は pydantic モデルで検証し、エラーは `{error: {code, message}}` で返す。プロジェクトファイルもスキーマで検証し、未知のキーは拒否する。詳細: [api.md#既定ポート・入力検証・エラー形式](api.md#既定ポート入力検証エラー形式)、[launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)。
+
+## 入力された式・コード
+
+- **`eval` / `exec` を使わない**: ダミー入力の式 (`${...}`) と変換ノードの式は、`ast.parse` した木の許可ノードだけを評価する自前の評価器で動かす。属性アクセス・添字・内包表記・lambda は拒否し、べき指数や文字列長に上限を置く (DoS 防止)。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)。
+- **入力メッセージのフィールド参照の境界**: 変換ノードの式が受信メッセージを読めるのは、`Expression(..., message_names=...)` で許可した名前に限る。メッセージは素のデータにして読み取り専用の `MsgView` で包み、`getattr` は一切使わないので Python のオブジェクトの属性には届かない。`_` で始まるフィールド名は拒否し、ビューは変更・反復・ハッシュができない。この評価器を広げるときは、安全の境界のテストを必ず足す。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)。
+- **関数ノードの利用者コードはサーバーの外で動かす**: サーバーは関数の一覧とシグネチャを `ast` の静的解析だけで作り、利用者のコードをサーバー内で実行も import もしない。import できるのは `<workspace>/src` の ROS パッケージの直下の Python パッケージだけで、利用者自身のコードなので、信頼の水準は自分でノードを起動するのと同じ (サンドボックスはしない)。詳細: [nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
+
+## ファイルとパス
+
+- **ユーザーが指定するパスは realpath で包含を確かめる**: `..`・絶対パス・外向き symlink を拒否する。対象ごとの許可範囲は次のとおり。
+  - 注入の stream / bag のファイル: `data_dir` の中 (パストラバーサル防止)。[input-and-media.md#injector](input-and-media.md#injector)
+  - メディアファイルとフォルダ: `data_dir` の中の通常ファイル。CameraInfo のキャリブレーション YAML は ワークスペースか `data_dir` の中。[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)
+  - Launcher のパラメータファイル: ワークスペースか `data_dir` の中の既存の `.yaml`。[launcher.md#Launcher](launcher.md#launcher-p3)
+  - ダミー・変換ノードの launch の書き出し先、関数ノードのコードの書き出し先: ワークスペースの中 (制御文字は拒否)。[nodes.md#恒久ダミーノード](nodes.md#恒久ダミーノード-p3)、[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)
+  - 録画の削除: 録画ディレクトリの形式に合い、親が recordings ディレクトリそのものであるもの (symlink・`..` を拒否)。[input-and-media.md#録画](input-and-media.md#録画-p4)
+  - launch ファイルの取り込み: `ros2 launch` で利用者が実行するのと同じ範囲 (走査で見つかったパッケージの launch ファイル、またはワークスペースの中のファイル) だけ。`data_dir` (アップロード・録画) の下のファイルは評価しない。[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)
+  - 関数ノードのモジュール: `<workspace>/src` のパッケージの中の通常ファイル。[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)
+- **プロジェクトの切り替えは一覧の `id` だけを受け付ける**: クライアントから任意のパスを送って開かせることはできない。サンプルはコピーして開き、サンプル自体と元のプロジェクトファイルには書かない。詳細: [launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)。
+- **既存のファイルを壊さない**: プロジェクトファイルの保存は一時ファイル → fsync → `os.replace` (原子的)。テンプレートのコピーは `O_EXCL` で、既存は上書きしない。読み込みに失敗したファイルは自動では上書きしない。関数ノードのコードの書き出しは、roshanavi が生成したファイルだけを置き換え、利用者のファイルは上書きしない (409)。詳細: [launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)、[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
+
+## サブプロセス
+
+- **シェルを使わず、argv のリストで起動する**: Launcher のノード、ffmpeg、`ros2 bag play` / `record`、計測ノード、launch 取り込みの子プロセスのすべて。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)、[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)、[input-and-media.md#録画](input-and-media.md#録画-p4)、[measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)、[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)。
+- **利用者の値を argv に紛れ込ませない**: `ros2 run` / `ros2 launch` / rcl 自身が解釈する argv (`--prefix`, `--ros-args`, `--params-file`, `__node:=` …) を、パッケージ名・実行ファイル名・パラメータ・リマップ・追加引数に混ぜられないよう、正規表現と走査結果で検査する。起動できるのは走査結果に存在するパッケージ・実行ファイル・launch ファイルだけ。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)。
+- **まだ source されていないパッケージの環境**: colcon が書く `package.dsv` (宣言的な形式) を読んで適用し、シェルスクリプトは実行しない。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)。
+- **ffmpeg に外部参照を読ませない**: 細工したファイル (HLS / concat のプレイリスト等) で URL 取得や `data_dir` 外の読み出しをさせないため、拡張子から demuxer を決めて `-f` で強制し、`-format_whitelist` にもその 1 つだけを入れる。`-protocol_whitelist file,pipe` と、入力を `file:<絶対パス>` で渡すことで http などのプロトコルや `concat:` 等の接頭辞も使えない。プレイリストらしき先頭は ffmpeg に渡す前に拒否する。詳細: [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)。
+- **launch ファイルの評価はサンドボックスの子プロセスで行う**: Python の launch ファイルの評価はその Python コードの実行になるため、サーバーのプロセスでは行わない。新しいセッションの子プロセスで、20 秒で打ち切り、終了後もプロセスグループごと SIGKILL し、結果は 8 MB まで。評価中もプロセスは起動せず、`LaunchContext` を変えるだけの action だけを訪れ、`Node` は実行せずに設定を読み取る。`OpaqueFunction` は中の Python が実行されるので警告を出す。パラメータファイルの中身は子プロセスが読み、取り込みは `preview_id` で行って、クライアントから中身を受け取らない。詳細: [launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)。
+- **書き出すコードには検証済みの値だけを埋め込む**: launch ファイルの書き出しは、ノード名・ID を検証済みの値だけ `repr()` で埋め込む。関数ノードのコードの書き出しも検証済みの値を `repr()` で埋め込み、書く前に `compile()` で確かめる。詳細: [nodes.md#恒久ダミーノード](nodes.md#恒久ダミーノード-p3)、[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
+- **自分が起動したものだけを止める**: プロセスは新しいセッション (プロセスグループ) で起動し、停止は SIGINT → SIGTERM → SIGKILL の順。サーバー終了時は全ターゲットを止め、計測ノードは親が変わったら自分で終了する。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)、[measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)。
+
+## 他人のプロセスに触らない
+
+- **roshanavi が起動していないプロセスにはシグナルを送らない**: 地図・ノード一覧から停止・再起動できるのは Launcher の起動対象と注入ジョブだけで、外部のノードはボタンを無効にして理由を出す。lifecycle の遷移は ROS の正規のサービスだけを使い、プロセスにシグナルは送らない。詳細: [ui.md#実装メモ (P3: Launcher)](ui.md#実装メモ-p3-launcher)、[launcher.md#lifecycle ノード](launcher.md#lifecycle-ノード-p45b)、[ui.md#実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)](ui.md#実装メモ-p45b-ノード一覧lifecyclelaunch-の取り込み)。
+- **外部ノードのパラメータ・lifecycle の変更は確認を挟む**: roshanavi が起動していないノード (role `other`) は閲覧のみが既定で、変更には `allow_external: true` が必要。UI は確認ダイアログの後にだけこれを付け、無ければ 403 (`external_node_readonly`)。roshanavi 自身のノードは変更できない (403 `self_node`)。グラフにいまいるノードだけが対象で、任意のサービス名は作らせない。詳細: [launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)、[launcher.md#lifecycle ノード](launcher.md#lifecycle-ノード-p45b)、[ui.md#実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)](ui.md#実装メモ-p45b-ノード一覧lifecyclelaunch-の取り込み)。
+- **一括操作は巻き込まれるノードを見せる**: 起動設定ごとに 1 回だけ操作し、選択していないのに一緒に止まるノードも確認ダイアログに列挙する。詳細: [ui.md#実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)](ui.md#実装メモ-p45b-ノード一覧lifecyclelaunch-の取り込み)。
+
+## 資源の上限と権限
+
+- **入力の大きさに上限を置く**: 式の評価 (べき指数・文字列長・10,000 文字・添字 ±1,000,000)、パラメータの値 (文字列 4096 文字、配列 1000 要素など)、ブラウザ入力 (音声 256 KB / フレーム、カメラ 4 MB / フレーム・30 fps、1 トピックに 1 つ)、ビューア (最大 16 トピック)、launch 取り込み (深さ 40・5000 要素・結果 8 MB・案は最大 16 個 / 30 分)、変換ノードの遅延キュー (最大 10,000 件)。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)、[launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)、[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)、[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)、[nodes.md#変換ノード](nodes.md#変換ノード-p5)。
+- **録画はディスクの空きを守る**: 空きが少ないと警告し、さらに少なければ自動停止、開始もしない。詳細: [input-and-media.md#録画](input-and-media.md#録画-p4)。
+- **詳細計測モードに特権は要らない**: LTTng のユーザー空間 (UST) だけを使い、root 権限・カーネルモジュール・Docker の特権は要らない。詳細: [measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)。
+- **E2E は利用者のデータに触らない**: E2E は別の `ROS_DOMAIN_ID`・空の `/data` (tmpfs)・ポート非公開の隔離したスタックで動かし、前後で `lab` のプロジェクトファイルが変わっていないことを確かめる。詳細: [ui.md#実装メモ (P2)](ui.md#実装メモ-p2)。

@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 // F-02: ~200 map elements with flowing particles must stay smooth.
 // /ws/live is replaced by a synthetic graph (no ROS needed beyond serving the UI).
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const PIPELINES = 20; // each: src -> /in_i -> proc_i -> /out_i -> sink_i  (5 vertices + 4 edges)
 const QOS = { reliability: 'reliable', durability: 'volatile', depth: 10 };
 

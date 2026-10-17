@@ -3,7 +3,7 @@
 //
 // SingleThreadedExecutor: all callbacks (receive, config, 1 s timer) run on one
 // thread, so the per-topic state needs no lock. The EventsExecutor was measured
-// too (DESIGN 4.3.1): slightly less CPU for many small messages, about twice the
+// too (docs/design/measurement.md): slightly less CPU for many small messages, about twice the
 // CPU for 30 Hz images, so it is not used.
 #include <cstdio>
 #include <exception>

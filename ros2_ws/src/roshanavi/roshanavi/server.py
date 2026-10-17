@@ -20,8 +20,8 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import (msgutil, security, server_launch_import, server_launcher, server_media,
-               server_nodes, server_tracing, server_transforms)
+from . import (data_kinds, msgutil, security, server_functions, server_launch_import,
+               server_launcher, server_media, server_nodes, server_tracing, server_transforms)
 from .api_errors import ApiError, parse_window
 from .echo import EchoError
 from .files import FileAccessError, list_files
@@ -115,6 +115,11 @@ def _cached_types() -> List[str]:
     return msgutil.list_types()
 
 
+@functools.lru_cache(maxsize=1)
+def _cached_kinds() -> Dict[str, Any]:
+    return data_kinds.catalog()
+
+
 def _register_rest(app: FastAPI, lab: Lab) -> None:
     @app.get('/api/health')
     def get_health() -> Dict[str, Any]:
@@ -138,7 +143,15 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.get('/api/types')
     def get_types() -> Dict[str, Any]:
-        return {'types': _cached_types()}
+        # groups: 詳細設定モード order (common -> workspace -> by package), never A-Z only.
+        packages = [p['name'] for p in lab.launcher.workspace.to_dict()['packages']
+                    if p['origin'] == 'workspace']
+        types = _cached_types()
+        return {'types': types, 'groups': data_kinds.type_groups(types, packages)}
+
+    @app.get('/api/data-kinds')
+    def get_data_kinds() -> Dict[str, Any]:
+        return _cached_kinds()
 
     @app.get('/api/types/{pkg}/msg/{name}/template')
     def get_template(pkg: str, name: str) -> Dict[str, Any]:
@@ -262,6 +275,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_launch_import.register(app, lab)
     server_tracing.register(app, lab)
     server_transforms.register(app, lab)
+    server_functions.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -272,9 +286,10 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
         @app.get('/')
         def index() -> Dict[str, Any]:
             return {'name': 'roshanavi', 'ui': None,
-                    'api': ['/api/health', '/api/graph', '/api/traffic', '/api/types', '/api/inject',
+                    'api': ['/api/health', '/api/graph', '/api/traffic', '/api/types',
+                            '/api/data-kinds', '/api/inject',
                             '/api/files', '/api/tracing', '/api/targets', '/api/workspace', '/api/build',
-                            '/api/project', '/api/dummies', '/api/media/types',
+                            '/api/project', '/api/dummies', '/api/functions', '/api/media/types',
                             '/api/recordings', '/api/nodes/{node}/parameters',
                             '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',
                             '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}']}

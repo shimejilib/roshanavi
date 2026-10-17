@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 // Requires `docker compose up -d lab demo` (demo runs the lifecycle node lc_talker).
 // Node list tab: bulk stop / start of talker + listener, lifecycle transitions of an
 // external lifecycle node, and the launch decomposition import.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const IMPORTED = ['imported_talker', 'imported_listener'];
 
 async function openNodes(page: Page) {
@@ -67,13 +67,11 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await page.getByTestId('node-check-target:listener').check();
   await expect(page.getByTestId('nodes-selected')).toContainText('2 個選択');
   await expect(page.getByTestId('nodes-bulk-start')).toBeEnabled();
-  // The row list (polled) and the live target state (websocket) can disagree for a moment right
-  // after the stop; a start requested against the stale one is refused without a dialog. Retry the
-  // request until the dialog opens; its content and the outcome are still asserted below.
-  await expect(async () => {
-    await page.getByTestId('nodes-bulk-start').click();
-    await expect(page.getByTestId('confirm-dialog')).toBeVisible({ timeout: 2_000 });
-  }).toPass({ timeout: 15_000 });
+  // Rows and the bulk plan come from the same node-list snapshot (issue #1): the start right
+  // after the stop must open the dialog on the first click, no retry.
+  await page.getByTestId('nodes-bulk-start').click();
+  await expect(page.getByTestId('confirm-dialog')).toBeVisible();
+  await expect(page.getByTestId('confirm-dialog')).toContainText('talker');
   await page.getByTestId('confirm-ok').click();
   await page.getByTestId('nodes-status').selectOption('all');
   await expect(page.getByTestId('node-row-/talker')).toHaveAttribute('data-status', /starting|running/, { timeout: 20_000 });

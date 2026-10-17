@@ -1,4 +1,4 @@
-// UI strings for 詳細計測モード (LTTng tracing, DESIGN §4.3.2; merged into `ja`).
+// UI strings for 詳細計測モード (LTTng tracing, docs/design/measurement.md; merged into `ja`).
 
 export const tracingJa = {
   'tracing.toggle': '詳細計測モード',

@@ -1,4 +1,5 @@
 import type { GraphNode } from '../api/types';
+import { FunctionStatusPanel } from '../function/FunctionStatusPanel';
 import { t, type MessageKey } from '../i18n';
 import { statusClass, statusLabel } from '../launcher/status';
 import { formatDuration } from '../lib/format';
@@ -43,6 +44,7 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
       <div className="row">
         <button type="button" onClick={() => openLogs(target.id)} data-testid="node-logs">{t('detail.openLogs')}</button>
       </div>
+      {target.kind === 'function' && <FunctionStatusPanel target={target} />}
     </section>
   );
 }

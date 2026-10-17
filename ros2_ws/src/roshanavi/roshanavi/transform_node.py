@@ -3,7 +3,7 @@
 Subscribes the input topic(s) of the config's ``transform`` spec and publishes
 the computed (``mode: map``) or forwarded (``mode: relay``) messages on the
 output topic, with optional filter condition, drop ratio, throttle and delay
-(DESIGN §4.18). The node name comes from ``--ros-args -r __node:=<name>``
+(docs/design/nodes.md). The node name comes from ``--ros-args -r __node:=<name>``
 (the Launcher and the exported launch file always pass it) or the spec.
 
 Exit codes: 2 = bad config (unreadable, schema or expression errors),

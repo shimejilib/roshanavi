@@ -10,6 +10,8 @@ import { trafficJa } from './messagesTraffic';
 import { tracingJa } from './messagesTracing';
 import { uxJa2 } from './messagesUx2';
 import { transformJa } from './messagesTransform';
+import { kindsJa } from './messagesKinds';
+import { functionJa } from './messagesFunction';
 
 export const ja = {
   ...mapJa,
@@ -21,6 +23,8 @@ export const ja = {
   ...trafficJa,
   ...tracingJa,
   ...transformJa,
+  ...kindsJa,
+  ...functionJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

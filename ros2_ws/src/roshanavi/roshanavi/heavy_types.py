@@ -1,6 +1,6 @@
 """Message types that are costly to (de)serialize: images and point clouds.
 
-Traffic monitoring subscribes to them only on explicit opt-in (DESIGN §4.3);
+Traffic monitoring subscribes to them only on explicit opt-in (docs/design/map-and-traffic.md);
 transform nodes only relay / delay / throttle / drop them (no field expressions).
 """
 

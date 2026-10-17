@@ -1,4 +1,4 @@
-// Node list (ノード一覧) table logic: filters, search, selection and grouping (pure, DESIGN §6.6).
+// Node list (ノード一覧) table logic: filters, search, selection and grouping (pure, docs/design/ui.md).
 
 import type { NodeGroup, NodeRow, RowRole } from '../api/nodeListTypes';
 

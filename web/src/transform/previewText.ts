@@ -1,4 +1,4 @@
-// Plain-Japanese text for dry-run errors (codes from the server's evaluator, DESIGN §4.5).
+// Plain-Japanese text for dry-run errors (codes from the server's evaluator, docs/design/input-and-media.md).
 
 import type { PreviewError } from '../api/transformTypes';
 import { tDynamic } from '../i18n';

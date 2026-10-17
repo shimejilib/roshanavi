@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 // Requires `docker compose up -d lab demo`. Starts nodes from the Launcher tab,
 // checks their roles on the map, then stops and removes everything it created.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const CREATED = ['e2e_talker', 'e2e_listener', 'e2e_dummy'];
 
 async function cleanup(page: Page) {
@@ -54,7 +54,7 @@ test('start talker from the Launcher, see it as "mine" on the map, stop it', asy
   // A persistent dummy node made from a running inject job.
   await page.getByTestId('tab-inject').click();
   await page.getByTestId('inject-topic').fill('/e2e_cmd');
-  await page.getByTestId('inject-type').fill('std_msgs/msg/String');
+  await page.getByTestId('inject-type-kind').selectOption('string');
   await expect(page.getByTestId('inject-yaml')).toHaveValue(/data:/);
   await page.getByLabel('周期的に').check();
   await page.getByLabel('周期 (Hz)').fill('2');

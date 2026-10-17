@@ -10,11 +10,14 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import (BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr,
                       confloat, conint, constr, root_validator)
 
+from .. import data_kinds
 from ..heavy_types import is_heavy
 from ..media.options import MediaOptions
 from . import validate
 
 ParamValue = Union[StrictBool, StrictInt, StrictFloat, StrictStr]
+KindName = Literal['string', 'float', 'int', 'bool', 'numbers', 'json', 'image', 'audio', 'bytes',
+                   'message']
 ID_PATTERN = validate.TARGET_ID_RE.pattern
 PROJECT_VERSION = 1
 
@@ -47,7 +50,7 @@ class TargetSpec(_Strict):
     role: Literal['mine', 'dependency'] = 'dependency'
     autostart: bool = False
     auto_restart: bool = False
-    # Informational: the launch file this target was decomposed from (§4.16).
+    # Informational: the launch file this target was decomposed from (docs/design/launcher.md).
     imported_from: Optional[constr(max_length=1024)] = None
 
     @root_validator(skip_on_failure=True)
@@ -76,6 +79,8 @@ class DummySpec(_Strict):
     namespace: Optional[constr(max_length=256)] = None
     topic: constr(min_length=1, max_length=256)
     type: constr(min_length=1, max_length=256)
+    # データの種類 the UI chose (docs/design/nodes.md); informational, must fit ``type``.
+    kind: Optional[KindName] = None
     mode: Literal['once', 'periodic', 'stream', 'media']
     payload: Optional[Dict[str, Any]] = None
     rate_hz: Optional[confloat(gt=0, le=1000)] = None
@@ -89,6 +94,7 @@ class DummySpec(_Strict):
 
     @root_validator(skip_on_failure=True)
     def _mode_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        _check_kind(values.get('kind'), values['type'])
         mode = values['mode']
         if mode == 'media':
             if not values.get('source'):
@@ -99,6 +105,11 @@ class DummySpec(_Strict):
         if mode == 'stream' and not values.get('source'):
             raise ValueError('mode "stream" needs "source" (a file in the data dir)')
         return values
+
+
+def _check_kind(kind: Optional[str], type_name: str) -> None:
+    if kind is not None and not data_kinds.fits(kind, type_name):
+        raise ValueError(f'type {type_name} does not carry data kind {kind!r}')
 
 
 ALIAS_PATTERN = r'^[a-z][a-z0-9_]{0,31}$'
@@ -205,11 +216,76 @@ def _same_type(a: str, b: str) -> bool:
     return norm(a) == norm(b)
 
 
+MODULE_PATTERN = r'^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*){0,7}\Z'
+FUNCTION_PATTERN = r'^[A-Za-z][A-Za-z0-9_]{0,63}\Z'
+MAX_FUNCTION_INPUTS = 8
+# pkg/Name or pkg/msg/Name only: function node types are also written into generated code.
+MSG_TYPE_PATTERN = r'^[A-Za-z][A-Za-z0-9_]*/(msg/)?[A-Za-z][A-Za-z0-9_]*\Z'
+RESERVED_MODULE_TOPS = ('roshanavi',)  # never re-import the tool's own package from source
+
+
+class FunctionInput(_Strict):
+    topic: constr(min_length=1, max_length=256)
+    # データの種類: what the function receives (``message``: the message as a dict).
+    kind: KindName = 'string'
+    # Explicit type: a compatible type of an existing topic (Float32 ...) or, for kind
+    # ``message``, the ROS type. Default: the kind's type (data_kinds).
+    type: Optional[constr(regex=MSG_TYPE_PATTERN, max_length=256)] = None
+
+
+class FunctionOutput(FunctionInput):
+    qos: QosSpec = Field(default_factory=QosSpec)
+
+
+class FunctionSpec(_Strict):
+    """A function node (``ros2 run roshanavi function``): a plain Python function as a node."""
+
+    id: constr(regex=ID_PATTERN)
+    name: constr(min_length=1, max_length=256)
+    namespace: Optional[constr(max_length=256)] = None
+    module: constr(regex=MODULE_PATTERN)     # e.g. my_pkg.logic (a workspace package)
+    function: constr(regex=FUNCTION_PATTERN)  # a top-level function of that module
+    call: Literal['on_message', 'periodic', 'multi_input'] = 'on_message'
+    inputs: List[FunctionInput] = Field(default_factory=list, max_items=MAX_FUNCTION_INPUTS)
+    output: FunctionOutput
+    rate_hz: Optional[confloat(gt=0, le=1000)] = None   # periodic
+    trigger: constr(max_length=256) = 'any'  # multi_input: 'any' or one input topic
+    autostart: bool = False
+    auto_restart: bool = False
+
+    @root_validator(skip_on_failure=True)
+    def _consistent(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        call, inputs = values['call'], values['inputs']
+        if values['module'].split('.')[0] in RESERVED_MODULE_TOPS:
+            raise ValueError('module must be one of your workspace packages, not roshanavi')
+        if call == 'on_message' and len(inputs) != 1:
+            raise ValueError('call "on_message" takes exactly one input')
+        if call == 'multi_input' and len(inputs) < 2:
+            raise ValueError('call "multi_input" takes 2 or more inputs')
+        if call == 'periodic':
+            if inputs:
+                raise ValueError('call "periodic" takes no inputs')
+            if values.get('rate_hz') is None:
+                raise ValueError('call "periodic" needs "rate_hz"')
+        topics = [i.topic for i in inputs]
+        if len(set(topics)) != len(topics):
+            raise ValueError(f'input topics must be unique: {topics}')
+        if values['trigger'] != 'any' and values['trigger'] not in topics:
+            raise ValueError('trigger must be "any" or one of the input topics')
+        for port in [*inputs, values['output']]:
+            if port.kind == 'message' and not port.type:
+                raise ValueError(f'{port.topic}: kind "message" needs a "type"')
+            if port.type:
+                _check_kind(port.kind, port.type)
+        return values
+
+
 class ProjectSpec(_Strict):
     version: Literal[1] = PROJECT_VERSION
     targets: List[TargetSpec] = Field(default_factory=list, max_items=100)
     dummies: List[DummySpec] = Field(default_factory=list, max_items=100)
     transforms: List[TransformSpec] = Field(default_factory=list, max_items=100)
+    functions: List[FunctionSpec] = Field(default_factory=list, max_items=100)
     watch_topics: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
                                                                      max_items=200)
 
@@ -217,10 +293,10 @@ class ProjectSpec(_Strict):
     def _unique_ids(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         seen = set()
         for item in [*values.get('targets', []), *values.get('dummies', []),
-                     *values.get('transforms', [])]:
+                     *values.get('transforms', []), *values.get('functions', [])]:
             if item.id in seen:
                 raise ValueError(f'duplicate id {item.id!r} (ids must be unique across '
-                                 'targets, dummies and transforms)')
+                                 'targets, dummies, transforms and functions)')
             seen.add(item.id)
         return values
 

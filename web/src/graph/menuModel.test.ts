@@ -54,6 +54,17 @@ describe('map menu by node role', () => {
     expect(actions(items)).toEqual(['stop', 'restart', 'editTransform', 'exportLaunch', 'logs', 'params', 'isolate']);
   });
 
+  it('gives function nodes their own edit item', () => {
+    const fn: Target = {
+      ...target('fn', 'run'), kind: 'function', role: 'function',
+      spec: { id: 'fn', name: 'fn', module: 'p.logic', function: 'shout', call: 'on_message', inputs: [{ topic: '/a', kind: 'string' }], output: { topic: '/b', kind: 'string' } },
+    };
+    expect(menuRole(node('/fn', { target_id: 'fn' }), [fn])).toBe('function');
+    const items = menuItems({ kind: 'node', nodeId: '/fn' }, ctx({ node: node('/fn', { role: 'function', target_id: 'fn' }), targets: [fn] }));
+    expect(actions(items)).toEqual(['stop', 'restart', 'editFunction', 'exportLaunch', 'logs', 'params', 'isolate']);
+    expect(items.find((i) => i.action === 'editFunction')?.label).toBe('関数ノードの設定を変更');
+  });
+
   it('lets inject jobs pause but not be edited', () => {
     const job = { id: '1', state: 'running', pausable: true, paused: false } as Job;
     const items = menuItems({ kind: 'node', nodeId: 'dummy:1' }, ctx({ node: node('dummy:1', { job_id: '1', role: 'dummy' }), jobs: [job] }));

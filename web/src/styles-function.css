@@ -1,0 +1,26 @@
+/* データの種類 picker, ⚙ 設定 in the top bar, function-node dialog (docs/design/ui.md). */
+.app-settings { margin-left: auto; margin-right: 8px; }
+.app-settings .settings-items { min-width: 280px; }
+.data-kind-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.data-kind-field > span:first-child, .data-kind-field > label > span:first-child { font-size: 13px; }
+.data-kind-field > label { display: flex; flex-direction: column; gap: 4px; }
+.kind-detected { margin: 0; padding: 4px 8px; border-left: 3px solid var(--accent, #7c3aed); background: var(--surface-2, rgba(124, 58, 237, 0.06)); font-size: 13px; }
+.raw-type-picker { display: flex; flex-direction: column; gap: 4px; padding: 6px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.raw-type-picker .row { gap: 6px; }
+.raw-type-picker select { min-width: 0; flex: 1; }
+.inject-type-row { display: flex; flex-direction: column; gap: 6px; }
+.inject-type-row > button { align-self: flex-start; }
+.transform-input-row .data-kind-field > label > span:first-child,
+.transform-input-row .data-kind-field > span:first-child { display: none; }
+.function-form fieldset { display: flex; flex-direction: column; gap: 8px; }
+.function-port-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: start; }
+.function-port-row > label { display: flex; flex-direction: column; gap: 4px; }
+.function-input { display: flex; flex-direction: column; gap: 4px; }
+.function-signature { margin: 0; padding: 6px 8px; background: var(--surface-2, rgba(219, 39, 119, 0.06)); border-left: 3px solid #db2777; border-radius: 0 var(--radius) var(--radius) 0; overflow-wrap: anywhere; }
+.function-status { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; }
+.function-status h4 { margin: 0 0 4px; }
+.function-status p { margin: 2px 0; }
+.function-export .row { align-items: flex-end; gap: 8px; }
+@media (max-width: 640px) {
+  .function-port-row { grid-template-columns: minmax(0, 1fr); }
+}

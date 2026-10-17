@@ -62,6 +62,17 @@ def test_types_and_template(client):
     assert err.json()['error']['code'] == 'unknown_type'
 
 
+def test_type_groups_and_data_kinds(client):
+    body = client.get('/api/types').json()
+    assert body['groups'][0]['id'] == 'common'
+    assert body['groups'][0]['types'][0] == 'std_msgs/msg/String'
+    assert [g['id'] for g in body['groups'][:2]] == ['common', 'workspace']
+    kinds = client.get('/api/data-kinds').json()
+    assert kinds['kinds'][0] == {'id': 'string', 'type': 'std_msgs/msg/String',
+                                 'available': True, 'python': 'str'}
+    assert kinds['type_kinds']['std_msgs/msg/Int32'] == 'int'
+
+
 def test_inject_lifecycle(client):
     resp = client.post('/api/inject', json={
         'mode': 'periodic', 'topic': '/tl_api_inject', 'type': 'std_msgs/msg/String',

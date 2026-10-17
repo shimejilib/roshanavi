@@ -122,6 +122,11 @@ def to_display(msg: Any, max_array: int = DEFAULT_MAX_ARRAY,
     return _jsonable(message_to_ordereddict(msg), max_array, max_str)
 
 
+def to_plain(msg: Any) -> Dict[str, Any]:
+    """Message -> plain dict (nothing truncated): function nodes in 詳細設定モード."""
+    return _jsonable(message_to_ordereddict(msg), None, None)
+
+
 def _jsonable(value: Any, max_array: Optional[int], max_str: Optional[int]) -> Any:
     if isinstance(value, Mapping):
         return {str(k): _jsonable(v, max_array, max_str) for k, v in value.items()}

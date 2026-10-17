@@ -155,6 +155,9 @@ def test_repo_demo_project_is_valid():
     samples = {name: ('mine', False) for name in
                ('image_filter', 'blob_detector', 'audio_level', 'state_machine')}
     assert roles == {'talker': ('mine', True), 'listener': ('dependency', True), **samples}
+    (shout,) = spec.functions
+    assert (shout.module, shout.function, shout.autostart) == ('roshanavi_examples.logic', 'shout',
+                                                               False)
 
 
 def test_autosave_is_off_for_a_project_that_failed_to_load(tmp_path, data_dir):

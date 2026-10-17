@@ -1,4 +1,4 @@
-// UI strings for transform nodes (変換ノード) and project switching (DESIGN §4.18; merged into `ja`).
+// UI strings for transform nodes (変換ノード) and project switching (docs/design/nodes.md; merged into `ja`).
 
 export const transformJa = {
   'transform.create': '＋ 変換ノードを作る',
@@ -23,6 +23,7 @@ export const transformJa = {
   'transform.heavyNote': '{type} は大きい型なので、「そのまま中継」と遅延・間引き・取りこぼしだけが使えます (フィールドごとの式は使えません)。',
   'transform.outputTopic': '出力トピック',
   'transform.outputType': '出力の型',
+  'transform.outputKind': '出力のデータの種類',
   'transform.mapping': '出力メッセージ (YAML)',
   'transform.mappingHelp': '型の既定値から作ったひな形です。${…} の中に式を書きます。例: ${upper(msg.data)}、${msg.linear.x * 0.5}、${int(msg.data)}、header: ${msg.header}。空にすると入力をそのまま送ります。',
   'transform.functions': '使える関数: upper lower strip replace len clamp now_stamp() / sin cos abs min max round floor ceil sqrt int float str ほか。変数: i (受信回数) t (起動からの秒) now (現在時刻)',

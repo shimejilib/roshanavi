@@ -2,7 +2,7 @@
 
 A :class:`Computer` compiles the spec's ``condition`` and ``mapping`` once,
 with the input aliases (``msg``, ``msg1`` ...) as the only names whose fields
-may be read (DESIGN §4.5). ``compute`` returns whether the message passes the
+may be read (docs/design/input-and-media.md). ``compute`` returns whether the message passes the
 condition and the output as plain data, ready for ``msgutil.build``.
 
 Errors are collected per output field (``FieldError``), so the editor's live

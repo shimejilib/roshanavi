@@ -1,4 +1,4 @@
-// Plain-language explanation of a ROS term as a tooltip (DESIGN §0: no ROS knowledge assumed).
+// Plain-language explanation of a ROS term as a tooltip (docs/overview/vision.md: no ROS knowledge assumed).
 // With children: the words get a dotted underline; without: a small ⓘ.
 
 import type { ReactNode } from 'react';

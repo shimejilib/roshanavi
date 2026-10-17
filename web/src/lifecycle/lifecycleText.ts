@@ -1,4 +1,4 @@
-// Plain-language labels and confirmations for lifecycle transitions (pure, DESIGN §4.15).
+// Plain-language labels and confirmations for lifecycle transitions (pure, docs/design/launcher.md).
 
 import type { LifecycleInfo, LifecycleTransition } from '../api/nodeListTypes';
 import { t, type MessageKey } from '../i18n';

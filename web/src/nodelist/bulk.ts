@@ -6,7 +6,7 @@
 // Lifecycle nodes roshanavi did not start are switched with lifecycle
 // transitions instead (activate / deactivate); they are never signalled.
 
-import type { LifecycleGoal, NodeRow } from '../api/nodeListTypes';
+import type { LifecycleGoal, NodeListResponse, NodeRow } from '../api/nodeListTypes';
 import type { Target } from '../api/types';
 import { affectedNodes, type ControlAction } from '../graph/nodeControl';
 import { t } from '../i18n';
@@ -81,6 +81,16 @@ export function planBulk(action: ControlAction, selected: readonly NodeRow[], ta
   const chosen = new Set(selected.map((r) => r.node).filter(Boolean));
   plan.alsoStopped = plan.targets.flatMap((s) => s.nodes).filter((n) => !chosen.has(n)).sort();
   return plan;
+}
+
+/**
+ * Plan from one node-list snapshot: the selected rows and the targets they refer to come from
+ * the same response, so a row shown as stopped is never planned against a target state from
+ * another source (issue #1: the websocket could still say "running" right after a stop).
+ */
+export function planFromSnapshot(action: ControlAction, snapshot: Pick<NodeListResponse, 'rows' | 'targets'>, selected: ReadonlySet<string>): BulkPlan {
+  const rows = snapshot.rows.filter((r) => selected.has(r.key));
+  return planBulk(action, rows, snapshot.targets ?? []);
 }
 
 export function isEmptyPlan(plan: BulkPlan): boolean {

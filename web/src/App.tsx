@@ -1,3 +1,4 @@
+import { SettingsMenu } from './datakind/SettingsMenu';
 import { DetailPane } from './detail/DetailPane';
 import { DialogHost } from './dialogs/DialogHost';
 import { t } from './i18n';
@@ -37,6 +38,7 @@ function Shell() {
             </button>
           ))}
         </nav>
+        <SettingsMenu />
         <ConnectionStatus />
       </header>
       <div className="workspace">

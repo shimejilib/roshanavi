@@ -1,4 +1,4 @@
-"""Transform node (変換ノード) and project-switch routes (DESIGN §4.18, §4.10).
+"""Transform node (変換ノード) and project-switch routes (docs/design/nodes.md, docs/design/launcher.md).
 
 - ``POST /api/transforms`` (``?start=true``) / ``PUT /api/transforms/{id}``: register or
   change a transform node. Start / stop / delete / logs use the generic

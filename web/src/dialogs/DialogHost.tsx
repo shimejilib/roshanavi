@@ -1,5 +1,6 @@
 // Renders the dialog requested through AppState (one at a time).
 
+import { CreateFunctionDialog } from '../function/CreateFunctionDialog';
 import { CreateInputDialog } from '../input/CreateInputDialog';
 import { ImportLaunchDialog } from '../launchImport/ImportLaunchDialog';
 import { LifecycleDialog } from '../lifecycle/LifecycleDialog';
@@ -19,6 +20,8 @@ export function DialogHost() {
       return <CreateInputDialog topic={dialog.topic} type={dialog.type} dummyId={dialog.dummyId} />;
     case 'createTransform':
       return <CreateTransformDialog topic={dialog.topic} type={dialog.type} transformId={dialog.transformId} />;
+    case 'createFunction':
+      return <CreateFunctionDialog topic={dialog.topic} functionId={dialog.functionId} />;
     case 'projects':
       return <ProjectsDialog />;
     case 'params':

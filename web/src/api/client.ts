@@ -3,6 +3,8 @@
 import type { TracingStatus } from './tracingTypes';
 import type { PreviewResult, ProjectList, TransformSpec } from './transformTypes';
 import { t, tDynamic } from '../i18n';
+import type { KindCatalog, TypeGroup } from '../datakind/kinds';
+import type { FunctionSpec, ModuleEntry, ModuleInfo } from './functionTypes';
 import type {
   BuildStatus,
   DataFile,
@@ -81,6 +83,8 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   types: () => request<{ types: string[] }>('GET', '/api/types').then((r) => r.types),
+  typeCatalog: () => request<{ types: string[]; groups: TypeGroup[] }>('GET', '/api/types'),
+  dataKinds: () => request<KindCatalog>('GET', '/api/data-kinds'),
   template: (path: string) => request<{ type: string; template: Record<string, unknown> }>('GET', path),
   files: () => request<{ data_dir: string; files: DataFile[] }>('GET', '/api/files'),
   startInject: (req: InjectRequest) => request<Job>('POST', '/api/inject', req),
@@ -116,6 +120,12 @@ export const api = {
   addTransform: (spec: TransformSpec, start = true) =>
     request<Target>('POST', `/api/transforms${start ? '?start=true' : ''}`, spec),
   updateTransform: (spec: TransformSpec) => request<Target>('PUT', `/api/transforms/${enc(spec.id)}`, spec),
+  functionModules: () => request<{ workspace: string; modules: ModuleEntry[] }>('GET', '/api/functions/modules'),
+  functionModule: (name: string) => request<ModuleInfo>('GET', `/api/functions/module?name=${encodeURIComponent(name)}`),
+  addFunction: (spec: FunctionSpec, start = true) => request<Target>('POST', `/api/functions${start ? '?start=true' : ''}`, spec),
+  updateFunction: (spec: FunctionSpec) => request<Target>('PUT', `/api/functions/${enc(spec.id)}`, spec),
+  exportFunctionCode: (id: string, directory: string) =>
+    request<{ file: string; command: string }>('POST', `/api/functions/${enc(id)}/export-code`, { directory }),
   previewTransform: (spec: TransformSpec, samples: Record<string, Record<string, unknown>>) =>
     request<PreviewResult>('POST', '/api/transforms/preview', { spec, samples }),
   projects: () => request<ProjectList>('GET', '/api/projects'),

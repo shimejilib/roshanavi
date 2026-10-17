@@ -3,7 +3,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 // Run via scripts/e2e.sh (isolated lab-e2e + demo-e2e). Chromium runs with a fake mic / camera.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 // Under scripts/e2e.sh this is a volume shared with lab-e2e (mounted at its /data/e2e).
 const DATA = process.env.E2E_MEDIA_DIR ? `${process.env.E2E_MEDIA_DIR}/` : fileURLToPath(new URL('../../data/e2e/', import.meta.url));
 
@@ -79,7 +79,7 @@ test('video file -> sensor_msgs/Image, shown in the image viewer', async ({ page
   await page.getByTestId('tab-inject').click();
   await page.getByTestId('inject-topic').fill('/e2e_cam/image_raw');
   await page.getByLabel('メディアファイル (画像・動画・音声)').check();
-  await page.getByTestId('inject-type').fill('sensor_msgs/msg/Image');
+  await page.getByTestId('inject-type-kind').selectOption('image');
   await page.getByTestId('media-source').selectOption('e2e/clip.webm');
   await page.getByTestId('media-rate').fill('10');
   await page.getByLabel('最後まで送ったら繰り返す').check();

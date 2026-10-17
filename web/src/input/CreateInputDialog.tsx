@@ -12,8 +12,10 @@ import { Term } from '../lib/Term';
 import { templatePath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
+import { DataKindField } from '../datakind/DataKindField';
+import type { PortValue } from '../datakind/kinds';
 import { InputContentFields } from './InputContentFields';
-import { buildInputNode, defaultInputForm, formFromDummy, isTextType, normalizeTopic, type InputForm } from './inputForm';
+import { buildInputNode, contentKindsFor, defaultInputForm, formFromDummy, normalizeTopic, textForKind, type InputForm } from './inputForm';
 
 interface Props {
   topic?: string;
@@ -46,24 +48,28 @@ export function CreateInputDialog({ topic, type, dummyId }: Props) {
   const [nameTouched, setNameTouched] = useState(Boolean(editing));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const types = useList(api.types);
   const files = useList<DataFile>(() => api.files().then((r) => r.files));
   const topicTypes = useMemo(() => new Map((live.graph?.topics ?? []).map((tp) => [tp.name, tp.types])), [live.graph]);
   const known = topicTypes.get(normalizeTopic(form.topic));
   const update = (patch: Partial<InputForm>) => setForm((prev) => ({ ...prev, ...patch }));
 
   const setTopic = (value: string) => {
-    const existing = topicTypes.get(normalizeTopic(value));
     update({
       topic: value,
-      ...(existing?.length === 1 && existing[0] ? { type: existing[0] } : {}),
       ...(nameTouched ? {} : { name: suggestDummyName(normalizeTopic(value) || null) }),
     });
   };
 
+  const setPort = (port: PortValue) => {
+    if (port.kind === form.kind && port.type === form.type) return;
+    const allowed = contentKindsFor(port.kind);
+    const content = allowed.includes(form.content) ? form.content : (allowed[0] ?? 'text');
+    update({ kind: port.kind, type: port.type, content, text: editing ? form.text : textForKind(port.kind, form.text, content) });
+  };
+
   useEffect(() => {
     const path = templatePath(form.type);
-    if (!path || isTextType(form.type) || editing) return undefined;
+    if (!path || (form.kind !== 'message' && form.kind !== '') || editing) return undefined;
     let cancelled = false;
     api
       .template(path)
@@ -72,7 +78,7 @@ export function CreateInputDialog({ topic, type, dummyId }: Props) {
     return () => {
       cancelled = true;
     };
-  }, [form.type]);
+  }, [form.type, form.kind]);
 
   const submit = async () => {
     const built = buildInputNode(form, live.targets.map((tg) => tg.id), editing?.id);
@@ -110,13 +116,8 @@ export function CreateInputDialog({ topic, type, dummyId }: Props) {
           </datalist>
           {form.topic.trim() && !known && <span className="muted small">{t('input.newTopic')}</span>}
         </label>
-        <label>
-          <span>{t('input.type')} <Term term="msgType" /></span>
-          <input list="input-types" value={form.type} onChange={(e) => update({ type: e.target.value })} data-testid="input-type" />
-          <datalist id="input-types">
-            {types.map((name) => <option key={name} value={name} />)}
-          </datalist>
-        </label>
+        <DataKindField testId="input-type" label={t('kind.label')} topicTypes={known ?? []}
+          value={{ kind: form.kind, type: form.type }} onChange={setPort} />
         <label>
           <span>{t('input.name')} <Term term="node" /></span>
           <input value={form.name} onChange={(e) => { update({ name: e.target.value }); setNameTouched(true); }} disabled={Boolean(editing)} data-testid="input-name" />

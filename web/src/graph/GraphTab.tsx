@@ -78,6 +78,9 @@ export function GraphTab({ active }: { active: boolean }) {
         <button type="button" onClick={() => openDialog({ kind: 'createTransform' })} data-testid="create-transform">
           {t('transform.create')}
         </button>
+        <button type="button" onClick={() => openDialog({ kind: 'createFunction' })} data-testid="create-function">
+          {t('function.create')}
+        </button>
         <input type="search" placeholder={t('graph.filter')} aria-label={t('graph.filter')} value={query} onChange={(e) => setQuery(e.target.value)} />
         <label className="check">
           <input type="checkbox" checked={hideHidden} onChange={(e) => setHideHidden(e.target.checked)} />

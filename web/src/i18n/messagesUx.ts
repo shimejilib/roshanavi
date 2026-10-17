@@ -52,7 +52,7 @@ export const uxJa = {
   'input.editTitle': '入力ノードを変更: {name}',
   'input.intro': 'トピックに送り続けるノードを作ります。新しいトピック名を入れると、そのトピックも一緒に現れます。プロジェクトに自動で保存されます。',
   'input.topic': 'トピック名',
-  'input.newTopic': '新しいトピックです。型を選んでください。',
+  'input.newTopic': '新しいトピックです。送るデータの種類を選んでください。',
   'input.type': '型',
   'input.name': 'ノード名',
   'input.content': '中身',

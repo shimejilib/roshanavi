@@ -1,4 +1,4 @@
-"""Theoretical per-subscriber rates for the traffic table (pure, DESIGN §6.7).
+"""Theoretical per-subscriber rates for the traffic table (pure, docs/design/ui.md).
 
 roshanavi measures traffic per *topic* with its own subscription; what a given
 subscriber really receives is not visible from outside. The theoretical value

@@ -1,6 +1,6 @@
 """Which topics to measure (shared by the C++ probe path and the Python fallback).
 
-Rules (DESIGN 4.3): live topics only, regex exclusions, heavy types opt-in
+Rules (docs/design/map-and-traffic.md): live topics only, regex exclusions, heavy types opt-in
 (``monitor_heavy`` or a per-topic override, which always wins). The selector
 is shared by both measurement backends so per-topic toggles survive a switch
 from the probe to the Python monitor.

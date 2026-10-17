@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 
 // 詳細計測モード on the isolated lab-e2e: the demo talker / listener are C++ nodes the lab starts
 // itself (after its init capture began), so the listener's receive side becomes 実測(トレース).
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 
 test('enable 詳細計測モード: the listener row is measured by the trace', async ({ page }) => {
   await page.goto('/');

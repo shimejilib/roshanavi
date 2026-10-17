@@ -1,4 +1,4 @@
-// Which right-click menu items the map offers, per target and node role (pure, DESIGN §6.5).
+// Which right-click menu items the map offers, per target and node role (pure, docs/design/ui.md).
 //
 // Only what roshanavi started can be stopped or rebuilt; nodes it did not start
 // ("external") get read-only items. Disabled items carry a plain-language reason.
@@ -16,7 +16,7 @@ export type MenuTarget =
 export type MenuAction =
   | ControlAction
   | 'logs' | 'editTarget' | 'buildRestart' | 'params' | 'isolate'
-  | 'pause' | 'resume' | 'editDummy' | 'editTransform' | 'exportLaunch' | 'details' | 'lifecycle'
+  | 'pause' | 'resume' | 'editDummy' | 'editTransform' | 'editFunction' | 'exportLaunch' | 'details' | 'lifecycle'
   | 'view' | 'tryInject' | 'createInput' | 'createTransform' | 'record' | 'monitorOn' | 'monitorOff' | 'typeDef' | 'flowOnly'
   | 'qosDetails' | 'whyNotDelivered'
   | 'addTopic' | 'launchNode' | 'relayout' | 'fit';
@@ -40,14 +40,14 @@ export interface MenuContext {
 }
 
 /** owned = launcher target (mine / dependency), dummy = persistent dummy, transform = 変換ノード, job = inject job. */
-export type MenuRole = 'owned' | 'dummy' | 'transform' | 'job' | 'external';
+export type MenuRole = 'owned' | 'dummy' | 'transform' | 'function' | 'job' | 'external';
 
 export function menuRole(node: GraphNode | undefined, targets: readonly Target[]): MenuRole {
   if (!node) return 'external';
   if (node.job_id) return 'job';
   const target = node.target_id ? targets.find((tg) => tg.id === node.target_id) : undefined;
   if (!target) return 'external';
-  if (target.kind === 'dummy' || target.kind === 'transform') return target.kind;
+  if (target.kind === 'dummy' || target.kind === 'transform' || target.kind === 'function') return target.kind;
   return 'owned';
 }
 
@@ -89,6 +89,9 @@ function baseNodeItems(ctx: MenuContext): MenuItem[] {
   }
   if (role === 'transform') {
     return [...controls, item('editTransform'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
+  }
+  if (role === 'function') {
+    return [...controls, item('editFunction'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
   }
   if (role === 'job') {
     const job = ctx.jobs.find((j) => j.id === node?.job_id);

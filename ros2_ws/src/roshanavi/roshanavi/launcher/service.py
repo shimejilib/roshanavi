@@ -28,13 +28,14 @@ from .dummy_config import export, format_errors
 from .errors import LauncherError
 from .manager import ProcessManager
 from .project import DEFAULT_FILE_NAME, ProjectStore
-from .schema import DummySpec, ProjectSpec, QosSpec, TargetSpec, TransformSpec, clean_dict
+from .schema import (DummySpec, FunctionSpec, ProjectSpec, QosSpec, TargetSpec, TransformSpec,
+                     clean_dict)
 
 LOG = logging.getLogger(__name__)
 
 AUTOSTART_DELAY_SEC = 2.0  # let DDS discovery see pre-existing nodes first (baseline)
 PERSISTABLE_MODES = ('once', 'periodic', 'stream', 'media')
-Spec = Union[TargetSpec, DummySpec, TransformSpec]
+Spec = Union[TargetSpec, DummySpec, TransformSpec, FunctionSpec]
 
 
 def id_from_name(name: str, taken: Iterable[str]) -> str:
@@ -77,7 +78,8 @@ class Launcher:
             return self.project_state()
         self.load_error = None
         self._autosave_blocked = False
-        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms])
+        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
+                                  *spec.functions])
         self._watch_topics = list(spec.watch_topics)
         return self.project_state()
 
@@ -96,6 +98,7 @@ class Launcher:
         targets, dummies = self.manager.specs()
         return ProjectSpec(targets=targets, dummies=dummies,
                            transforms=self.manager.transforms(),
+                           functions=self.manager.functions(),
                            watch_topics=self._watch_topics)
 
     def project_state(self) -> Dict[str, Any]:
@@ -106,7 +109,8 @@ class Launcher:
                 'project': clean_dict(current)}
 
     def put_project(self, spec: ProjectSpec) -> Dict[str, Any]:
-        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms])
+        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
+                                  *spec.functions])
         self._watch_topics = list(spec.watch_topics)
         return self.save_project()
 
@@ -204,14 +208,17 @@ class Launcher:
         target_dir = validate.contained_dir(directory, self.workspace.root)
         _, dummies = self.manager.specs()
         transforms = self.manager.transforms()
+        functions = self.manager.functions()
         if ids:
-            unknown = set(ids) - {d.id for d in [*dummies, *transforms]}
+            unknown = set(ids) - {d.id for d in [*dummies, *transforms, *functions]}
             if unknown:
-                raise LauncherError('not_found', f'no such dummy / transform: {sorted(unknown)}',
-                                    404)
+                raise LauncherError('not_found', 'no such dummy / transform / function: '
+                                    f'{sorted(unknown)}', 404)
             dummies = [d for d in dummies if d.id in set(ids)]
             transforms = [d for d in transforms if d.id in set(ids)]
-        return export(dummies, target_dir, self.manager.data_dir, transforms)
+            functions = [d for d in functions if d.id in set(ids)]
+        return export(dummies, target_dir, self.manager.data_dir, transforms, functions,
+                      self.workspace.root)
 
     def close(self) -> None:
         self.builder.close()

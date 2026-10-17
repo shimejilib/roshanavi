@@ -1,4 +1,4 @@
-"""詳細計測モード routes (DESIGN §4.3.2): status, and turning it on / off.
+"""詳細計測モード routes (docs/design/measurement.md): status, and turning it on / off.
 
 Turning it on is an operator action (the target nodes pay a small cost per
 message), so it is a mutating JSON request behind the security middleware

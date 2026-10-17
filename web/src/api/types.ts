@@ -1,10 +1,12 @@
-// Shapes of the roshanavi REST / WebSocket API (docs/DESIGN.md §4.8).
+// Shapes of the roshanavi REST / WebSocket API (docs/design/api.md).
 
+import type { PortKind } from '../datakind/kinds';
 import type { SubscriberTrace, TracingStatus } from './tracingTypes';
 import type { MediaOptions, RecordingStatus } from './mediaTypes';
 import type { TransformSpec } from './transformTypes';
+import type { FunctionSpec, FunctionStatus } from './functionTypes';
 
-export type Role = 'mine' | 'dependency' | 'dummy' | 'transform' | 'other';
+export type Role = 'mine' | 'dependency' | 'dummy' | 'transform' | 'function' | 'other';
 
 export interface Qos {
   reliability: string;
@@ -222,7 +224,7 @@ export interface LiveMessage {
   tracing?: TracingStatus;
 }
 
-// ---- Launcher (DESIGN §4.9) ------------------------------------------------
+// ---- Launcher (docs/design/launcher.md) ------------------------------------------------
 
 export type ParamValue = string | number | boolean;
 
@@ -251,6 +253,8 @@ export interface DummySpec {
   namespace?: string;
   topic: string;
   type: string;
+  /** データの種類 chosen in the UI (informational; fits `type`). */
+  kind?: PortKind;
   mode: 'once' | 'periodic' | 'stream' | 'media';
   payload?: Record<string, unknown>;
   rate_hz?: number;
@@ -273,9 +277,9 @@ export interface TargetNode {
 
 export interface Target {
   id: string;
-  kind: 'run' | 'launch' | 'dummy' | 'transform';
-  role: 'mine' | 'dependency' | 'dummy' | 'transform';
-  spec: TargetSpec | DummySpec | TransformSpec;
+  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function';
+  role: 'mine' | 'dependency' | 'dummy' | 'transform' | 'function';
+  spec: TargetSpec | DummySpec | TransformSpec | FunctionSpec;
   status: TargetStatus;
   exit_code: number | null;
   problem: string | null;
@@ -287,6 +291,8 @@ export interface Target {
   restart_count: number;
   pending_restart: boolean;
   nodes?: TargetNode[];
+  /** Function nodes: the running node's status (null when stopped / not reported yet). */
+  function_status?: FunctionStatus | null;
 }
 
 export interface WorkspacePackage {
@@ -339,6 +345,7 @@ export interface ProjectState {
     targets?: TargetSpec[];
     dummies?: DummySpec[];
     transforms?: TransformSpec[];
+    functions?: FunctionSpec[];
     watch_topics?: string[];
   };
 }

@@ -19,12 +19,12 @@ describe('i18n', () => {
   });
 
   it('has a detail / list / launcher label for every node role (a missing one blanked the UI)', () => {
-    const roles: Role[] = ['mine', 'dependency', 'dummy', 'transform', 'other'];
+    const roles: Role[] = ['mine', 'dependency', 'dummy', 'transform', 'function', 'other'];
     for (const role of roles) {
       expect(ja[`detail.role.${role}` as MessageKey], `detail.role.${role}`).toBeTruthy();
       expect(ja[`nodes.role.${role}` as MessageKey], `nodes.role.${role}`).toBeTruthy();
     }
-    for (const role of ['mine', 'dependency', 'dummy', 'transform'] as const) {
+    for (const role of ['mine', 'dependency', 'dummy', 'transform', 'function'] as const) {
       expect(ja[`launcher.role.${role}` as MessageKey], `launcher.role.${role}`).toBeTruthy();
     }
   });

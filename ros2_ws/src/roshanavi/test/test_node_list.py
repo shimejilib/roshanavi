@@ -76,6 +76,13 @@ def test_stopped_launch_target_keeps_its_group():
     assert result['rows'][0]['name'] == 'x.launch.py'
 
 
+def test_targets_snapshot_is_the_one_the_rows_were_built_from():
+    stopped = target('talker', status='stopped')
+    result = build_node_list([], [stopped])
+    assert result['targets'] == [stopped]
+    assert result['rows'][0]['status'] == result['targets'][0]['status'] == 'stopped'
+
+
 def test_lifecycle_nodes_are_controllable_even_when_external():
     nodes = [gnode('/lc_talker', lifecycle=True), gnode('/plain')]
     result = build_node_list(nodes, [], {'/lc_talker': 'inactive'})

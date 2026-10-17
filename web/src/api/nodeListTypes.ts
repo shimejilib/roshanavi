@@ -1,12 +1,12 @@
-// Node list (GET /api/node-list), lifecycle and launch-import API shapes (DESIGN §4.15-4.16, §6.6).
+// Node list (GET /api/node-list), lifecycle and launch-import API shapes (docs/design/launcher.md, docs/design/ui.md).
 
-import type { MappingConfidence, TargetSpec } from './types';
+import type { MappingConfidence, Target, TargetSpec } from './types';
 
 export type RowControl = 'target' | 'lifecycle' | 'none';
-export type RowRole = 'mine' | 'dependency' | 'dummy' | 'transform' | 'other';
+export type RowRole = 'mine' | 'dependency' | 'dummy' | 'transform' | 'function' | 'other';
 
 export interface RowOrigin {
-  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'external';
+  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function' | 'external';
   package?: string;
   executable?: string;
   launch_file?: string;
@@ -46,6 +46,8 @@ export interface NodeGroup {
 export interface NodeListResponse {
   rows: NodeRow[];
   groups: NodeGroup[];
+  /** Launcher targets of the same snapshot as `rows` (bulk plans use these, never live state). */
+  targets: Target[];
 }
 
 export type LifecycleTransition = 'configure' | 'activate' | 'deactivate' | 'cleanup';

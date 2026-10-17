@@ -1,12 +1,15 @@
-// "＋ 変換ノードを作る" editor <-> TransformSpec (pure, unit-tested; DESIGN §4.18).
+// "＋ 変換ノードを作る" editor <-> TransformSpec (pure, unit-tested; docs/design/nodes.md).
 
 import type { TransformSpec } from '../api/transformTypes';
 import { t } from '../i18n';
 import { parsePayload, type Result } from '../inject/buildRequest';
 import { idFromName, normalizeTopic } from '../input/inputForm';
+import type { PortKind } from '../datakind/kinds';
 
 export interface InputRow {
   topic: string;
+  /** データの種類 shown for the row (the spec only stores the type). */
+  kind?: PortKind | '';
   type: string;
   alias: string;
 }
@@ -16,6 +19,7 @@ export interface TransformForm {
   inputs: InputRow[];
   mode: 'map' | 'relay';
   outputTopic: string;
+  outputKind?: PortKind | '';
   outputType: string;
   /** Output message as YAML; strings with ${...} are expressions. Empty = forward the input. */
   mappingYaml: string;

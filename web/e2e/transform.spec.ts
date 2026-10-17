@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { rightClickNode } from './helpers';
 
 // P5 transform nodes: topic menu -> editor with live preview -> node on the map -> echo.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const NAME = 'chatter_upper';
 
 async function openMap(page: Page) {
@@ -26,7 +26,7 @@ test('topic menu -> transform /chatter to upper case -> it runs and echoes upper
 
   const dialog = page.getByTestId('create-transform-dialog');
   await expect(dialog.getByTestId('transform-input-topic-0')).toHaveValue('/chatter');
-  await expect(dialog.getByTestId('transform-input-type-0')).toHaveValue('std_msgs/msg/String');
+  await expect(dialog.getByTestId('transform-input-type-0-detected')).toContainText('文字列 (std_msgs/String)');
   await dialog.getByTestId('transform-name').fill(NAME);
   await dialog.getByTestId('transform-output-topic').fill('/chatter_upper');
   // The starting mapping copies the field; then write the expression.

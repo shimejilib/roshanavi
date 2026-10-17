@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 from .errors import LauncherError
 from .logbuf import LogBuffer
 from .process import ProcessRunner
-from .schema import DummySpec, TargetSpec, TransformSpec, clean_dict
+from .schema import DummySpec, FunctionSpec, TargetSpec, TransformSpec, clean_dict
 
 LOG = logging.getLogger(__name__)
 
@@ -24,7 +24,7 @@ BACKOFF_BASE_SEC = 1.0
 BACKOFF_MAX_SEC = 30.0
 HEALTHY_RUN_SEC = 30.0
 
-Spec = Union[TargetSpec, DummySpec, TransformSpec]
+Spec = Union[TargetSpec, DummySpec, TransformSpec, FunctionSpec]
 
 
 def kind_of(spec: Spec) -> str:
@@ -32,12 +32,15 @@ def kind_of(spec: Spec) -> str:
         return 'dummy'
     if isinstance(spec, TransformSpec):
         return 'transform'
+    if isinstance(spec, FunctionSpec):
+        return 'function'
     return spec.kind
 
 
 def role_of(spec: Spec) -> str:
-    """Map role: dummy (input node), transform (変換ノード), or the target's mine / dependency."""
-    if isinstance(spec, (DummySpec, TransformSpec)):
+    """Map role: dummy (input node), transform (変換ノード), function (関数ノード), or the
+    target's mine / dependency."""
+    if isinstance(spec, (DummySpec, TransformSpec, FunctionSpec)):
         return kind_of(spec)
     return spec.role
 

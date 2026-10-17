@@ -1,4 +1,4 @@
-// Record button with topic selection and presets (DESIGN §4.12).
+// Record button with topic selection and presets (docs/design/input-and-media.md).
 
 import { useState } from 'react';
 import { api, describeError } from '../api/client';

@@ -1,4 +1,4 @@
-"""Subprocess entry: ``python3 -m roshanavi.launch_import.child`` (DESIGN §4.16).
+"""Subprocess entry: ``python3 -m roshanavi.launch_import.child`` (docs/design/launcher.md).
 
 Reads ``{"path", "args"}`` as JSON on stdin, loads the launch file (Python /
 XML / YAML) and walks it with :mod:`.walker`, then writes one JSON object to

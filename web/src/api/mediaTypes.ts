@@ -1,4 +1,4 @@
-// Shapes of the media / capture / recording API (docs/DESIGN.md §4.11-§4.12).
+// Shapes of the media / capture / recording API (docs/design/input-and-media.md).
 
 export type MediaKind = 'image' | 'audio';
 

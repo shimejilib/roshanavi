@@ -91,10 +91,13 @@ def _ensure_loaded() -> None:
         LOG.info('media adapter plugins: %s', ', '.join(plugins))
 
 
-def supported() -> List[Dict[str, str]]:
+def supported() -> List[Dict[str, Any]]:
+    """Types media can be made into; ``data_kind`` is the beginner-facing kind (data_kinds)."""
+    from ... import data_kinds
     _ensure_loaded()
     with _lock:
-        return [{'type': name, 'kind': a.kind} for name, a in sorted(_registry.items())]
+        return [{'type': name, 'kind': a.kind, 'data_kind': data_kinds.kind_of_type(name)}
+                for name, a in sorted(_registry.items())]
 
 
 def get(type_name: str) -> MediaAdapter:

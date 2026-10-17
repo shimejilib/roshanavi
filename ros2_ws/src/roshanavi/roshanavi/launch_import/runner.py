@@ -1,4 +1,4 @@
-"""Run the launch-file evaluation child with a timeout (server side, DESIGN §4.16).
+"""Run the launch-file evaluation child with a timeout (server side, docs/design/launcher.md).
 
 Evaluating a Python launch file executes its code, so it never happens in
 the server process: :mod:`.child` runs in a new session (process group) with

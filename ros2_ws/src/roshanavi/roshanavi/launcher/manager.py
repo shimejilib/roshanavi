@@ -6,20 +6,22 @@ project file are registered even when they no longer validate, in state
 ``invalid`` with the reason, so a stale project still opens.
 """
 
+import json
 import logging
 import os
 import shutil
 import tempfile
 import threading
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from . import command
 from .discovery import Workspace
-from .dummy_config import config_text, transform_config_text, write_atomic
+from .dummy_config import (config_text, function_config_text, transform_config_text,
+                           write_atomic)
 from .env import child_env
 from .errors import LauncherError
 from .process import SIGINT_TIMEOUT_SEC, SIGTERM_TIMEOUT_SEC
-from .schema import DummySpec, TargetSpec, TransformSpec
+from .schema import DummySpec, FunctionSpec, TargetSpec, TransformSpec
 from .target import Spec, Target, kind_of, role_of
 
 LOG = logging.getLogger(__name__)
@@ -49,7 +51,29 @@ class ProcessManager:
             command.validate_transform(spec)
             path = self._write_config(spec.id, transform_config_text(spec))
             return command.transform_command(spec, path)
+        if isinstance(spec, FunctionSpec):
+            command.validate_function(spec, self.workspace.root)
+            status = self.status_path(spec.id)
+            try:
+                os.unlink(status)  # a stale status of the previous run must not show
+            except FileNotFoundError:
+                pass
+            path = self._write_config(spec.id, function_config_text(spec, self.workspace.root,
+                                                                    status))
+            return command.function_command(spec, path, self.workspace.root)
         return command.target_command(spec, self._ctx)
+
+    def status_path(self, spec_id: str) -> str:
+        """Where a function node writes its status (the server's private runtime dir)."""
+        return os.path.join(self._runtime_dir, f'{spec_id}.status.json')
+
+    def function_status(self, spec_id: str) -> Optional[Dict[str, Any]]:
+        try:
+            with open(self.status_path(spec_id), encoding='utf-8') as fh:
+                status = json.load(fh)
+        except (OSError, ValueError):
+            return None
+        return status if isinstance(status, dict) else None
 
     def _write_config(self, spec_id: str, text: str) -> str:
         path = os.path.join(self._runtime_dir, f'{spec_id}.yaml')
@@ -67,6 +91,8 @@ class ProcessManager:
             command.validate_dummy(spec)
         elif isinstance(spec, TransformSpec):
             command.validate_transform(spec)
+        elif isinstance(spec, FunctionSpec):
+            command.validate_function(spec, self.workspace.root)
         else:
             command.target_command(spec, self._ctx)
 
@@ -96,7 +122,7 @@ class ProcessManager:
         target = self._get(target_id)
         if spec.id != target_id:
             raise LauncherError('invalid_request', 'the id of a target cannot be changed')
-        managed = ('dummy', 'transform')
+        managed = ('dummy', 'transform', 'function')
         if kind_of(spec) != kind_of(target.spec) and (kind_of(spec) in managed
                                                       or kind_of(target.spec) in managed):
             raise LauncherError('invalid_request', f'cannot turn a {kind_of(target.spec)} '
@@ -173,14 +199,21 @@ class ProcessManager:
         with self._lock:
             return list(self._targets.values())
 
+    def _describe(self, target: Target) -> Dict[str, Any]:
+        info = target.to_dict()
+        if isinstance(target.spec, FunctionSpec):
+            status = self.function_status(target.id) if target.alive() else None
+            info['function_status'] = status
+        return info
+
     def get(self, target_id: str) -> Dict[str, Any]:
-        return self._get(target_id).to_dict()
+        return self._describe(self._get(target_id))
 
     def target(self, target_id: str) -> Target:
         return self._get(target_id)
 
     def list(self) -> List[Dict[str, Any]]:
-        return [t.to_dict() for t in self._all()]
+        return [self._describe(t) for t in self._all()]
 
     def specs(self) -> Tuple[List[TargetSpec], List[DummySpec]]:
         targets = [t.spec for t in self._all() if isinstance(t.spec, TargetSpec)]
@@ -189,6 +222,9 @@ class ProcessManager:
 
     def transforms(self) -> List[TransformSpec]:
         return [t.spec for t in self._all() if isinstance(t.spec, TransformSpec)]
+
+    def functions(self) -> List[FunctionSpec]:
+        return [t.spec for t in self._all() if isinstance(t.spec, FunctionSpec)]
 
     def roles(self) -> Dict[str, str]:
         return {t.id: role_of(t.spec) for t in self._all()}

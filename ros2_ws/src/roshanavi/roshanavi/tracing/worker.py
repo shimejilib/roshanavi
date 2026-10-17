@@ -12,7 +12,9 @@ Protocol (one JSON object per line):
 
 Every period (1 s while measuring, 5 s otherwise) each session is rotated, the
 closed chunk is parsed into :class:`TraceModel` and deleted at once, so disk
-use stays at about one chunk.
+use stays at about one chunk. babeltrace2 runs in a disposable grandchild
+(:mod:`.chunk_parser`, replaced every 32 chunks) because bt2 2.0.x leaks a
+descriptor per chunk; this process never opens trace files itself.
 """
 
 import argparse
@@ -32,7 +34,8 @@ from typing import Any, Deque, Dict, List, Optional
 from . import config
 from .lttng import Lttng, LttngError, destroy_stale_sessions
 from .model import TraceModel
-from .reader import ChunkInfo, read_chunk
+from .chunk_parser import ChunkParser
+from .reader import ChunkInfo
 
 LOG = logging.getLogger('roshanavi.tracing.worker')
 
@@ -85,6 +88,7 @@ class Worker:
         self._emit = emit
         self.lttng = lttng or Lttng()
         self.model = TraceModel()
+        self.parser = ChunkParser()
         self.init_name = config.session_name(prefix, 'init')
         self.rt_name = config.session_name(prefix, 'rt')
         self.active_since: Optional[int] = None
@@ -148,6 +152,7 @@ class Worker:
             self.lttng.destroy(self.rt_name)
             self.lttng.destroy(self.init_name)
         finally:  # the daemon this worker started must go even when destroying failed
+            self.parser.close()
             self.lttng.close()
             shutil.rmtree(self.out_dir, ignore_errors=True)
 
@@ -168,7 +173,7 @@ class Worker:
                 self._skipped_chunks += 1
                 LOG.warning('tracing: chunk %s too large; dropped unparsed', path)
             else:
-                self.model.feed(read_chunk(path, info))
+                self.model.feed(self.parser.parse(path, info))
         except Exception as exc:  # a corrupt chunk must not stop measuring
             self._parse_errors += 1
             LOG.warning('tracing: cannot read chunk %s: %s', path, exc)
@@ -240,11 +245,11 @@ class Worker:
         except (LttngError, config.ShmTooSmall) as again:
             LOG.error('tracing: recovery failed: %s', again)
 
-    @staticmethod
-    def _cpu_seconds() -> float:
+    def _cpu_seconds(self) -> float:
         own = resource.getrusage(resource.RUSAGE_SELF)
-        kids = resource.getrusage(resource.RUSAGE_CHILDREN)  # the lttng CLI calls
-        return own.ru_utime + own.ru_stime + kids.ru_utime + kids.ru_stime
+        kids = resource.getrusage(resource.RUSAGE_CHILDREN)  # lttng CLI calls, retired parsers
+        live = self.parser.cpu_seconds()
+        return own.ru_utime + own.ru_stime + kids.ru_utime + kids.ru_stime + live
 
     def _cpu_percent(self) -> float:
         now, usage = time.monotonic(), self._cpu_seconds()
@@ -320,7 +325,7 @@ def _emitter() -> Any:
 
 
 def _raise_fd_limit() -> None:
-    """Headroom for the lttng CLI pipes and bt2 file handles (the soft limit is often 1024)."""
+    """Headroom for the lttng CLI pipes and the parser's bt2 handles (soft limit often 1024)."""
     soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
     want = hard if hard != resource.RLIM_INFINITY else 65536
     if soft < want:

@@ -1,4 +1,4 @@
-// First-run guide of the Launcher (pure, DESIGN §6.5).
+// First-run guide of the Launcher (pure, docs/design/ui.md).
 
 import type { Target, TargetSpec, WorkspacePackage } from '../api/types';
 import { makeTargetId } from './form';

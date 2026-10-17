@@ -1,4 +1,4 @@
-// Right-click menu on the map (nodes by role, topics, edges, blank area; DESIGN §6.5).
+// Right-click menu on the map (nodes by role, topics, edges, blank area; docs/design/ui.md).
 // Start / stop / restart keep their confirmation flow (useNodeControl); disabled
 // items show why in a tooltip and a visible hint.
 

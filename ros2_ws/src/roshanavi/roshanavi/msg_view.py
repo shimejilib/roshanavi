@@ -1,4 +1,4 @@
-"""Read-only view of a received message for transform expressions (DESIGN §4.5).
+"""Read-only view of a received message for transform expressions (docs/design/input-and-media.md).
 
 The safe evaluator never calls ``getattr`` on user-chosen names. Instead, a
 received message is first converted to plain data (dicts / lists / scalars,

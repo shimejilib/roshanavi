@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 // Requires `docker compose up -d lab demo`: lab starts the demo project's talker / listener
 // (/chatter, roshanavi-owned); the demo container adds external_talker on /external/chatter.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const MESSAGE = `e2e hello ${Date.now()}`;
 
 test('map shows the demo, inject once, echo receives it', async ({ page }) => {
@@ -47,7 +47,8 @@ test('map shows the demo, inject once, echo receives it', async ({ page }) => {
   // "Inject to this topic" -> Inject tab with topic and type prefilled.
   await page.getByTestId('detail-inject').click();
   await expect(page.getByTestId('inject-topic')).toHaveValue('/chatter');
-  await expect(page.getByTestId('inject-type')).toHaveValue('std_msgs/msg/String');
+  // An existing topic: no type to choose, the detected kind and ROS type are shown.
+  await expect(page.getByTestId('inject-type-detected')).toContainText('文字列 (std_msgs/String)');
   await expect(page.getByTestId('inject-yaml')).toHaveValue(/data:/);
   await page.getByTestId('inject-yaml').fill(`data: "${MESSAGE}"`);
   await page.getByTestId('inject-start').click();
@@ -60,7 +61,7 @@ test('a periodic injection appears as a dummy source with a diagnostic', async (
   await page.goto('/');
   await page.getByTestId('tab-inject').click();
   await page.getByTestId('inject-topic').fill('/chater');
-  await page.getByTestId('inject-type').fill('std_msgs/msg/String');
+  await page.getByTestId('inject-type-kind').selectOption('string');
   await expect(page.getByTestId('inject-yaml')).toHaveValue(/data:/);
   await page.getByTestId('inject-yaml').fill('data: "typo ${i}"');
   await page.getByLabel('周期的に').check();

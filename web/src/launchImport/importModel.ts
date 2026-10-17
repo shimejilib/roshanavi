@@ -1,4 +1,4 @@
-// Launch decomposition import: preview display and the commit request (pure, DESIGN §4.16).
+// Launch decomposition import: preview display and the commit request (pure, docs/design/launcher.md).
 
 import type { ImportArgument, ImportCommitRequest, ImportNode, ImportPlan, ImportSource } from '../api/nodeListTypes';
 import type { WorkspacePackage } from '../api/types';

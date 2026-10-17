@@ -22,7 +22,7 @@ namespace
 {
 
 constexpr double kDefaultPeriodSec = 1.0;
-constexpr std::size_t kSubscriptionDepth = 10;  // as the Python monitor (DESIGN 4.3)
+constexpr std::size_t kSubscriptionDepth = 10;  // as the Python monitor (docs/design/map-and-traffic.md)
 constexpr std::size_t kConfigDepth = 4;          // one latched sample per roshanavi instance
 constexpr double kNaN = std::numeric_limits<double>::quiet_NaN();
 

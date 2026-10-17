@@ -1,4 +1,4 @@
-// Pure helpers for "how fresh is this data" (DESIGN §6.5): averaging window
+// Pure helpers for "how fresh is this data" (docs/design/ui.md): averaging window
 // label, the global last-update line and the hz-basis note.
 
 import type { TrafficEntry } from '../api/types';

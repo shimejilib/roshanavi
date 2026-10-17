@@ -15,7 +15,7 @@ export interface Palette {
   qosBad: string;
   focus: string;
   warn: string;
-  roles: Record<'mine' | 'dependency' | 'dummy' | 'transform' | 'other', string>;
+  roles: Record<'mine' | 'dependency' | 'dummy' | 'transform' | 'function' | 'other', string>;
 }
 
 export const LIGHT: Palette = {
@@ -30,8 +30,8 @@ export const LIGHT: Palette = {
   qosBad: '#dc2626',
   focus: '#0ea5e9',
   warn: '#d97706',
-  // transform: same family as dummy (roshanavi-made nodes), shifted to violet.
-  roles: { mine: '#16a34a', dependency: '#0891b2', dummy: '#c026d3', transform: '#7c3aed', other: '#64748b' },
+  // transform / function: same family as dummy (roshanavi-made nodes), shifted to violet / pink.
+  roles: { mine: '#16a34a', dependency: '#0891b2', dummy: '#c026d3', transform: '#7c3aed', function: '#db2777', other: '#64748b' },
 };
 
 export const DARK: Palette = {
@@ -46,7 +46,7 @@ export const DARK: Palette = {
   qosBad: '#f87171',
   focus: '#38bdf8',
   warn: '#fbbf24',
-  roles: { mine: '#22c55e', dependency: '#22d3ee', dummy: '#e879f9', transform: '#a78bfa', other: '#94a3b8' },
+  roles: { mine: '#22c55e', dependency: '#22d3ee', dummy: '#e879f9', transform: '#a78bfa', function: '#f472b6', other: '#94a3b8' },
 };
 
 export function prefersDark(): boolean {

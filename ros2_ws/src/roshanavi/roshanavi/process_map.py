@@ -14,7 +14,7 @@ infer it from the process trees of the processes *we* started:
    are candidates, the one with a process whose executable name equals the
    node name wins; otherwise the most recently started one.
 
-Limits (documented in DESIGN.md §4.9): composable nodes inside a container
+Limits (documented in docs/design/launcher.md): composable nodes inside a container
 map to the container process (per-container, not per-node); nodes in other
 PID namespaces (other containers) or hosts are never mapped; a heuristic match
 can be wrong when unrelated nodes start at the same moment.

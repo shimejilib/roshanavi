@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 // P5 perception demo: switch projects from the ⚙ settings menu, then see the sample
 // nodes on the map and image_filter's output in the image viewer. Switches back afterwards.
-const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
+const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 
 async function openProject(page: Page, id: string) {
   await page.getByTestId('tab-launcher').click();

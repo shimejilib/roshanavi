@@ -5,15 +5,12 @@ tuples (``model.K_*`` first): converting bt2 field objects is the dominant
 cost (~13 µs / event measured), so nothing else is touched.
 """
 
-import gc
-import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, Tuple
 
 from . import model as m
 
 Event = Tuple[Any, ...]
-_FD_DIR = '/proc/self/fd'
 
 
 @dataclass
@@ -109,36 +106,7 @@ def read_chunk(path: str, info: ChunkInfo) -> Iterator[Event]:
                     yield (known[0], ts, pid, procname, *known[1](p))
     finally:
         # The bt2 iterator owns a graph whose listeners point back at it (a reference
-        # cycle), so refcounting never frees it: every CTF stream file of the chunk (one
-        # per CPU, plus the metadata) stayed open - deleted but not closed - until a
-        # random GC pass. Drop the cycle now so the descriptors are closed.
+        # cycle), so refcounting never frees it. Drop our references; the chunk parser
+        # child (chunk_parser.py) collects the cycle after each chunk, and what bt2 2.0.x
+        # never closes itself (the metadata file) goes away with that disposable process.
         msg = ev = ctx = p = iterator = None
-        release_trace_handles(path)
-
-
-def release_trace_handles(path: str) -> int:
-    """Close every descriptor still open on a file of the chunk at ``path``.
-
-    First the unreachable bt2 graphs are collected (that closes the stream files). The
-    ``metadata`` file of babeltrace2 2.0.x is opened by C code that never closes it, so the
-    leftovers are closed here; nothing reads the chunk any more. Returns how many.
-    """
-    gc.collect()
-    prefix = os.path.join(os.path.realpath(path), '')
-    closed = 0
-    try:
-        names = os.listdir(_FD_DIR)
-    except OSError:
-        return 0
-    for name in names:
-        try:
-            target = os.readlink(os.path.join(_FD_DIR, name))
-        except OSError:
-            continue
-        if target.startswith(prefix):
-            try:
-                os.close(int(name))
-                closed += 1
-            except OSError:
-                pass
-    return closed

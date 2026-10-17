@@ -1,4 +1,4 @@
-// ノード一覧 tab: every node (running or registered), bulk ON / OFF with checkboxes (DESIGN §6.6).
+// ノード一覧 tab: every node (running or registered), bulk ON / OFF with checkboxes (docs/design/ui.md).
 
 import { useEffect, useMemo, useState } from 'react';
 import { t } from '../i18n';
@@ -31,7 +31,7 @@ export function NodeListTab({ active }: { active: boolean }) {
         onFilter={setFilter}
         selectedCount={chosen.length}
         busy={bulk.busy}
-        onAction={(action) => bulk.request(action, chosen)}
+        onAction={(action) => data && bulk.request(action, data, selected)}
         onClear={() => setSelected(new Set())}
         onImport={openImport}
       />

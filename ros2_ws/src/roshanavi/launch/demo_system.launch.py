@@ -1,4 +1,4 @@
-"""Demo "existing system" for the launch decomposition import (roshanavi DESIGN §4.16).
+"""Demo "existing system" for the launch decomposition import (roshanavi docs/design/launcher.md).
 
 Node 一覧 → 「launch ファイルから取り込む」 で roshanavi / demo_system.launch.py を選ぶと、
 talker と listener がノードごとの起動設定 (名前空間・リマップ・パラメータ込み) として

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bulkConfirmText, isEmptyPlan, planBulk } from './bulk';
+import { bulkConfirmText, isEmptyPlan, planBulk, planFromSnapshot } from './bulk';
 import { row, target } from './testRows';
 
 describe('bulk plan', () => {
@@ -43,5 +43,23 @@ describe('bulk plan', () => {
     const plan = planBulk('stop', [row('/x', { target_id: null, control: 'none' })], targets);
     expect(isEmptyPlan(plan)).toBe(true);
     expect(plan.skipped[0]?.reason).toBe('操作できません');
+  });
+
+  it('plans from one snapshot: a row shown stopped is started even if live state lags', () => {
+    // Issue #1: right after a stop the node list says stopped; the plan must use the targets of
+    // that same response, not another (websocket) source that may still say running.
+    const snapshot = {
+      rows: [row('target:talker', { target_id: 'talker', running: false, status: 'stopped' })],
+      targets: [target('talker', [], { status: 'stopped' })],
+    };
+    const plan = planFromSnapshot('start', snapshot, new Set(['target:talker']));
+    expect(plan.targets.map((s) => s.targetId)).toEqual(['talker']);
+    expect(planFromSnapshot('start', snapshot, new Set(['/gone'])).targets).toEqual([]);
+  });
+
+  it('only plans the selected rows of the snapshot', () => {
+    const snapshot = { rows: [row('/solo', { target_id: 'solo' }), row('/talker', { target_id: 'pair', group: 'pair' })], targets };
+    const plan = planFromSnapshot('stop', snapshot, new Set(['/solo']));
+    expect(plan.targets.map((s) => s.targetId)).toEqual(['solo']);
   });
 });

@@ -1,4 +1,4 @@
-/* P4.5b: node list tab, lifecycle, launch import (DESIGN §6.6). */
+/* P4.5b: node list tab, lifecycle, launch import (docs/design/ui.md). */
 .node-list-tab { display: flex; flex-direction: column; height: 100%; }
 .node-list-intro { margin: 8px 12px 0; }
 .node-list-hint { margin: 8px 12px; font-size: 13px; }
@@ -35,7 +35,7 @@
 .import-preview .row.wrap { align-items: center; }
 .import-preview label:not(.radio):not(.check) { display: inline-flex; align-items: center; gap: 6px; }
 .import-preview .check, .import-source .radio, .import-preview .radio { flex-direction: row; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
-/* Traffic per node × topic × direction (§6.7). */
+/* Traffic per node × topic × direction (docs/design/ui.md). */
 .topic-head { display: flex; align-items: center; gap: 6px; }
 .expander { border: none; background: none; padding: 0 4px; font-size: 12px; color: var(--muted); }
 .expander:focus-visible { outline: 2px solid var(--accent); }

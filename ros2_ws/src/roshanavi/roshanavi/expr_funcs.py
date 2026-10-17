@@ -1,4 +1,4 @@
-"""Whitelisted functions of the safe expression evaluator (DESIGN §4.5).
+"""Whitelisted functions of the safe expression evaluator (docs/design/input-and-media.md).
 
 Every function checks its argument types and keeps results within the caps of
 :mod:`.expr_base` (string length, integer size) *before* doing expensive work.

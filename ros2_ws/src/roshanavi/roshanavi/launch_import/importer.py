@@ -1,4 +1,4 @@
-"""Launch decomposition import: source checks, preview cache, commit (DESIGN §4.16).
+"""Launch decomposition import: source checks, preview cache, commit (docs/design/launcher.md).
 
 Trust model: a Python launch file is code, and evaluating it runs that code.
 Only files that ``ros2 launch`` would run for this user anyway are accepted:

@@ -5,10 +5,13 @@ ROS 2 Jazzy dev tool for developers new to ROS: live topic/node map, traffic per
 User-facing replies are in **Japanese**, plain language, no unexplained jargon (the user is the product owner; target users are developers new to ROS).
 
 ## Where things are
-- `docs/DESIGN.md` — the spec and every decision (single source of truth). Read §0 (motivation/target users), §0.1 (user journey), §8 (phases) first, then only the sections you need.
-- `docs/TEST_PLAN.md` — test items with status (✅ 🟡 ⬜ 👀). Update the section you touch.
-- `docs/DEPENDENCIES.md` — every dependency with purpose/license/rosdep key. Update it together with `package.xml` / Dockerfile / `web/package.json`. Never let Docker have a dependency that `package.xml` lacks.
-- Planned-but-not-built designs: `docs/RESOURCES.md` (CPU/GPU/mem/disk/net monitoring, Lv1 only), `docs/REMOTE_ACCESS.md` (device pairing), `docs/DISTRIBUTION.md` (install/packaging).
+- `docs/README.md` — index of every doc (one line each). Start there; read only the page you need.
+- `docs/overview/` — `vision.md` (motivation / target users / user journey / goals; read first), `architecture.md` (tech stack, repo layout, how the pieces fit), `roadmap.md` (phases and status; open work is tracked in GitHub Issues).
+- `docs/design/` — the spec and every decision, by topic (single source of truth): `map-and-traffic.md`, `measurement.md` (C++ probe, tracing), `input-and-media.md` (inject, expr, media, recording), `nodes.md` (input / transform / function nodes, data kinds), `launcher.md` (launcher, project file, params, lifecycle, launch import, node list), `ui.md`, `api.md`, `security.md` (every security decision with links), `scenarios.md` (spec only, not implemented yet). The spec used to be one file with numbered sections; those numbers no longer exist, so refer to the page and heading.
+- `docs/project/testing.md` — test policy, commands, and test items with status (✅ 🟡 ⬜ 👀). Update the section you touch.
+- `docs/project/dependencies.md` — every dependency with purpose/license/rosdep key. Update it together with `package.xml` / Dockerfile / `web/package.json`. Never let Docker have a dependency that `package.xml` lacks.
+- `docs/project/distribution.md` — install/packaging design (planned). Planned-but-not-built designs: `docs/planned/resources.md` (CPU/GPU/mem/disk/net monitoring, Lv1 only), `docs/planned/remote-access.md` (device pairing).
+- `docs/images/` — UI screenshots, written by the E2E specs.
 - Packages: `ros2_ws/src/roshanavi` (Python server), `roshanavi_msgs`, `roshanavi_probe` (C++), `roshanavi_examples` (sample nodes), `roshanavi_test_nodes`. Web: `web/`.
 
 ## Commands (ROS is NOT installed on the host — everything runs in Docker)

@@ -1,4 +1,4 @@
-// Inject tab: send the browser microphone / camera to a topic (DESIGN §4.11).
+// Inject tab: send the browser microphone / camera to a topic (docs/design/input-and-media.md).
 
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';

@@ -1,4 +1,4 @@
-"""Lifecycle (managed) nodes: read the state and request transitions (DESIGN §4.15).
+"""Lifecycle (managed) nodes: read the state and request transitions (docs/design/launcher.md).
 
 Uses only the ROS-official lifecycle services every managed node offers
 (``<node>/get_state``, ``get_available_transitions``, ``change_state`` from

@@ -1,6 +1,6 @@
 """Event selection, channel sizing and filters for the tracing sessions (pure).
 
-Two sessions per server (DESIGN §4.3.2):
+Two sessions per server (docs/design/measurement.md):
 
 * **init** — from server start while LTTng is available: only the events a
   node emits once when it creates nodes / subscriptions / publishers. Nothing
@@ -32,7 +32,7 @@ RT_CONTEXTS = ('vpid', 'vtid')
 KIB = 1024
 MIB = 1024 * KIB
 PAGE = 4 * KIB
-DEFAULT_RT_PER_CPU = 4 * MIB      # DESIGN §4.3.2: "CPU 1 個あたり 4 MiB"
+DEFAULT_RT_PER_CPU = 4 * MIB      # docs/design/measurement.md: "CPU 1 個あたり 4 MiB"
 RT_SUBBUF_COUNT = 4
 INIT_SUBBUF = 64 * KIB            # node start bursts: ~40 events x ~150 B per node
 INIT_SUBBUF_COUNT = 2

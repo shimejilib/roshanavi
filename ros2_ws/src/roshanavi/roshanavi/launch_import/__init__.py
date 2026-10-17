@@ -1,4 +1,4 @@
-"""Launch-file decomposition import (DESIGN §4.16).
+"""Launch-file decomposition import (docs/design/launcher.md).
 
 ``child`` / ``walker`` / ``extract`` run in a separate, time-limited process
 (they import and evaluate the user's launch file). ``runner`` / ``plan`` /

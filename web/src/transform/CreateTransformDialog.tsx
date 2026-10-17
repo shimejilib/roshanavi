@@ -12,6 +12,7 @@ import { Term } from '../lib/Term';
 import { templatePath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
+import { DataKindField } from '../datakind/DataKindField';
 import { TransformInputsFields } from './TransformInputsFields';
 import { TransformPreview } from './TransformPreview';
 import { TransformTimingFields } from './TransformTimingFields';
@@ -39,17 +40,12 @@ export function CreateTransformDialog({ topic, type, transformId }: Props) {
     editing ? formFromTransform(editing.spec as TransformSpec, templateToYaml) : defaultTransformForm(topic, type),
   );
   const [mappingTouched, setMappingTouched] = useState(Boolean(editing));
-  const [types, setTypes] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const topicTypes = useMemo(() => new Map((live.graph?.topics ?? []).map((tp) => [tp.name, tp.types])), [live.graph]);
   const update = (patch: Partial<TransformForm>) => setForm((prev) => ({ ...prev, ...patch }));
   const firstInput = form.inputs[0];
   const heavy = form.inputs.some((row) => isHeavy(row.type));
-
-  useEffect(() => {
-    api.types().then(setTypes).catch(() => setTypes([])); // only suggestions; typing still works
-  }, []);
 
   // A fresh starting mapping whenever the types change (until the user edits the YAML).
   useEffect(() => {
@@ -111,7 +107,7 @@ export function CreateTransformDialog({ topic, type, transformId }: Props) {
           <span>{t('transform.name')} <Term term="node" /></span>
           <input value={form.name} onChange={(e) => update({ name: e.target.value })} disabled={Boolean(editing)} data-testid="transform-name" />
         </label>
-        <TransformInputsFields form={form} topicTypes={topicTypes} types={types} disabled={Boolean(editing)} onChange={setForm} />
+        <TransformInputsFields form={form} topicTypes={topicTypes} disabled={Boolean(editing)} onChange={setForm} />
         <fieldset>
           <legend>{t('transform.mode')}</legend>
           <label className="check">
@@ -131,10 +127,8 @@ export function CreateTransformDialog({ topic, type, transformId }: Props) {
             <input value={form.outputTopic} onChange={(e) => update({ outputTopic: e.target.value })} data-testid="transform-output-topic" />
           </label>
           {form.mode === 'map' && (
-            <label>
-              {t('transform.outputType')}
-              <input list="transform-types" value={form.outputType} onChange={(e) => update({ outputType: e.target.value })} data-testid="transform-output-type" />
-            </label>
+            <DataKindField testId="transform-output-type" label={t('transform.outputKind')} topicTypes={topicTypes.get(normalizeTopic(form.outputTopic)) ?? []}
+              value={{ kind: form.outputKind ?? '', type: form.outputType }} onChange={(port) => update({ outputKind: port.kind, outputType: port.type })} />
           )}
         </div>
         {form.mode === 'map' && (

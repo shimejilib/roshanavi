@@ -1,4 +1,4 @@
-"""Traffic statistics measured by the C++ probe (DESIGN 4.3, probe path).
+"""Traffic statistics measured by the C++ probe (docs/design/map-and-traffic.md, probe path).
 
 Same interface and entry shape as :class:`traffic.TrafficMonitor` (the Python
 fallback). Topic selection stays here (``TopicSelector``); the probe gets the

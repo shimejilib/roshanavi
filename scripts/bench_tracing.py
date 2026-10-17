@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Benchmark 詳細計測モード: tracing off vs on (DESIGN §4.3.2 "性能").
+"""Benchmark 詳細計測モード: tracing off vs on (docs/design/measurement.md "性能").
 
 Runs inside the test image (needs the built workspace):
 

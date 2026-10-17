@@ -1,4 +1,4 @@
-"""Launcher / project / build / dummy REST + log WebSocket routes (DESIGN §4.9-§4.10).
+"""Launcher / project / build / dummy REST + log WebSocket routes (docs/design/launcher.md).
 
 Kept apart from :mod:`server` to keep files small. Same conventions: pydantic
 bodies with ``extra=forbid``, the ``{error: {code, message}}`` envelope via

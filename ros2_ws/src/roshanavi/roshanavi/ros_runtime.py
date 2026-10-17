@@ -54,8 +54,8 @@ DEFAULT_DEPTH = 10
 # it: when this node's raw traffic subscription and one of its own publishers (injected
 # media, dummy nodes) share a topic, the executor's wait() keeps returning at once with
 # nothing to take, so the executor thread busy-loops in Python (3000+ wait-set rebuilds per
-# second) and holds the GIL, delaying every other thread's wake-up by 50-250 ms (DESIGN
-# 4.11, pacing). We register no event handlers.
+# second) and holds the GIL, delaying every other thread's wake-up by 50-250 ms
+# (docs/design/input-and-media.md, pacing). We register no event handlers.
 NO_SUBSCRIPTION_EVENTS = SubscriptionEventCallbacks(use_default_callbacks=False)
 
 

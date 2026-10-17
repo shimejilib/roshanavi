@@ -50,6 +50,7 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
     resume: () => setPaused(false),
     editDummy: () => owner && app.openDialog({ kind: 'createInput', dummyId: owner.id }),
     editTransform: () => owner && app.openDialog({ kind: 'createTransform', transformId: owner.id }),
+    editFunction: () => owner && app.openDialog({ kind: 'createFunction', functionId: owner.id }),
     exportLaunch: () => owner && app.openDialog({ kind: 'exportLaunch', dummyId: owner.id }),
     view: () => app.select({ kind: 'topic', id: topic }),
     tryInject: () => app.openInject(topic),

@@ -1,1 +1,1 @@
-"""Transform nodes (変換ノード, DESIGN §4.18): receive topic(s), compute, publish."""
+"""Transform nodes (変換ノード, docs/design/nodes.md): receive topic(s), compute, publish."""

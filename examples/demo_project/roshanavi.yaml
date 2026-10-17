@@ -16,7 +16,7 @@ targets:
   name: listener
   role: dependency
   autostart: true
-# Sample nodes (roshanavi_examples, DESIGN §0.1). Not started automatically: start them from
+# Sample nodes (roshanavi_examples, docs/overview/vision.md). Not started automatically: start them from
 # the map or the launch list. See examples/perception_demo for a wired-up pipeline.
 - id: image_filter
   kind: run
@@ -49,3 +49,13 @@ targets:
   name: state_machine
   remaps: {cmd: /cmd, state: /state}
   role: mine
+# A function node (関数ノード, docs/design/nodes.md): the plain Python function shout() of
+# roshanavi_examples/logic.py run as a node, /chatter -> /shouted. Start it from the map; edit
+# logic.py and save to see it reload.
+functions:
+- id: text_shout
+  name: text_shout
+  module: roshanavi_examples.logic
+  function: shout
+  inputs: [{topic: /chatter, kind: string}]
+  output: {topic: /shouted, kind: string}

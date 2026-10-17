@@ -195,7 +195,10 @@ def test_api_media_mode_and_type_info(client, helper, data_dir):
              timeout=10)
     info = client.get('/api/media/types?topic=/tl_still').json()
     assert info['detected'] == 'sensor_msgs/msg/Image' and info['detected_supported']
-    assert {'type': 'sensor_msgs/msg/CompressedImage', 'kind': 'image'} in info['supported']
+    assert {'type': 'sensor_msgs/msg/CompressedImage', 'kind': 'image',
+            'data_kind': None} in info['supported']  # no data kind: 専用の型
+    assert {'type': 'sensor_msgs/msg/Image', 'kind': 'image',
+            'data_kind': 'image'} in info['supported']
     resp = client.post('/api/inject', json={'mode': 'media', 'topic': '/tl_still',
                                             'source': 'still.png', 'rate_hz': 20, 'count': 3,
                                             'media': {'encoding': 'mono8'}})

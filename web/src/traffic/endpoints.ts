@@ -1,4 +1,4 @@
-// Traffic per (node × topic × direction): rows under a topic, or grouped by node (pure, DESIGN §6.7).
+// Traffic per (node × topic × direction): rows under a topic, or grouped by node (pure, docs/design/ui.md).
 //
 // Publisher values come from the backend split (rates.py: exact / measured /
 // estimated / configured / unknown); subscriber values are theoretical (what the
