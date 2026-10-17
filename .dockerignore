@@ -1,0 +1,12 @@
+.git
+data
+docs
+web/node_modules
+web/dist
+web/test-results
+web/playwright-report
+ros2_ws/build
+ros2_ws/install
+ros2_ws/log
+ros2_ws/src/roshanavi/roshanavi/static
+**/__pycache__

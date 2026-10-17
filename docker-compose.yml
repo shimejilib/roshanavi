@@ -2,6 +2,7 @@
 #   lab  : API/web server on 127.0.0.1:8080
 #   demo : demo_nodes_py talker + listener (same ROS_DOMAIN_ID / network)
 #   test : build + full pytest suite (exit code = result)
+#   e2e  : Playwright smoke test against a running `lab` + `demo` (profile e2e)
 
 x-ros: &ros
   build:
@@ -42,3 +43,16 @@ services:
     volumes:
       - ./ros2_ws/src:/ws/src:ro
     command: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/ws/src/roshanavi/test"]
+
+  e2e:
+    profiles: ["e2e"]
+    image: mcr.microsoft.com/playwright:v1.63.0-noble
+    network_mode: host  # reaches the lab UI published on 127.0.0.1:8080
+    user: "${UID:-1000}:${GID:-1000}"
+    environment:
+      HOME: /tmp
+      ROSHANAVI_URL: ${ROSHANAVI_URL:-http://localhost:8080}
+    working_dir: /repo/web
+    volumes:
+      - .:/repo
+    command: ["npx", "playwright", "test"]

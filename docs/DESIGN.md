@@ -71,6 +71,8 @@ roshanavi/
     roshanavi/
       ros_runtime.py   # rclpy ノード + MultiThreadedExecutor を専用スレッドで回す。スレッド安全な facade
       graph.py         # グラフスナップショット
+      qos_compat.py    # pub × sub の QoS 互換判定 (純関数)
+      diagnostics.py   # 初心者向け診断 (純関数)
       traffic.py       # 全トピック raw 購読 + 統計
       msgutil.py       # 型解決 / テンプレ生成 / dict⇄msg / 表示用切り詰め
       expr.py          # AST ホワイトリスト式評価器 (eval 禁止)
@@ -81,7 +83,7 @@ roshanavi/
       main.py          # エントリ: `ros2 run roshanavi server`
       static/          # web のビルド成果物 (git 管理外、ビルドで生成)
     test/              # pytest (unit + rclpy 統合)
-  web/                 # Vite + React
+  web/                 # Vite + React (§6.2)。e2e/ は Playwright
   examples/scenarios/  # サンプルシナリオ
 ```
 
@@ -94,7 +96,15 @@ roshanavi/
 
 ### 4.2 graph
 - `get_node_names_and_namespaces()`, `get_topic_names_and_types()`, `get_publishers_info_by_topic()`, `get_subscriptions_info_by_topic()` から構築。
-- 出力: `{nodes:[{id,name,namespace}], topics:[{name,types[]}], edges:[{node,topic,dir:"pub"|"sub",qos:{reliability,durability,history,depth}}]}`
+- 出力: `{nodes:[{id,name,namespace,role}], topics:[{name,types[]}], edges:[{node,topic,dir:"pub"|"sub",qos:{reliability,durability,history,depth,deadline_ms,liveliness,lease_ms}}], diagnostics:[...]}`
+  - `deadline_ms` / `lease_ms` は未設定・無制限なら `null`。
+  - `role`: P2 では実ノードは常に `"other"`。実行中の注入ジョブ (topic を持つもの) は仮想ノード `dummy:<job id>` (`role:"dummy"`, `job_id`) として pub エッジ付きで含める。注入の publisher は roshanavi 自身のノード (既定で非表示) に属するため、ジョブ単位の仮想ノードにしないと注入が地図に現れない。bag ジョブは `rosbag2_player` が通常ノードとして見えるので仮想ノードにしない。
+  - `diagnostics` (`diagnostics.py` / `qos_compat.py`, 純関数): `{code, severity, topic, nodes[], detail}`。重大度順 (error → warning) で決定的に並べる。
+    - `qos_incompatible` (error): topic ごとに pub × sub の全組を判定。reliability (BEST_EFFORT pub → RELIABLE sub)、durability (VOLATILE pub → TRANSIENT_LOCAL sub)、deadline (pub の deadline > sub の要求、pub 無制限で sub 有限も不可)、liveliness (AUTOMATIC pub → MANUAL_BY_TOPIC sub)、lease (pub > sub)。`detail.reasons=[{policy,pub,sub}]`。
+    - `no_subscriber` / `no_publisher` (warning): 片側しかいないトピック。隠しトピック (`_` で始まる区切り)、`/rosout`、`/parameter_events`、roshanavi 自身しか端点を持たないトピックは対象外。
+    - `similar_names` (warning): pub のみのトピックと sub のみのトピックの組で、`_`/`-`/大小文字を除くと同一、または同じ名前空間で最後の区切りの Levenshtein 距離 ≤ 2 (4 文字以下の名前は ≤ 1)。
+    - `type_mismatch` (error): 同名トピックに複数の型。
+  - 文言は UI 側の i18n 辞書で組み立てる (API は英語のコードと構造化データのみ)。
 - 1 秒周期でスナップショットを更新し、変化時のみ WS 送信 (ハッシュ比較)。
 
 ### 4.3 traffic
@@ -164,7 +174,7 @@ roshanavi/
 | POST/GET/DELETE | `/api/inject[/{id}]` | 注入ジョブ |
 | GET | `/api/files` | data_dir 内のファイル一覧 (stream/bag 選択用) |
 | GET/POST | `/api/scenarios`, `/api/scenarios/run` | シナリオ一覧・実行 (結果は JSON) |
-| WS | `/ws/live` | 1 秒毎に `{traffic, graph?(変化時), jobs}` を push |
+| WS | `/ws/live` | 1 秒毎に `{traffic, graph?(変化時), jobs}` を push。traffic 各エントリに直近 1 秒の受信数 `recent_count` |
 | WS | `/ws/echo/{topic}` | エコー |
 
 - 入力は pydantic モデルで検証。既定 bind は `127.0.0.1` (Docker 内では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:8080:8080`)。
@@ -293,6 +303,43 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 - グラフスナップショットに QoS 互換性の判定結果と、診断の警告リストを含める (判定はバックエンドで行い、テスト可能にする)。
 - ノードの役割 (自分 / 依存 / ダミー) は、Launcher とダミーノードの管理情報から付与する。
 
+### 6.2 実装メモ (P2)
+
+**構成 (`web/`)**: Vite + React 19 + TypeScript (strict)。依存はすべて完全一致でピン留め (`package-lock.json`)。
+- `src/tabs/registry.tsx`: タブ定義 `{id, label, keepMounted, render}`。Launcher / Scenarios は ここに追加する。Graph と Inject は非表示中もマウントしたまま (レイアウト・入力を保持)。
+- `src/detail/DetailPane.tsx`: 右ペイン。選択 (topic / node) ごとにセクションを並べる (統計・エコー・注入ショートカット・監視切替)。ログや画像ビューアは後のフェーズで追加する。
+- `src/i18n/messages.ts`: UI 文言の唯一の辞書 (既定は日本語)。英語は同じキーで `locales.en` を足せば切り替わる (欠けたキーは日本語にフォールバック)。
+- 純粋ロジック (vitest): `graph/model.ts` (スナップショット → 要素、状態・太さの写像、フィルタ)、`graph/diff.ts` (差分パッチ)、`graph/focus.ts` (上流・下流)、`graph/particles.ts` (粒のシミュレーション)、`graph/diagnosticsText.ts` (診断の文章化)、`traffic/sort.ts`、`inject/buildRequest.ts`、`state/live.ts`、`api/reconnect.ts`、`lib/format.ts`。
+
+**ライブ通信マップの決定事項**
+- **差分更新**: 毎秒の要素リストを前回と比較し、追加・削除・data 更新だけを cytoscape に適用する。dagre レイアウトは **トポロジーが変わったときだけ** アニメーション付きで再実行する (統計の変化では位置は動かない)。新しい要素は隣接ノードの位置から生えるように置く。dagre は決定的なので、変化のない部分の位置はほぼ保たれる。ただしユーザーがドラッグした位置はトポロジー変化時に再配置される (P2 の制約)。
+- **流れの粒は canvas オーバーレイで描く**: cytoscape のスタイル (例: `line-dash-offset`) をフレームごとに変えると、そのたびに cytoscape がグラフ全体を再描画するため、200 要素 × 60 fps では重い。オーバーレイなら cytoscape の再描画はデータ更新時 (1 Hz) だけで、粒は色ごとに 1 本の Path2D でまとめて描く。エッジ端点 (モデル座標) はノード移動時だけ再計算してキャッシュし、描画時に pan/zoom で変換する。粒の頻度は `min(6, 1 + sqrt(hz - 1))` 個/秒、総数上限 1200。計測 (Playwright, headless Chromium, 180 要素 + 粒): 約 60 fps (`web/e2e/perf.spec.ts`)。
+- **低頻度 (≤ 1 Hz)**: 連続放出せず、`recent_count > 0` の tick ごとにエッジを光らせて 1 粒流す (実際の受信に同期)。
+- **状態**: 通信中 = 青実線 / 停止 (`last_seen` > 3 s) = 灰破線 / 取りこぼし (`drop_ratio` > 0) = 橙 / 非監視 = 灰点線 / QoS 不一致 = 赤破線 + 終端 T 字。QoS 不一致は受信側エッジ (topic → sub) に付け、ホバーで理由を表示する。粒は流さない。
+- **太さ**: エッジ = `1.5 + 1.2·log10(1 + B/1000)` px (上限 10)、ノード縁取り = `1 + log10(1 + 入出力帯域合計/1000)`。
+- **ラベル**: `10.0 Hz · 1.2 KB/s`。cytoscape の `min-zoomed-font-size` でズームアウト時に自動で省略する。
+- **一時停止**: 表示中のスナップショットと粒を固定する。裏では受信を続け、再開時に最新へ追従する。
+- **フォーカス**: クリックした要素から有向辺をたどった上流・下流以外を薄くする。エッジのクリックはそのトピックの選択として扱う。診断のクリックで対象トピックを選択・フォーカスする。
+- **アクセシビリティ / E2E**: 地図の内容を視覚的に隠したリスト (`data-testid="graph-outline"`) としても出力する。
+
+**エコー**: 右ペインでトピックを選ぶと、監視対象 (重い型でない) なら自動で `/ws/echo` を開始する。重い型は「エコーを開始」で明示的に開始する。
+
+**配信とビルド**
+- `npm run build` は `ros2_ws/src/roshanavi/roshanavi/static/` (git 管理外) に出力し、`setup.py` が package data としてインストールする → `ros2 run roshanavi server` が `/` で UI を配信する。
+- Docker: `docker/Dockerfile` の第 1 段 (`node:24.14.0-bookworm-slim`) で `npm ci` + build し、成果物を `/opt/roshanavi/static` に焼き込む。`lab` はソースを bind mount するため package data に頼らず、`ROSHANAVI_STATIC_DIR` 環境変数 (main.py の `--static-dir` 既定値) で参照する。UI を変更したら `docker compose build lab`。
+
+**実行方法**
+```bash
+# Docker で UI + デモ
+docker compose up -d --build lab demo        # http://localhost:8080
+# UI 開発 (ホットリロード; /api と /ws は :8080 にプロキシ)
+cd web && npm ci && npm run dev              # http://localhost:5173
+# テスト
+cd web && npm test                           # vitest (純粋ロジック)
+docker compose --profile test run --rm test  # バックエンド pytest
+docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中に)。スクリーンショットは docs/screenshots/
+```
+
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
 - 統合 (rclpy, Docker 内): publisher → traffic に Hz が出る / injector periodic → 受信数 / scenario 実行 pass・fail 両方 / API を TestClient で叩く。
@@ -301,7 +348,7 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 ## 8. フェーズ
 1. ✅ P1 バックエンド核 + Docker (graph / traffic / msgutil / expr / injector / echo / server + テスト)
 2. ✅ P1.5 セキュリティ強化 (Host/Origin/Content-Type)、MessageInfo による Hz・取りこぼし、heavy 型の opt-in
-3. P2 Web UI 基盤 + ライブ通信マップ (§6.1, 診断を含む) + Traffic + Inject
+3. ✅ P2 Web UI 基盤 + ライブ通信マップ (§6.1, 診断を含む) + Traffic + Inject
 4. P3 Launcher (§0.1 の 3) + プロジェクトファイル + ビルドボタン + 恒久ダミーノード
 5. P4 メディア注入 (§4.6.1) + 画像ビューア・音声の波形と再生
 6. P5 サンプルノード (`roshanavi_examples`)

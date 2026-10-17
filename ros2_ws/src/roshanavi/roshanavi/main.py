@@ -6,7 +6,9 @@ import os
 import sys
 from typing import List, Optional
 
-DEFAULT_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+PACKAGE_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
+# The Docker image bakes the UI elsewhere and points this variable at it.
+DEFAULT_STATIC_DIR = os.environ.get('ROSHANAVI_STATIC_DIR') or PACKAGE_STATIC_DIR
 
 LOG = logging.getLogger('roshanavi')
 
