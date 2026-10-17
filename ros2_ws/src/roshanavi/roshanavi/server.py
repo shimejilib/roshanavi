@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (msgutil, security, server_launch_import, server_launcher, server_media,
-               server_nodes)
+               server_nodes, server_tracing)
 from .api_errors import ApiError, parse_window
 from .echo import EchoError
 from .files import FileAccessError, list_files
@@ -211,8 +211,10 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
 
         async def push() -> None:
             snapshot, digest = lab.graph.snapshot()
-            payload: Dict[str, Any] = {'traffic': lab.traffic_view(window),
+            traffic = lab.traffic_view(window)
+            payload: Dict[str, Any] = {'traffic': traffic,
                                        'measurement': lab.traffic.status(),
+                                       'tracing': lab.tracing_status(traffic),
                                        'server_time': time.time(),
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
@@ -258,6 +260,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_media.register(app, lab)
     server_nodes.register(app, lab)
     server_launch_import.register(app, lab)
+    server_tracing.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -269,7 +272,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
         def index() -> Dict[str, Any]:
             return {'name': 'roshanavi', 'ui': None,
                     'api': ['/api/health', '/api/graph', '/api/traffic', '/api/types', '/api/inject',
-                            '/api/files', '/api/targets', '/api/workspace', '/api/build',
+                            '/api/files', '/api/tracing', '/api/targets', '/api/workspace', '/api/build',
                             '/api/project', '/api/dummies', '/api/media/types',
                             '/api/recordings', '/api/nodes/{node}/parameters',
                             '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',

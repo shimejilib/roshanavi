@@ -39,6 +39,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument('--probe', choices=['auto', 'off'], default='auto',
                         help='measure traffic with the C++ probe (roshanavi_probe) when it is '
                              'built (auto, default) or always in Python (off)')
+    parser.add_argument('--tracing', choices=['auto', 'off'], default='auto',
+                        help='詳細計測モード (LTTng tracing): auto (default) records node start-up '
+                             'events while lttng and python3-bt2 are installed, so the mode can be '
+                             'turned on from the UI without restarting nodes; off disables it')
+    parser.add_argument('--trace-buffer-kib', type=int, default=4096,
+                        help='詳細計測モード: ring buffer per CPU in KiB (default 4096; shrunk to '
+                             'fit half of the free /dev/shm)')
     parser.add_argument('--allowed-host', action='append', default=[], metavar='HOST',
                         help='extra Host header value to accept (repeatable); localhost, '
                              '127.0.0.1 and [::1] are always allowed')
@@ -106,8 +113,10 @@ def main(argv: Optional[List[str]] = None) -> int:
               disk_thresholds=DiskThresholds(args.record_warn_free_mb, args.record_warn_free_pct,
                                              args.record_stop_free_mb,
                                              args.record_stop_free_pct),
-              probe=args.probe).start()
+              probe=args.probe, tracing=args.tracing,
+              trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024).start()
     atexit.register(lab.launcher.close)
+    atexit.register(lab.tracing.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     try:
         app = create_app(lab, static_dir=args.static_dir, allowed_hosts=args.allowed_host,

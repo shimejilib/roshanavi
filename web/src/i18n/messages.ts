@@ -7,6 +7,7 @@ import { uxJa } from './messagesUx';
 import { importJa } from './messagesImport';
 import { nodesJa } from './messagesNodes';
 import { trafficJa } from './messagesTraffic';
+import { tracingJa } from './messagesTracing';
 import { uxJa2 } from './messagesUx2';
 
 export const ja = {
@@ -17,6 +18,7 @@ export const ja = {
   ...nodesJa,
   ...importJa,
   ...trafficJa,
+  ...tracingJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

@@ -1,5 +1,6 @@
 // Shapes of the roshanavi REST / WebSocket API (docs/DESIGN.md §4.8).
 
+import type { SubscriberTrace, TracingStatus } from './tracingTypes';
 import type { MediaOptions, RecordingStatus } from './mediaTypes';
 
 export type Role = 'mine' | 'dependency' | 'dummy' | 'other';
@@ -155,10 +156,11 @@ export interface Measurement {
 export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown';
 
 /** theoretical = what compatible publishers send (not measured inside the subscriber);
- * not_delivered = no QoS-compatible publisher. A tracing probe may later report measured. */
+ * not_delivered = no QoS-compatible publisher; measured = counted inside the node by the trace
+ * (詳細計測モード). */
 export type SubscriberBasis = 'theoretical' | 'not_delivered' | 'measured';
 
-export interface SubscriberRate {
+export interface SubscriberRate extends SubscriberTrace {
   node: string;
   hz: number | null;
   bps: number | null;
@@ -172,6 +174,8 @@ export interface PublisherRate {
   hz: number | null;
   bps: number | null;
   basis: RateBasis;
+  /** 詳細計測モード: sends counted by the trace (rmw_publish), a cross-check of `hz`. */
+  hz_traced?: number | null;
 }
 
 export type InjectMode = 'once' | 'periodic' | 'stream' | 'bag' | 'media';
@@ -214,6 +218,7 @@ export interface LiveMessage {
   /** Server clock (epoch seconds) when the frame was built. */
   server_time?: number;
   measurement?: Measurement;
+  tracing?: TracingStatus;
 }
 
 // ---- Launcher (DESIGN §4.9) ------------------------------------------------

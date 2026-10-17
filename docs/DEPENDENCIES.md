@@ -53,7 +53,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `audio_common_msgs` | 音声の注入先として AudioData 系の型が選べなくなる (std_msgs の配列型は使える) | `sudo apt install ros-jazzy-audio-common-msgs` |
 | `colcon` (`python3-colcon-common-extensions`) | ビルドボタンが無効になる | `sudo apt install python3-colcon-common-extensions` |
 | `pynvml` (P8, 予定) | GPU の監視が無効になる | rosdep キーを実装時に確認する |
-| `lttng-tools`, LTTng-UST, `babeltrace2` (予定) | 詳細計測モード (トレース) が無効になる | `sudo apt install lttng-tools liblttng-ust-dev python3-babeltrace` (実装時に確定) |
+| `lttng-tools`, `liblttng-ust1t64` (`ros-jazzy-tracetools` の依存で通常は導入済み), `python3-bt2` | 詳細計測モード (トレース) が無効になる。トグルに導入方法を表示する | `sudo apt install lttng-tools python3-bt2` |
 
 ## 3. 開発・テスト用 (利用者には不要)
 
@@ -64,6 +64,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `python3-httpx` | FastAPI の TestClient |
 | `ros-jazzy-demo-nodes-cpp`, `ros-jazzy-demo-nodes-py`, `ros-jazzy-example-interfaces` | テストとデモの相手役ノード |
 | `ros-jazzy-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
+| `roshanavi_test_nodes` (同梱の ament パッケージ。rclcpp, std_msgs, sensor_msgs) | トレース計測のテスト用ノード (遅いコールバックなど) |
 | `ros-jazzy-rmw-cyclonedds-cpp` (任意、未導入) | Cyclone DDS での計測の自動テスト (現在は手動確認のみ) |
 
 ### Web UI (ビルド時のみ。配布物にはビルド済みの静的ファイルを同梱し、利用者に npm を要求しない)
@@ -84,6 +85,9 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 Node.js: 開発は v24.14 (ホスト)。jsdom は Node 24.15 以上が必要なため未使用 (コンポーネントテストは対象外)。
 
 ## 4. Docker イメージ
+
+全 ROS サービスに `shm_size: 512m` を設定する (LTTng のリングバッファが /dev/shm に置かれ、既定の 64 MB では足りずに何も記録されないため)。
+
 | イメージ | 用途 |
 |---|---|
 | `ros:jazzy-ros-base` | lab / demo / test のベース |

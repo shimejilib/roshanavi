@@ -11,6 +11,8 @@ import { EndpointRows } from './EndpointRows';
 import { NodeTrafficView } from './NodeTrafficView';
 import { sortTraffic, toggleSort, type SortKey, type SortState } from './sort';
 import { TrafficRow } from './TrafficRow';
+import { TracingStatusBar } from './TracingStatusBar';
+import { TracingToggle } from './TracingToggle';
 
 type View = 'topic' | 'node';
 
@@ -62,6 +64,7 @@ export function TrafficTab() {
           </button>
         )}
         <WindowSelect />
+        <TracingToggle status={live.tracing} />
         {note && (
           <span className={note.level === 'warn' ? 'measurement-note warn-text small' : 'measurement-note muted small'}
             title={note.help} data-testid="traffic-measurement">{note.text}</span>
@@ -69,6 +72,7 @@ export function TrafficTab() {
         <span className="spacer" />
         <LastUpdateBadge />
       </div>
+      <TracingStatusBar status={live.tracing} />
       <div className="table-wrap">
         {view === 'node' ? <NodeTrafficView entries={rows} /> : (
         <table className="traffic-table">

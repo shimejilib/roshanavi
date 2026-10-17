@@ -1,0 +1,12 @@
+/* 詳細計測モード (traffic tab toolbar, status bar, trace values, node pane) */
+.modal-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.modal-body h4 { margin: 4px 0 0; font-size: 13px; }
+.modal-body ul { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 4px; }
+label.check.disabled { opacity: 0.6; }
+.tracing-bar { display: flex; flex-direction: column; gap: 6px; padding: 6px 10px; margin: 0 0 6px; font-size: 12px; border: 1px solid var(--border); border-left: 3px solid var(--accent); border-radius: 4px; }
+.tracing-bar details ul { margin: 4px 0 0; padding-left: 18px; }
+.trace-info { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
+.badge.basis-traced { border-color: var(--accent); }
+.node-trace { width: 100%; border-collapse: collapse; font-size: 12px; }
+.node-trace th, .node-trace td { text-align: left; padding: 2px 6px 2px 0; vertical-align: top; }
+.node-trace td.num, .node-trace th.num { text-align: right; }

@@ -2,9 +2,10 @@
 //
 // Publisher values come from the backend split (rates.py: exact / measured /
 // estimated / configured / unknown); subscriber values are theoretical (what the
-// QoS-compatible publishers send) or 0 when nothing can be delivered. `basis`
-// stays a free string so a future tracing probe can report `measured`.
+// QoS-compatible publishers send) or 0 when nothing can be delivered; with
+// 詳細計測モード a covered subscriber is `measured` inside the node (`trace`).
 
+import type { SubscriberTrace } from '../api/tracingTypes';
 import type { TrafficEntry } from '../api/types';
 import { t, tDynamic } from '../i18n';
 import { formatHz, formatRate } from '../lib/format';
@@ -20,6 +21,10 @@ export interface EndpointRow {
   bps: number | null;
   basis: string;
   delivered: boolean;
+  /** Subscriber rows: trace values (詳細計測モード). */
+  trace?: SubscriberTrace;
+  /** Publisher rows: sends counted by the trace. */
+  hzTraced?: number | null;
 }
 
 export interface NodeTraffic {
@@ -33,10 +38,10 @@ const byNode = (a: EndpointRow, b: EndpointRow) => a.node.localeCompare(b.node);
 export function topicEndpoints(entry: TrafficEntry): EndpointRow[] {
   const base = { topic: entry.topic, type: entry.type };
   const pubs: EndpointRow[] = (entry.publishers ?? []).map((p) => ({
-    ...base, node: p.node, dir: 'pub', hz: p.hz, bps: p.bps, basis: p.basis, delivered: true,
+    ...base, node: p.node, dir: 'pub', hz: p.hz, bps: p.bps, basis: p.basis, delivered: true, hzTraced: p.hz_traced,
   }));
   const subs: EndpointRow[] = (entry.subscribers ?? []).map((s) => ({
-    ...base, node: s.node, dir: 'sub', hz: s.hz, bps: s.bps, basis: s.basis, delivered: s.delivered,
+    ...base, node: s.node, dir: 'sub', hz: s.hz, bps: s.bps, basis: s.basis, delivered: s.delivered, trace: s,
   }));
   return [...pubs.sort(byNode), ...subs.sort(byNode)];
 }
@@ -54,6 +59,11 @@ export function groupByNode(entries: Iterable<TrafficEntry>): NodeTraffic[] {
   return [...groups.entries()]
     .map(([node, rows]) => ({ node, rows: [...rows].sort(order) }))
     .sort((a, b) => a.node.localeCompare(b.node));
+}
+
+/** Badge key: a subscriber measured by the trace reads 実測(トレース). */
+export function displayBasis(row: Pick<EndpointRow, 'dir' | 'basis'>): string {
+  return row.dir === 'sub' && row.basis === 'measured' ? 'traced' : row.basis;
 }
 
 export function basisLabel(basis: string): string {

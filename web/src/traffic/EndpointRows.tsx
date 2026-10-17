@@ -1,7 +1,7 @@
 // Child rows under an expanded topic: one per publisher and per subscriber.
 
 import { topicEndpoints } from './endpoints';
-import { BasisBadge, DirectionLabel, RateCells } from './EndpointCells';
+import { DirectionLabel, RateCells, RowBasisBadge, TraceInfo } from './EndpointCells';
 import type { TrafficEntry } from '../api/types';
 import { t } from '../i18n';
 
@@ -19,10 +19,10 @@ export function EndpointRows({ entry, span }: { entry: TrafficEntry; span: numbe
       {rows.map((row) => (
         <tr key={`${row.dir}-${row.node}`} className="endpoint-row" data-testid={`endpoint-${entry.topic}-${row.dir}-${row.node}`}>
           <td className="endpoint-cell">
-            <DirectionLabel dir={row.dir} /> <span className="mono">{row.node}</span> <BasisBadge basis={row.basis} />
+            <DirectionLabel dir={row.dir} /> <span className="mono">{row.node}</span> <RowBasisBadge row={row} />
           </td>
           <RateCells row={row} />
-          <td colSpan={span - 3} />
+          <td colSpan={span - 3}><TraceInfo row={row} /></td>
         </tr>
       ))}
     </>

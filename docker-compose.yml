@@ -15,6 +15,9 @@ x-ros: &ros
     dockerfile: docker/Dockerfile
   image: roshanavi:dev
   init: true
+  # LTTng's per-CPU ring buffers (詳細計測モード) and Fast DDS's shared-memory transport both
+  # live in /dev/shm; Docker's default 64 MB is too small for 4 MiB x many CPUs.
+  shm_size: 512m
   environment: &ros-env
     ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
     PYTHONUNBUFFERED: "1"

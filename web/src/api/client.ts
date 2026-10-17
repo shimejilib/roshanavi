@@ -1,5 +1,6 @@
 // REST client. Every failure becomes an ApiError with the server's error code.
 
+import type { TracingStatus } from './tracingTypes';
 import { t, tDynamic } from '../i18n';
 import type {
   BuildStatus,
@@ -86,6 +87,9 @@ export const api = {
   pauseInject: (id: string, paused: boolean) => request<Job>('POST', `/api/inject/${enc(id)}/${paused ? 'pause' : 'resume'}`),
   setMonitor: (topicApiPath: string, enabled: boolean) =>
     request<{ topic: string; enabled: boolean }>('PUT', topicApiPath, { enabled }),
+
+  tracing: () => request<TracingStatus>('GET', '/api/tracing'),
+  setTracing: (enabled: boolean) => request<TracingStatus>('PUT', '/api/tracing', { enabled }),
 
   workspace: () => request<WorkspaceInfo>('GET', '/api/workspace'),
   refreshWorkspace: () => request<WorkspaceInfo>('POST', '/api/workspace/refresh'),

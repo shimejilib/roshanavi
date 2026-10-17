@@ -8,6 +8,7 @@ import { NodeIO } from './NodeIO';
 import { NodeLifecycle } from './NodeLifecycle';
 import { NodeLauncher } from './NodeLauncher';
 import { NodeLinks } from './NodeLinks';
+import { NodeTracing } from './NodeTracing';
 
 export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnapshot | null }) {
   const { openDialog } = useAppState();
@@ -38,6 +39,7 @@ export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnap
         </button>
       )}
       <NodeIO nodeId={nodeId} graph={graph} traffic={live.traffic} />
+      <NodeTracing nodeId={nodeId} traffic={live.traffic} tracing={live.tracing} />
       <NodeLauncher node={node} />
       <details className="qos-details">
         <summary>{t('io.qosDetails')}</summary>

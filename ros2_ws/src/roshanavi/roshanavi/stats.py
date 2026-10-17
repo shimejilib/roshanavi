@@ -124,6 +124,26 @@ def rate_samples(samples: Sequence[Sample], retained: Sequence[Sample], now: flo
     return samples, window, 'too_few'
 
 
+def window_rate(times: Sequence[float], now: float, window: float
+                ) -> Tuple[Optional[float], Optional[str]]:
+    """Event rate over the last ``window`` s from ascending event times (seconds).
+
+    Same semantics as :meth:`TopicStats.snapshot`: (n-1)/(t_last-t_first) over the
+    events inside the window, the longest window for slow streams (``'extended'``),
+    0 for a stopped stream. ``(None, 'too_few')`` when it cannot be measured yet
+    (fewer than 2 events), so callers show "measuring" rather than a number.
+    """
+    retained = [Sample(t, 0) for t in times if t >= now - MAX_WINDOW_SEC and t <= now]
+    in_window = [s for s in retained if s.t >= now - window]
+    stale = bool(retained) and is_silent(retained, now)
+    used, _span, note = rate_samples(in_window, retained, now, window, stale)
+    if stale:
+        return 0.0, note
+    if note == 'too_few':
+        return None, note
+    return _rate_and_intervals([s.t for s in used])[0], note
+
+
 def expected_period(samples: Sequence[Sample]) -> Optional[float]:
     """Mean receive interval of the retained samples (None with fewer than 2)."""
     if len(samples) < 2:

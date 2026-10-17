@@ -4,7 +4,7 @@ import type { TrafficEntry } from '../api/types';
 import { t } from '../i18n';
 import { useAppState } from '../state/AppState';
 import { groupByNode } from './endpoints';
-import { BasisBadge, DirectionLabel, RateCells } from './EndpointCells';
+import { DirectionLabel, RateCells, RowBasisBadge, TraceInfo } from './EndpointCells';
 
 export function NodeTrafficView({ entries }: { entries: TrafficEntry[] }) {
   const { select } = useAppState();
@@ -33,7 +33,7 @@ export function NodeTrafficView({ entries }: { entries: TrafficEntry[] }) {
               <td><DirectionLabel dir={row.dir} /></td>
               <td className="mono">{row.topic}</td>
               <RateCells row={row} />
-              <td><BasisBadge basis={row.basis} /></td>
+              <td><RowBasisBadge row={row} /> <TraceInfo row={row} /></td>
             </tr>
           )),
         )}

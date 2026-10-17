@@ -265,3 +265,26 @@
 | K-32 | 地図の右クリック・右ペインからの lifecycle | lifecycle ノードにだけ項目が出て、ダイアログが開く | 🟡 (項目は vitest `menuModel.test.ts`、操作は 👀) |
 | K-33 | 取り込んだノードの実起動 | 取り込んだ talker を起動するとノード名・名前空間・リマップ・パラメータファイルどおりに動く | 👀 (demo_system の talker を取り込み起動 → `/demo_robot/imported_talker` が確実で対応づき実行。talker が宣言しないパラメータ `note` は rclcpp の仕様で一覧に出ない) |
 | K-34 | 非常に大きい launch (数百ノード) の評価時間 | 20 秒以内に評価が終わる | ⬜ |
+
+## L. 詳細計測モード (トレース, P4.7)
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| L-01 | 対応づけと窓ごとの値 (unit) | rcl_node_init → rcl_subscription_init → rclcpp_subscription_init → callback_added の連鎖で take・コールバックがノード × トピックに付く。1 / 5 / 10 秒の受信・処理 Hz、処理時間の平均 / p95 / 最大、計測時間が窓より短いときは経過時間で割る (2 秒未満は null) | ✅ (`test_tracing_model.py`) |
+| L-02 | プロセスごとの区別・後片付け (unit) | 同じハンドル値でも vpid が違えば混ざらない。init の無いプロセスの記録は `unknown_pids`。終了したプロセスの記録を捨てる。古いサンプルの刈り込み、対にならない callback_end は無視 | ✅ (`test_tracing_model.py`) |
+| L-03 | rclpy (unit) | 受信数だけ (`hz_processed` / `cb_ms` は null、`lang: py`) | ✅ (`test_tracing_model.py`) |
+| L-04 | バッファの大きさとフィルタ (unit) | 既定 4 MiB/CPU、/dev/shm の空きの半分に収まるよう縮める (64 MB・24 CPU で 1 MiB/CPU)、最小 4 KiB × 2、それも無理なら `ShmTooSmall`。`taken == 1` と自分のプロセスの除外フィルタ、古いセッション名から持ち主の pid | ✅ (`test_tracing_model.py`) |
+| L-05 | 交通量への反映 (unit) | 対象ノードの受信行が `measured` (受信・処理・処理時間、理論値は `hz_expected`)。測れ始める前は理論値のまま。届いていない行は `not_delivered` のまま。送信行に `hz_traced` | ✅ (`test_tracing_merge.py`) |
+| L-06 | 処理が追いついていない (unit) | 送信側の実測 (または受信数) に対して処理が 10% かつ 0.5 Hz 以上少ない → `behind` と `processing_behind` の診断。0.5 Hz 未満・rclpy は判定しない | ✅ (`test_tracing_merge.py`) |
+| L-07 | 測れないノードの理由 (unit) | rclpy → `rclpy`、intra-process → `intra_process`、起動リストのノードでトレース開始前からのプロセス → `restart_needed`、その他 → `not_traced`。roshanavi 自身・注入ジョブは除外 | ✅ (`test_tracing_merge.py`) |
+| L-08 | 実ノード: C++ talker / listener と遅いコールバック | API で有効化 → listener の受信 1 Hz・処理 1 Hz・処理関数名。200 ms 眠る slow_listener は送信 10 Hz に対して処理 5 Hz・処理時間 200 ms で `processing_behind`。取りこぼし 0、CPU が出る、ディスク < 32 MB。無効化で理論値に戻る | ✅ (`test_tracing_ros.py`) |
+| L-09 | 実ノード: rclpy と開始前からのノード | demo_nodes_py の listener は受信だけ `measured`、理由 `rclpy`。roshanavi より前に起動した listener は `not_traced` で理論値のまま | ✅ (`test_tracing_ros.py`) |
+| L-10 | 後片付け | 停止後に解析プロセス・lttng-sessiond / consumerd が残らない (開始前と同じ)、`roshanavi-` のセッションが無い、トレースのディレクトリが消える | ✅ (`test_tracing_ros.py`) |
+| L-11 | 取りこぼしの報告 | 8 KiB/CPU のバッファで 2000 件ずつのバーストを送ると `discarded > 0` | ✅ (`test_tracing_ros.py`) |
+| L-12 | 解析プロセスの異常終了 | SIGKILL から 5 秒後に起動し直し (`restarts: 1`)、有効化できる | ✅ (`test_tracing_ros.py`) |
+| L-13 | API | `--tracing off` は `reason: disabled`、有効化は 409 `tracing_unavailable`、text/plain は 415、余計な項目は 422、/ws/live に `tracing`。lttng が無ければ `not_installed` | ✅ (`test_tracing_api.py`) |
+| L-14 | UI の表示 (vitest) | 導入方法の案内、状態の 1 行 (件/秒・取りこぼし・ディスク・CPU)、受信 / 処理 / 処理時間、rclpy は「未対応」、`実測(トレース)` は受信行だけ、追いついていない文言、右ペインの行 | ✅ (`traffic/tracing.test.ts`) |
+| L-15 | E2E: 有効化 → listener が実測(トレース) | 説明ダイアログ (対象ノード側・roshanavi 側の負荷) → 有効化 → 状態バー → /chatter の listener 行が `実測(トレース)` と処理の値、ノード別も同じ。無効化で理論値に戻る | ✅ (`e2e/tracing.spec.ts`) |
+| L-16 | ベンチマーク (オン・オフ) | 10 トピック × 100 Hz と 720p 画像 30 Hz で、対象ノードの CPU・遅延、roshanavi の CPU、ディスク、件/秒、取りこぼし (DESIGN §4.3.2) | 👀 (`scripts/bench_tracing.py`) |
+| L-17 | 別コンテナのノード | demo コンテナの external_listener は `not_traced` | 👀 (ラボで確認) |
+| L-18 | 他の RMW (Cyclone DDS) | rmw_take / rmw_publish のトレースポイントがある | ⬜ |

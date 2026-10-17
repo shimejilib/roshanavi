@@ -11,6 +11,8 @@ import os
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+import psutil
+
 from . import graph, rates
 from .echo import EchoManager
 from .injector import Injector
@@ -24,10 +26,20 @@ from .params import ParamService
 from .ros_runtime import RosRuntime
 from .traffic import DEFAULT_WINDOW_SEC
 from .traffic_backend import PROBE_OFF, TrafficService
+from .tracing import merge as trace_merge
+from .tracing.config import DEFAULT_RT_PER_CPU
+from .tracing.service import TRACING_OFF, TracingService
 
 LOG = logging.getLogger(__name__)
 
 HOUSEKEEPING_PERIOD_SEC = 1.0
+
+
+def _created_at(pid: int) -> Optional[float]:
+    try:
+        return psutil.Process(pid).create_time()
+    except psutil.Error:
+        return None
 
 
 class Lab:
@@ -38,7 +50,8 @@ class Lab:
                  clock: Callable[[], float] = time.monotonic,
                  workspace: Optional[str] = None, project_path: Optional[str] = None,
                  autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None,
-                 disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF):
+                 disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF,
+                 tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU):
         self.data_dir = data_dir
         self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
@@ -48,6 +61,8 @@ class Lab:
         self.traffic = TrafficService(self.runtime, probe=probe, window_sec=window_sec,
                                       exclude=traffic_exclude, clock=clock,
                                       monitor_heavy=monitor_heavy)
+        self.tracing = TracingService(tracing, rt_per_cpu=trace_buffer_per_cpu)
+        self._node_pids: Dict[str, Optional[int]] = {}
         self.injector = Injector(self.runtime, data_dir, clock=clock,
                                  extra_roots=(self.launcher.workspace.root,))
         self.echo = EchoManager(self.runtime)
@@ -62,6 +77,8 @@ class Lab:
     def start(self) -> 'Lab':
         self.runtime.start()
         self.traffic.start()
+        # Before the first housekeeping: the Launcher's autostart must find the init capture on.
+        self.tracing.start()
         self._timer = self.runtime.create_timer(self._period, self.housekeeping)
         return self
 
@@ -70,9 +87,11 @@ class Lab:
         try:
             raw = graph.collect(self.runtime)
             node_info = self.launcher.observe(graph.node_ids(raw))
+            self._node_pids = {n: info.get('pid') for n, info in node_info.items()}
             self.graph.update(raw, self.injector.list(), node_info)
             self.traffic.sync(raw)
             self.traffic.tick()
+            self.tracing.poll()
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')
@@ -82,11 +101,35 @@ class Lab:
         snapshot, _ = self.graph.snapshot()
         known = rates.known_rates(self.injector.list(), snapshot['nodes'],
                                   self.launcher.targets())
-        return rates.annotate_traffic(self.traffic.snapshot(window_sec), snapshot['edges'],
-                                      known)
+        entries = rates.annotate_traffic(self.traffic.snapshot(window_sec), snapshot['edges'],
+                                         known)
+        return trace_merge.apply_trace(entries, self.tracing.snapshot(), window_sec)
+
+    def tracing_status(self, entries: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+        """詳細計測モード status, plus unsupported nodes and processing diagnostics."""
+        status = self.tracing.status()
+        snap = self.tracing.snapshot()
+        if snap is None:
+            return {**status, 'unsupported': [], 'diagnostics': []}
+        snapshot, _ = self.graph.snapshot()
+        unsupported = trace_merge.unsupported_nodes(
+            snapshot['nodes'], snap, self._node_pids, self.tracing.started_wall, _created_at)
+        entries = self.traffic_view() if entries is None else entries
+        return {**status, 'unsupported': unsupported,
+                'diagnostics': trace_merge.behind_list(entries)}
+
+    def set_tracing(self, enabled: bool) -> Dict[str, Any]:
+        """Turn 詳細計測モード on / off; roshanavi's own processes are filtered out."""
+        exclude = [os.getpid()]
+        probe_pid = self.traffic.status().get('pid')
+        if probe_pid:
+            exclude.append(int(probe_pid))
+        self.tracing.set_enabled(enabled, exclude)
+        return self.tracing_status()
 
     def stop(self) -> None:
         self.launcher.close()  # idempotent; child processes go first
+        self.tracing.close()  # idempotent; the worker destroys its LTTng sessions
         self.recorder.close()  # SIGINT so the bag is finalized
         if not self.runtime.running:
             return

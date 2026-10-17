@@ -4,6 +4,7 @@ import { App } from './App';
 import './styles.css';
 import './styles-ux.css';
 import './styles-nodes.css';
+import './styles-tracing.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element missing from index.html');
