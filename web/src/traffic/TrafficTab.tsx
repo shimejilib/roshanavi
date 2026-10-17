@@ -50,7 +50,7 @@ export function TrafficTab() {
           <input type="checkbox" checked={showCollapsed} onChange={(e) => setShowCollapsed(e.target.checked)} />
           {t('traffic.showCollapsed')}
         </label>
-        <div role="radiogroup" aria-label={t('traffic.view')} className="segmented">
+        <div role="radiogroup" aria-label={t('traffic.view')} className="segmented" data-tour="traffic-view">
           {(['topic', 'node'] as const).map((v) => (
             <label key={v} className={view === v ? 'seg active' : 'seg'} data-testid={`traffic-view-${v}`}>
               <input type="radio" name="traffic-view" checked={view === v} onChange={() => setView(v)} />

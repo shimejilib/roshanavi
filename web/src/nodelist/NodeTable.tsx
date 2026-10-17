@@ -91,7 +91,7 @@ function RowView({ row, checked, onToggle, onLifecycle }: { row: NodeRow; checke
 
 export function NodeTable({ sections, selected, all, onToggle, onToggleAll, onToggleGroup, onLifecycle }: Props) {
   return (
-    <table className="traffic-table node-table" data-testid="node-table">
+    <table className="traffic-table node-table" data-testid="node-table" data-tour="node-table">
       <caption className="sr-only">{t('nodes.caption')}</caption>
       <thead>
         <tr>

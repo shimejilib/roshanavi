@@ -118,7 +118,7 @@ export function InjectTab() {
           <>
             <label>
               {t('inject.topic')}
-              <input list="inject-topics" value={form.topic} placeholder={t('inject.topicPlaceholder')} onChange={(e) => setTopic(e.target.value)} data-testid="inject-topic" />
+              <input list="inject-topics" value={form.topic} placeholder={t('inject.topicPlaceholder')} onChange={(e) => setTopic(e.target.value)} data-testid="inject-topic" data-tour="inject-topic" />
               <datalist id="inject-topics">
                 {[...topicTypes.keys()].map((name) => (
                   <option key={name} value={name} />
@@ -139,7 +139,7 @@ export function InjectTab() {
         {(form.mode === 'once' || form.mode === 'periodic') && (
           <label>
             {t('inject.payload')}
-            <textarea className="yaml" rows={10} spellCheck={false} value={form.yaml} onChange={(e) => { update({ yaml: e.target.value }); setYamlTouched(true); }} data-testid="inject-yaml" />
+            <textarea className="yaml" rows={10} spellCheck={false} value={form.yaml} onChange={(e) => { update({ yaml: e.target.value }); setYamlTouched(true); }} data-testid="inject-yaml" data-tour="inject-yaml" />
             <span className={yamlCheck.ok ? 'ok-text small' : 'error-text small'}>{yamlCheck.ok ? t('inject.yamlOk') : yamlCheck.error}</span>
             <span className="muted small">{t('inject.payloadHelp')}</span>
             <code className="hint small">{t('inject.exprExamples')}</code>
@@ -165,7 +165,7 @@ export function InjectTab() {
         )}
         {files.error && <p className="error-text small">{files.error}</p>}
         {form.mode !== 'bag' && <QosFields form={form} onChange={update} />}
-        <button type="submit" className="primary" disabled={busy} data-testid="inject-start">
+        <button type="submit" className="primary" disabled={busy} data-testid="inject-start" data-tour="inject-start">
           {t('inject.start')}
         </button>
         {notice && (

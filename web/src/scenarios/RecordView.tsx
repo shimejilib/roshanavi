@@ -55,13 +55,13 @@ function WatchPicker({ onStart, busy }: { onStart: (topics: string[]) => void; b
         <legend>{t('scn.rec.watch')}</legend>
         {topics.map((topic) => (
           <label key={topic} className="check mono">
-            <input type="checkbox" checked={selected.includes(topic)} onChange={() => toggle(topic)} data-testid={`scn-watch-${topic}`} />
+            <input type="checkbox" checked={selected.includes(topic)} onChange={() => toggle(topic)} data-testid={`scn-watch-${topic}`} data-tour={`scn-watch-${topic}`} />
             {topic}
           </label>
         ))}
         {topics.length === 0 && <p className="muted">{t('scn.rec.noTopics')}</p>}
       </fieldset>
-      <button type="button" className="primary" disabled={busy || selected.length === 0} onClick={() => onStart(selected)} data-testid="scn-rec-start">
+      <button type="button" className="primary" disabled={busy || selected.length === 0} onClick={() => onStart(selected)} data-testid="scn-rec-start" data-tour="scn-rec-start">
         {t('scn.rec.start')}
       </button>
     </div>
@@ -234,7 +234,7 @@ export function RecordView({ onSaved }: { onSaved: (file: ScenarioFile) => void 
         <p className="small">{record.active ? t('scn.rec.howto') : t('scn.rec.howtoStopped')}</p>
         <div className="row">
           {record.active ? (
-            <button type="button" className="danger" disabled={busy} onClick={() => void stop()} data-testid="scn-rec-stop">{t('scn.rec.stop')}</button>
+            <button type="button" className="danger" disabled={busy} onClick={() => void stop()} data-testid="scn-rec-stop" data-tour="scn-rec-stop">{t('scn.rec.stop')}</button>
           ) : (
             <>
               <button type="button" disabled={busy} onClick={() => void start(watch)}>{t('scn.rec.restart')}</button>
@@ -266,7 +266,7 @@ export function RecordView({ onSaved }: { onSaved: (file: ScenarioFile) => void 
               </li>
             ) : (
               <li key={ev.seq}>
-                <button type="button" data-testid="scn-tl-msg" data-topic={ev.topic}
+                <button type="button" data-testid="scn-tl-msg" data-tour="scn-tl-msg" data-topic={ev.topic}
                   className={`scn-tl-msg${ev.seq === anchor ? ' selected' : ''}${range && ev.topic === selected?.topic && ev.t >= range[0] && ev.t <= range[1] ? ' in-range' : ''}`}
                   onClick={(e) => clickMessage(ev, e.shiftKey)}>
                   <span className="scn-tl-t">{ev.t.toFixed(2)}</span>
@@ -295,7 +295,7 @@ export function RecordView({ onSaved }: { onSaved: (file: ScenarioFile) => void 
                   }} />
               ) : (
                 <>
-                  <button type="button" className="primary" onClick={() => setPicking(true)} data-testid="scn-expect-this">{t('scn.rec.expectThis')}</button>
+                  <button type="button" className="primary" onClick={() => setPicking(true)} data-testid="scn-expect-this" data-tour="scn-expect-this">{t('scn.rec.expectThis')}</button>
                   <p className="muted small">{range ? t('scn.rec.range', { from: range[0].toFixed(2), to: range[1].toFixed(2) }) : t('scn.rec.rangeHelp')}</p>
                   <div className="row">
                     {RANGE_KINDS.map((kind) => (
@@ -321,15 +321,15 @@ export function RecordView({ onSaved }: { onSaved: (file: ScenarioFile) => void 
             ))}
           </ol>
           <h4>{t('scn.rec.steps', { n: steps.length })}</h4>
-          <ol className="scn-preview mono small" data-testid="scn-rec-steps">
+          <ol className="scn-preview mono small" data-testid="scn-rec-steps" data-tour="scn-rec-steps">
             {steps.map((s, i) => <li key={i}>{describeStep(s)}</li>)}
           </ol>
           <div className="scn-save">
             <label className="scn-field wide">
               {t('scn.rec.name')}
-              <input value={name} onChange={(e) => setName(e.target.value)} data-testid="scn-rec-name" />
+              <input value={name} onChange={(e) => setName(e.target.value)} data-testid="scn-rec-name" data-tour="scn-rec-name" />
             </label>
-            <button type="button" className="primary" disabled={busy || steps.length === 0} onClick={() => void save()} data-testid="scn-rec-save">
+            <button type="button" className="primary" disabled={busy || steps.length === 0} onClick={() => void save()} data-testid="scn-rec-save" data-tour="scn-rec-save">
               {t('scn.rec.save')}
             </button>
           </div>

@@ -20,7 +20,7 @@ function PortRow({ row, testId, label, topicTypes, onChange }: { row: FnPortRow;
     <div className="function-port-row">
       <label>
         <span>{label}</span>
-        <input list="function-topics" value={row.topic} placeholder="/topic" onChange={(e) => onChange({ ...row, topic: e.target.value })} data-testid={`${testId}-topic`} />
+        <input list="function-topics" value={row.topic} placeholder="/topic" onChange={(e) => onChange({ ...row, topic: e.target.value })} data-testid={`${testId}-topic`} data-tour={`${testId}-topic`} />
       </label>
       <DataKindField testId={`${testId}-type`} label={t('kind.label')} topicTypes={topicTypes.get(normalizeTopic(row.topic)) ?? []}
         value={{ kind: row.kind, type: row.type }} onChange={(port: PortValue) => onChange({ ...row, kind: port.kind, type: port.type })} />

@@ -4,12 +4,27 @@ import { t, type MessageKey } from '../i18n';
 import { statusClass, statusLabel } from '../launcher/status';
 import { formatDuration } from '../lib/format';
 import { useAppState } from '../state/AppState';
+import type { DialogRequest } from '../dialogs/dialogTypes';
 import { useLive } from '../state/LiveProvider';
 
 /** Right-pane section: which launcher target owns this node, its process, quick actions. */
+/** The dialog that edits a node the tool itself made (input / transform / function). */
+function editDialogFor(target: { id: string; kind: string }): { label: MessageKey; dialog: DialogRequest } | null {
+  switch (target.kind) {
+    case 'dummy':
+      return { label: 'menu.editDummy', dialog: { kind: 'createInput', dummyId: target.id } };
+    case 'transform':
+      return { label: 'menu.editTransform', dialog: { kind: 'createTransform', transformId: target.id } };
+    case 'function':
+      return { label: 'menu.editFunction', dialog: { kind: 'createFunction', functionId: target.id } };
+    default:
+      return null;
+  }
+}
+
 export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
   const { live } = useLive();
-  const { openLogs } = useAppState();
+  const { openLogs, openDialog } = useAppState();
   if (!node || node.id.startsWith('dummy:')) return null;
   const target = node.target_id ? live.targets.find((tg) => tg.id === node.target_id) : undefined;
   if (!target) {
@@ -21,6 +36,7 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
     );
   }
   const mapped = target.nodes?.find((n) => n.node === node.id);
+  const edit = editDialogFor(target);
   const confidence = node.confidence ?? mapped?.confidence ?? 'heuristic';
   return (
     <section data-testid="node-launcher">
@@ -43,6 +59,9 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
       <p className="muted small">{t(`launcher.confidenceHelp.${confidence}` as MessageKey)}</p>
       <div className="row">
         <button type="button" onClick={() => openLogs(target.id)} data-testid="node-logs">{t('detail.openLogs')}</button>
+        {edit && (
+          <button type="button" onClick={() => openDialog(edit.dialog)} data-testid="node-edit" data-tour="node-edit">{t(edit.label)}</button>
+        )}
       </div>
       {target.kind === 'function' && <FunctionStatusPanel target={target} />}
     </section>

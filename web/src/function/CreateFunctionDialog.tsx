@@ -101,7 +101,7 @@ export function CreateFunctionDialog({ topic, functionId }: Props) {
         <div className="row wrap">
           <label>
             {t('function.module')}
-            <select value={form.module} onChange={(e) => update({ module: e.target.value, fn: '' })} disabled={Boolean(editing)} data-testid="function-module">
+            <select value={form.module} onChange={(e) => update({ module: e.target.value, fn: '' })} disabled={Boolean(editing)} data-testid="function-module" data-tour="function-module">
               <option value="">{t('function.moduleChoose')}</option>
               {modules.modules.map((m) => <option key={m.module} value={m.module}>{m.module}</option>)}
             </select>
@@ -110,7 +110,7 @@ export function CreateFunctionDialog({ topic, functionId }: Props) {
           </label>
           <label>
             {t('function.function')}
-            <select value={form.fn} onChange={(e) => pickFunction(e.target.value)} disabled={!moduleInfo.info} data-testid="function-name">
+            <select value={form.fn} onChange={(e) => pickFunction(e.target.value)} disabled={!moduleInfo.info} data-testid="function-name" data-tour="function-name">
               <option value="">{t('function.functionChoose')}</option>
               {(moduleInfo.info?.functions ?? []).map((f) => <option key={f.name} value={f.name}>{f.signature}</option>)}
             </select>
@@ -156,7 +156,7 @@ export function CreateFunctionDialog({ topic, functionId }: Props) {
         {error && <p className="error-box" role="alert">{error}</p>}
         <div className="row end">
           <button type="button" onClick={closeDialog}>{t('common.cancel')}</button>
-          <button type="submit" className="primary" disabled={busy} data-testid="function-submit">
+          <button type="submit" className="primary" disabled={busy} data-testid="function-submit" data-tour="function-submit">
             {editing ? t('function.saveRestart') : t('function.submit')}
           </button>
         </div>

@@ -57,7 +57,7 @@ export function EchoView({ topic, autoStart, compact = false }: { topic: string;
       {message && (
         <>
           <div className="muted small">#{message.seq} · {message.type}</div>
-          <pre className="echo-body" data-testid={compact ? 'io-echo-body' : 'echo-body'}>{text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text}</pre>
+          <pre className="echo-body" data-testid={compact ? 'io-echo-body' : 'echo-body'} data-tour={compact ? 'io-echo-body' : 'echo-body'}>{text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text}</pre>
         </>
       )}
     </section>

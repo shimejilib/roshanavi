@@ -9,6 +9,7 @@ import { RecordView } from './RecordView';
 import { RunResultView } from './RunResultView';
 import { ScenarioEditor } from './ScenarioEditor';
 import { useScenarioLive } from './ScenarioLive';
+import { TourHelp } from '../tour/TourHelp';
 
 type View = { kind: 'result'; id: string } | { kind: 'edit'; file: ScenarioFile } | { kind: 'record' } | { kind: 'none' };
 
@@ -23,7 +24,7 @@ function ItemRow({ item, active, running, onSelect, onRun, onEdit, onDelete }: {
 }) {
   const last = item.last_result;
   return (
-    <li className={active ? 'scn-item active' : 'scn-item'} data-testid={`scn-item-${item.id}`}>
+    <li className={active ? 'scn-item active' : 'scn-item'} data-testid={`scn-item-${item.id}`} data-tour="scn-item" data-scn-id={item.id} data-scn-source={item.source}>
       <button type="button" className="scn-item-main" onClick={onSelect}>
         <span className="scn-item-name">{item.name}</span>
         {last && <span className={`scn-badge scn-${last.status}`} data-testid="scn-item-status">{tDynamic(`scn.status.${last.status}`, 'scn.status.pending')}</span>}
@@ -32,7 +33,7 @@ function ItemRow({ item, active, running, onSelect, onRun, onEdit, onDelete }: {
         {item.error && <span className="error-text small">{t('scn.list.invalid')}</span>}
       </button>
       <div className="row">
-        <button type="button" className="primary" disabled={running || Boolean(item.error)} onClick={onRun} data-testid={`scn-run-${item.id}`}>{t('scn.run')}</button>
+        <button type="button" className="primary" disabled={running || Boolean(item.error)} onClick={onRun} data-testid={`scn-run-${item.id}`} data-tour="scn-run" data-scn-id={item.id}>{t('scn.run')}</button>
         <button type="button" onClick={onEdit} data-testid={`scn-edit-${item.id}`}>{item.read_only ? t('scn.list.copyEdit') : t('scn.edit.open')}</button>
         {!item.read_only && <button type="button" className="danger" onClick={onDelete} data-testid={`scn-delete-${item.id}`}>{t('scn.delete')}</button>}
       </div>
@@ -126,7 +127,7 @@ export function ScenariosTab() {
       <aside className="scn-list" aria-labelledby="scn-list-title">
         <div className="scn-list-head">
           <h3 id="scn-list-title">{t('scn.title')}</h3>
-          <button type="button" className="primary" onClick={() => setView({ kind: 'record' })} data-testid="scn-record-open">
+          <button type="button" className="primary" onClick={() => setView({ kind: 'record' })} data-testid="scn-record-open" data-tour="scn-record-open">
             {live.record.active ? t('scn.rec.openActive') : t('scn.rec.open')}
           </button>
         </div>
@@ -135,7 +136,7 @@ export function ScenariosTab() {
         <h4>{t('scn.list.project')}</h4>
         <p className="muted small mono">{projectDir}</p>
         <ul className="scn-items">{project.map(row)}</ul>
-        {project.length === 0 && <p className="muted small">{t('scn.list.empty')}</p>}
+        {project.length === 0 && <p className="muted small">{t('scn.list.empty')} <TourHelp id="scenario" /></p>}
         {examples.length > 0 && (
           <>
             <h4>{t('scn.list.examples')}</h4>

@@ -8,6 +8,8 @@ import { LiveProvider, useLive } from './state/LiveProvider';
 import { RecordingBadge } from './scenarios/ScenariosTab';
 import { ScenarioLiveProvider } from './scenarios/ScenarioLive';
 import { DEFAULT_TAB, TABS } from './tabs/registry';
+import { TourOverlay } from './tour/TourOverlay';
+import { TourProvider } from './tour/TourProvider';
 
 function ConnectionStatus() {
   const { status, url } = useLive();
@@ -35,6 +37,7 @@ function Shell() {
               className={tab === def.id ? 'tab active' : 'tab'}
               onClick={() => setTab(def.id)}
               data-testid={`tab-${def.id}`}
+              data-tour={`tab-${def.id}`}
             >
               {t(def.label)}
             </button>
@@ -61,6 +64,9 @@ function Shell() {
       <ErrorBoundary scope="dialog">
         <DialogHost />
       </ErrorBoundary>
+      <ErrorBoundary scope="tour">
+        <TourOverlay />
+      </ErrorBoundary>
     </div>
   );
 }
@@ -70,7 +76,9 @@ export function App() {
     <LiveProvider>
       <ScenarioLiveProvider>
         <AppStateProvider initialTab={DEFAULT_TAB}>
-          <Shell />
+          <TourProvider>
+            <Shell />
+          </TourProvider>
         </AppStateProvider>
       </ScenarioLiveProvider>
     </LiveProvider>

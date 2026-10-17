@@ -28,14 +28,14 @@ function MessageFields({ form, onChange }: Pick<Props, 'form' | 'onChange'>) {
       <label>
         {t(valueLabel(form))}
         {form.kind === 'bool' && form.content !== 'expression' ? (
-          <select value={['true', 'on', '1'].includes(form.text.toLowerCase()) ? 'true' : 'false'} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text">
+          <select value={['true', 'on', '1'].includes(form.text.toLowerCase()) ? 'true' : 'false'} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text" data-tour="input-text">
             <option value="true">ON (true)</option>
             <option value="false">OFF (false)</option>
           </select>
         ) : multiline ? (
-          <textarea className="yaml" rows={4} spellCheck={false} value={form.text} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text" />
+          <textarea className="yaml" rows={4} spellCheck={false} value={form.text} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text" data-tour="input-text" />
         ) : (
-          <input value={form.text} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text" />
+          <input value={form.text} onChange={(e) => onChange({ text: e.target.value })} data-testid="input-text" data-tour="input-text" />
         )}
         {form.content === 'expression' && <code className="hint small">{t('inject.exprExamples')}</code>}
       </label>

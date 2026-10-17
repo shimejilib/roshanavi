@@ -12,7 +12,7 @@ export function DetailPane() {
   const { selection, select } = useAppState();
   const { live } = useLive();
   return (
-    <aside className="detail-pane" aria-label="detail">
+    <aside className="detail-pane" aria-label="detail" data-tour="detail-pane">
       {selection && (
         <button type="button" className="close" onClick={() => select(null)} aria-label={t('common.close')}>
           ×

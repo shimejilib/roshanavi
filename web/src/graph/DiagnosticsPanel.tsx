@@ -1,5 +1,6 @@
 import type { Diagnostic } from '../api/types';
 import { t } from '../i18n';
+import { TourHelp } from '../tour/TourHelp';
 import { diagnosticText } from './diagnosticsText';
 
 interface DiagnosticsPanelProps {
@@ -11,17 +12,17 @@ const SEVERITY_ICON: Record<Diagnostic['severity'], string> = { error: '⛔', wa
 
 export function DiagnosticsPanel({ diagnostics, onFocus }: DiagnosticsPanelProps) {
   return (
-    <section className="diag-panel" aria-labelledby="diag-title">
+    <section className="diag-panel" aria-labelledby="diag-title" data-tour="diagnostics">
       <h3 id="diag-title">
         {t('diag.title')} <span className="badge">{t('diag.count', { n: diagnostics.length })}</span>
       </h3>
       {diagnostics.length === 0 ? (
-        <p className="muted">{t('diag.none')}</p>
+        <p className="muted">{t('diag.none')} <TourHelp id="qosFix" /></p>
       ) : (
         <ul className="diag-list">
           {diagnostics.map((d, i) => (
             <li key={`${d.code}:${d.topic}:${d.nodes.join(',')}:${i}`}>
-              <button type="button" className={`diag-item sev-${d.severity}`} onClick={() => onFocus(d)}>
+              <button type="button" className={`diag-item sev-${d.severity}`} onClick={() => onFocus(d)} data-tour="diag-item" data-tour-topic={d.topic}>
                 <span aria-hidden="true">{SEVERITY_ICON[d.severity]}</span> {diagnosticText(d)}
               </button>
             </li>

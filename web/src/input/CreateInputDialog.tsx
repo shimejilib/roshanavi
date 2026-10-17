@@ -110,7 +110,7 @@ export function CreateInputDialog({ topic, type, dummyId }: Props) {
         <p className="muted small">{t('input.intro')}</p>
         <label>
           <span>{t('input.topic')} <Term term="topic" /></span>
-          <input list="input-topics" value={form.topic} placeholder="/my_topic" onChange={(e) => setTopic(e.target.value)} disabled={Boolean(editing)} data-testid="input-topic" />
+          <input list="input-topics" value={form.topic} placeholder="/my_topic" onChange={(e) => setTopic(e.target.value)} disabled={Boolean(editing)} data-testid="input-topic" data-tour="input-topic" />
           <datalist id="input-topics">
             {[...topicTypes.keys()].map((name) => <option key={name} value={name} />)}
           </datalist>
@@ -130,7 +130,7 @@ export function CreateInputDialog({ topic, type, dummyId }: Props) {
         {error && <p className="error-box" role="alert">{error}</p>}
         <div className="row end">
           <button type="button" onClick={closeDialog}>{t('common.cancel')}</button>
-          <button type="submit" className="primary" disabled={busy} data-testid="input-submit">
+          <button type="submit" className="primary" disabled={busy} data-testid="input-submit" data-tour="input-submit">
             {editing ? t('input.saveRestart') : t('input.submit')}
           </button>
         </div>

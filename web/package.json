@@ -13,6 +13,7 @@
   "dependencies": {
     "cytoscape": "3.34.3",
     "cytoscape-dagre": "4.0.1",
+    "driver.js": "1.8.0",
     "js-yaml": "5.4.2",
     "react": "19.3.0",
     "react-dom": "19.3.0",

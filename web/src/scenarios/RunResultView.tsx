@@ -95,7 +95,7 @@ function SetupRow({ item }: { item: SetupResult }) {
 export function RunResultView({ result, onCancel }: { result: RunResult; onCancel?: () => void }) {
   const running = result.status === 'running' || result.status === 'pending';
   return (
-    <section className="scn-result" aria-labelledby="scn-result-title" data-testid="scn-result" data-status={result.status}>
+    <section className="scn-result" aria-labelledby="scn-result-title" data-testid="scn-result" data-tour="scn-result" data-status={result.status}>
       <header className={`scn-banner scn-banner-${result.status}`}>
         <h3 id="scn-result-title">
           <StatusMark status={result.status} /> {tDynamic(`scn.result.${result.status}`, 'scn.result.pending')}

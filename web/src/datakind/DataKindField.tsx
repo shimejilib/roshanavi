@@ -97,7 +97,7 @@ export function DataKindField({ testId, label, topicTypes, value, onChange, disa
     <div className="data-kind-field" data-testid={testId}>
       <label>
         <span>{label}</span>
-        <select value={value.kind} disabled={disabled} onChange={(e) => pick(e.target.value as PortKind | '')} data-testid={`${testId}-kind`}>
+        <select value={value.kind} disabled={disabled} onChange={(e) => pick(e.target.value as PortKind | '')} data-testid={`${testId}-kind`} data-tour={`${testId}-kind`}>
           <option value="">{t('kind.choose')}</option>
           {offered.map((k) => (
             <option key={k.id} value={k.id} disabled={!k.available}>

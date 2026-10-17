@@ -23,7 +23,7 @@ export function LastUpdateBadge() {
     <span
       className={className}
       title={t(info.paused ? 'timing.pausedHelp' : 'timing.lastUpdateHelp')}
-      data-testid="last-update"
+      data-testid="last-update" data-tour="last-update"
       data-late={info.late}
       data-paused={info.paused}
       role="status"

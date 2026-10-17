@@ -4,7 +4,7 @@ import { t } from '../i18n';
 interface Props {
   children: ReactNode;
   /** Where it sits in the screen: only used for the test id and the heading. */
-  scope: 'app' | 'map' | 'detail' | 'tab' | 'dialog';
+  scope: 'app' | 'map' | 'detail' | 'tab' | 'dialog' | 'tour';
   /** The boundary clears itself when this value changes (e.g. another node was selected). */
   resetKey?: string | number | null;
 }

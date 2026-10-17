@@ -9,6 +9,7 @@ import './styles-transform.css';
 import './styles-tracing.css';
 import './styles-function.css';
 import './styles-scenario.css';
+import './styles-tour.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element missing from index.html');

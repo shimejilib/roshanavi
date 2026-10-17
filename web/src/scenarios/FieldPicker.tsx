@@ -45,7 +45,7 @@ export function FieldPicker({ choices, response, onAdd, onCancel }: {
       <p className="muted small">{t('scn.pick.withinHelp', { ms: Math.round(Math.max(response, 0) * 1000) })}</p>
       <div className="row end">
         <button type="button" onClick={onCancel}>{t('common.cancel')}</button>
-        <button type="button" className="primary" onClick={() => onAdd(conditionsFrom(items), within)} data-testid="scn-pick-add">{t('scn.pick.add')}</button>
+        <button type="button" className="primary" onClick={() => onAdd(conditionsFrom(items), within)} data-testid="scn-pick-add" data-tour="scn-pick-add">{t('scn.pick.add')}</button>
       </div>
     </div>
   );

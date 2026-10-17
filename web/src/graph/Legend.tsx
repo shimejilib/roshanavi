@@ -22,7 +22,7 @@ export function Legend({ palette }: { palette: Palette }) {
     { key: 'graph.legend.qosBad', className: 'sw-line dashed', color: palette.qosBad },
   ];
   return (
-    <ul className="legend" aria-label="legend">
+    <ul className="legend" aria-label="legend" data-tour="legend">
       {items.map((item) => (
         <li key={item.key}>
           <span className={`swatch ${item.className}`} style={{ color: item.color }} />

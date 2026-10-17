@@ -7,6 +7,7 @@ import { useWorkspace } from '../launcher/useWorkspace';
 import { useAppState, type Selection } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
 import { LastUpdateBadge } from '../timing/LastUpdate';
+import { TourHelp } from '../tour/TourHelp';
 import { WindowSelect } from '../timing/WindowSelect';
 import { diagnosticTargets } from './diagnosticsText';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
@@ -72,13 +73,13 @@ export function GraphTab({ active }: { active: boolean }) {
   return (
     <div className="graph-tab">
       <div className="toolbar" role="toolbar">
-        <button type="button" className="primary" onClick={() => openDialog({ kind: 'createInput' })} data-testid="create-input">
+        <button type="button" className="primary" onClick={() => openDialog({ kind: 'createInput' })} data-testid="create-input" data-tour="create-input">
           {t('input.create')}
         </button>
         <button type="button" onClick={() => openDialog({ kind: 'createTransform' })} data-testid="create-transform">
           {t('transform.create')}
         </button>
-        <button type="button" onClick={() => openDialog({ kind: 'createFunction' })} data-testid="create-function">
+        <button type="button" onClick={() => openDialog({ kind: 'createFunction' })} data-testid="create-function" data-tour="create-function">
           {t('function.create')}
         </button>
         <input type="search" placeholder={t('graph.filter')} aria-label={t('graph.filter')} value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -97,8 +98,10 @@ export function GraphTab({ active }: { active: boolean }) {
         <LastUpdateBadge />
       </div>
       <div className="graph-body">
-        <div className="graph-main">
-          {elements.length === 0 && live.graph && <p className="graph-empty">{t('graph.empty')}</p>}
+        <div className="graph-main" data-tour="map">
+          {elements.length === 0 && live.graph && (
+            <p className="graph-empty">{t('graph.empty')} <TourHelp id="firstInput" /></p>
+          )}
           <ErrorBoundary scope="map">
           <GraphView
             elements={elements}
