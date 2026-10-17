@@ -59,7 +59,9 @@ roshanavi/
                        #   build / env / schema / project / dummy_config / service
       process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース計測でも使う)
       dummy_node.py    # エントリ: `ros2 run roshanavi dummy --config <yaml>` (恒久ダミーノード)
-      scenario/        # schema.py / runner.py / junit.py / cli.py
+      scenario/        # docs/design/scenarios.md: schema / fields (where) / checks (判定) / buffers (事前購読) /
+                       #   runner / procs (setup・起動設定) / hints / result / junit / cli / api / store / service / recorder
+      server_scenarios.py # シナリオ・記録モードの REST + /ws/scenarios
       server.py        # FastAPI アプリ (REST + WS)
       server_launcher.py # Launcher / プロジェクト / ビルド / ダミーの REST + /ws/logs
       params.py        # ノードのパラメータサービス (list/describe/get/set) のクライアント (docs/design/launcher.md)
@@ -70,7 +72,7 @@ roshanavi/
       static/          # web のビルド成果物 (git 管理外、ビルドで生成)
     test/              # pytest (unit + rclpy 統合)
   web/                 # Vite + React (docs/design/ui.md)。e2e/ は Playwright
-  examples/scenarios/  # サンプルシナリオ
+  examples/scenarios/  # サンプルシナリオ (examples/launch_pytest/ は launch_pytest から使う例)
 ```
 
 ## 部品のつながり

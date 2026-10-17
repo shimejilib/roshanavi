@@ -82,7 +82,11 @@ def _register_targets(app: FastAPI, lab: Lab) -> None:
         handlers = {'start': manager.start, 'stop': manager.stop, 'restart': manager.restart}
         if action not in handlers:
             raise LauncherError('not_found', f'unknown action {action!r}', 404)
-        return handlers[action](target_id)
+        result = handlers[action](target_id)
+        # Record mode: starting / stopping an input or function node becomes a step.
+        lab.scenarios.recorder.note_op({'kind': f'target_{action}', 'target_id': target_id,
+                                        'target_kind': result.get('kind')})
+        return result
 
     @app.get('/api/targets/{target_id}/logs')
     def get_logs(target_id: str, since: int = Query(0, ge=0),

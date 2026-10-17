@@ -12,6 +12,7 @@ import { uxJa2 } from './messagesUx2';
 import { transformJa } from './messagesTransform';
 import { kindsJa } from './messagesKinds';
 import { functionJa } from './messagesFunction';
+import { scenarioJa } from './messagesScenario';
 
 export const ja = {
   ...mapJa,
@@ -25,6 +26,7 @@ export const ja = {
   ...transformJa,
   ...kindsJa,
   ...functionJa,
+  ...scenarioJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

@@ -1,6 +1,18 @@
 // REST client. Every failure becomes an ApiError with the server's error code.
 
 import type { TracingStatus } from './tracingTypes';
+import type {
+  Measurement,
+  MeasureRequest,
+  RecordEvent,
+  RecordStatus,
+  RunResult,
+  RunSummary,
+  ScenarioFile,
+  ScenarioList,
+  ScenarioSpec,
+  ValidateResult,
+} from './scenarioTypes';
 import type { PreviewResult, ProjectList, TransformSpec } from './transformTypes';
 import { t, tDynamic } from '../i18n';
 import type { KindCatalog, TypeGroup } from '../datakind/kinds';
@@ -152,6 +164,28 @@ export const api = {
     request<RecordingStatus>('POST', '/api/recordings', { topics, name }),
   stopRecording: () => request<RecordingStatus>('POST', '/api/recordings/stop'),
   deleteRecording: (name: string) => request<{ deleted: string }>('DELETE', `/api/recordings/${enc(name)}`),
+
+  scenarios: () => request<ScenarioList>('GET', '/api/scenarios'),
+  scenario: (id: string) => request<ScenarioFile>('GET', `/api/scenarios/${enc(id)}`),
+  createScenario: (spec: ScenarioSpec, file?: string, overwrite = false) =>
+    request<ScenarioFile>('POST', '/api/scenarios', { spec, ...(file ? { file } : {}), overwrite }),
+  saveScenario: (id: string, body: { spec: ScenarioSpec } | { yaml: string }) =>
+    request<ScenarioFile>('PUT', `/api/scenarios/${enc(id)}`, body),
+  deleteScenario: (id: string) => request<{ deleted: string }>('DELETE', `/api/scenarios/${enc(id)}`),
+  validateScenario: (body: { spec: ScenarioSpec } | { yaml: string }) =>
+    request<ValidateResult>('POST', '/api/scenarios/validate', body),
+  runScenario: (id: string) => request<RunResult>('POST', `/api/scenarios/${enc(id)}/run`),
+  scenarioRuns: () =>
+    request<{ runs: RunSummary[]; current: RunResult | null; running: boolean }>('GET', '/api/scenario-runs'),
+  scenarioRun: (runId: string) => request<RunResult>('GET', `/api/scenario-runs/${enc(runId)}`),
+  cancelScenarioRun: (runId: string) =>
+    request<{ run_id: string; cancelling: boolean }>('POST', `/api/scenario-runs/${enc(runId)}/cancel`),
+  startScenarioRecord: (watch: string[]) => request<RecordStatus>('POST', '/api/scenario-record', { watch }),
+  stopScenarioRecord: (discard = false) =>
+    request<RecordStatus>('DELETE', `/api/scenario-record${discard ? '?discard=true' : ''}`),
+  scenarioRecord: (since = 0) =>
+    request<RecordStatus & { events: RecordEvent[] }>('GET', `/api/scenario-record?since=${since}`),
+  measureRecord: (req: MeasureRequest) => request<Measurement>('POST', '/api/scenario-record/measure', req),
 };
 
 /** `/ns/talker` -> `/api/nodes/ns/talker` (segments encoded). */

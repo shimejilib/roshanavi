@@ -14,6 +14,7 @@ roshanavi は **認証なしのローカル開発ツール** で、利用者の 
 - **`eval` / `exec` を使わない**: ダミー入力の式 (`${...}`) と変換ノードの式は、`ast.parse` した木の許可ノードだけを評価する自前の評価器で動かす。属性アクセス・添字・内包表記・lambda は拒否し、べき指数や文字列長に上限を置く (DoS 防止)。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)。
 - **入力メッセージのフィールド参照の境界**: 変換ノードの式が受信メッセージを読めるのは、`Expression(..., message_names=...)` で許可した名前に限る。メッセージは素のデータにして読み取り専用の `MsgView` で包み、`getattr` は一切使わないので Python のオブジェクトの属性には届かない。`_` で始まるフィールド名は拒否し、ビューは変更・反復・ハッシュができない。この評価器を広げるときは、安全の境界のテストを必ず足す。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)。
 - **関数ノードの利用者コードはサーバーの外で動かす**: サーバーは関数の一覧とシグネチャを `ast` の静的解析だけで作り、利用者のコードをサーバー内で実行も import もしない。import できるのは `<workspace>/src` の ROS パッケージの直下の Python パッケージだけで、利用者自身のコードなので、信頼の水準は自分でノードを起動するのと同じ (サンドボックスはしない)。詳細: [nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
+- **シナリオの判定も `eval` を使わない**: `where` のフィールドは受信メッセージの素のデータを `MsgView` で辞書引きするだけ、送る値の `${...}` は同じ式評価器。正規表現は 500 文字まで、比べる文字列は 10,000 文字まで。詳細: [scenarios.md#判定ルール](scenarios.md#判定ルール-runnerpy--checkspy)。
 
 ## ファイルとパス
 
@@ -25,6 +26,7 @@ roshanavi は **認証なしのローカル開発ツール** で、利用者の 
   - 録画の削除: 録画ディレクトリの形式に合い、親が recordings ディレクトリそのものであるもの (symlink・`..` を拒否)。[input-and-media.md#録画](input-and-media.md#録画-p4)
   - launch ファイルの取り込み: `ros2 launch` で利用者が実行するのと同じ範囲 (走査で見つかったパッケージの launch ファイル、またはワークスペースの中のファイル) だけ。`data_dir` (アップロード・録画) の下のファイルは評価しない。[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)
   - 関数ノードのモジュール: `<workspace>/src` のパッケージの中の通常ファイル。[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)
+  - シナリオのファイル: クライアントは一覧の id (`project:<file>` / `example:<file>`) だけを送り、ファイル名は厳しいパターン、realpath がシナリオのディレクトリの直下であること。サンプルは読み取り専用。シナリオが使う stream / bag / メディアのファイルは注入と同じく `data_dir` の中。結果は `data_dir/scenario_results/` に新しい 50 件まで。[scenarios.md#サーバー](scenarios.md#サーバー-scenarios-タブ-servicepy--storepy)
 - **プロジェクトの切り替えは一覧の `id` だけを受け付ける**: クライアントから任意のパスを送って開かせることはできない。サンプルはコピーして開き、サンプル自体と元のプロジェクトファイルには書かない。詳細: [launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)。
 - **既存のファイルを壊さない**: プロジェクトファイルの保存は一時ファイル → fsync → `os.replace` (原子的)。テンプレートのコピーは `O_EXCL` で、既存は上書きしない。読み込みに失敗したファイルは自動では上書きしない。関数ノードのコードの書き出しは、roshanavi が生成したファイルだけを置き換え、利用者のファイルは上書きしない (409)。詳細: [launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)、[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
 
@@ -32,11 +34,13 @@ roshanavi は **認証なしのローカル開発ツール** で、利用者の 
 
 - **シェルを使わず、argv のリストで起動する**: Launcher のノード、ffmpeg、`ros2 bag play` / `record`、計測ノード、launch 取り込みの子プロセスのすべて。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)、[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)、[input-and-media.md#録画](input-and-media.md#録画-p4)、[measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)、[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)。
 - **利用者の値を argv に紛れ込ませない**: `ros2 run` / `ros2 launch` / rcl 自身が解釈する argv (`--prefix`, `--ros-args`, `--params-file`, `__node:=` …) を、パッケージ名・実行ファイル名・パラメータ・リマップ・追加引数に混ぜられないよう、正規表現と走査結果で検査する。起動できるのは走査結果に存在するパッケージ・実行ファイル・launch ファイルだけ。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)。
+- **シナリオの setup も Launcher と同じ検査を通る**: `run` / `launch` / 関数・変換・入力ノードは Launcher の仕様にして同じ検証で起動し、`cmd` は `ros2 run` / `ros2 launch` の形だけを受け付けて同じ仕様に読み替える (ほかのコマンドは起動しない)。API から保存したシナリオで起動できる範囲は Launcher の API と同じ。詳細: [scenarios.md#ステップの種類](scenarios.md#ステップの種類)。
 - **まだ source されていないパッケージの環境**: colcon が書く `package.dsv` (宣言的な形式) を読んで適用し、シェルスクリプトは実行しない。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)。
 - **ffmpeg に外部参照を読ませない**: 細工したファイル (HLS / concat のプレイリスト等) で URL 取得や `data_dir` 外の読み出しをさせないため、拡張子から demuxer を決めて `-f` で強制し、`-format_whitelist` にもその 1 つだけを入れる。`-protocol_whitelist file,pipe` と、入力を `file:<絶対パス>` で渡すことで http などのプロトコルや `concat:` 等の接頭辞も使えない。プレイリストらしき先頭は ffmpeg に渡す前に拒否する。詳細: [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)。
 - **launch ファイルの評価はサンドボックスの子プロセスで行う**: Python の launch ファイルの評価はその Python コードの実行になるため、サーバーのプロセスでは行わない。新しいセッションの子プロセスで、20 秒で打ち切り、終了後もプロセスグループごと SIGKILL し、結果は 8 MB まで。評価中もプロセスは起動せず、`LaunchContext` を変えるだけの action だけを訪れ、`Node` は実行せずに設定を読み取る。`OpaqueFunction` は中の Python が実行されるので警告を出す。パラメータファイルの中身は子プロセスが読み、取り込みは `preview_id` で行って、クライアントから中身を受け取らない。詳細: [launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)。
 - **書き出すコードには検証済みの値だけを埋め込む**: launch ファイルの書き出しは、ノード名・ID を検証済みの値だけ `repr()` で埋め込む。関数ノードのコードの書き出しも検証済みの値を `repr()` で埋め込み、書く前に `compile()` で確かめる。詳細: [nodes.md#恒久ダミーノード](nodes.md#恒久ダミーノード-p3)、[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)。
 - **自分が起動したものだけを止める**: プロセスは新しいセッション (プロセスグループ) で起動し、停止は SIGINT → SIGTERM → SIGKILL の順。サーバー終了時は全ターゲットを止め、計測ノードは親が変わったら自分で終了する。詳細: [launcher.md#Launcher](launcher.md#launcher-p3)、[measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)。
+- **シナリオは後片付けを必ず行う**: セットアップのプロセスはシナリオ専用のプロセス管理 (プロセスグループ) で起動し、成功・失敗・中止のどれでも止める。プロジェクトの起動設定はシナリオの前の状態に戻す。[scenarios.md#判定ルール](scenarios.md#判定ルール-runnerpy--checkspy)
 
 ## 他人のプロセスに触らない
 
@@ -47,6 +51,7 @@ roshanavi は **認証なしのローカル開発ツール** で、利用者の 
 ## 資源の上限と権限
 
 - **入力の大きさに上限を置く**: 式の評価 (べき指数・文字列長・10,000 文字・添字 ±1,000,000)、パラメータの値 (文字列 4096 文字、配列 1000 要素など)、ブラウザ入力 (音声 256 KB / フレーム、カメラ 4 MB / フレーム・30 fps、1 トピックに 1 つ)、ビューア (最大 16 トピック)、launch 取り込み (深さ 40・5000 要素・結果 8 MB・案は最大 16 個 / 30 分)、変換ノードの遅延キュー (最大 10,000 件)。詳細: [input-and-media.md#expr](input-and-media.md#expr-安全な式評価)、[launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)、[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)、[launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)、[nodes.md#変換ノード](nodes.md#変換ノード-p5)。
+- シナリオ: ファイル 512 KB・ステップ 500・`where` 32 条件、受信のためは 1 トピック 20,000 件 (大きい配列は長さと先頭だけ)、実行は 1 つずつ、記録モードは見張るトピック 8・タイムライン 5,000 件・30 分。
 - **録画はディスクの空きを守る**: 空きが少ないと警告し、さらに少なければ自動停止、開始もしない。詳細: [input-and-media.md#録画](input-and-media.md#録画-p4)。
 - **詳細計測モードに特権は要らない**: LTTng のユーザー空間 (UST) だけを使い、root 権限・カーネルモジュール・Docker の特権は要らない。詳細: [measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)。
 - **E2E は利用者のデータに触らない**: E2E は別の `ROS_DOMAIN_ID`・空の `/data` (tmpfs)・ポート非公開の隔離したスタックで動かし、前後で `lab` のプロジェクトファイルが変わっていないことを確かめる。詳細: [ui.md#実装メモ (P2)](ui.md#実装メモ-p2)。

@@ -1,4 +1,4 @@
-// Top-level tab registry. Later phases (Scenarios, ...) register here.
+// Top-level tab registry.
 
 import type { ReactNode } from 'react';
 import { GraphTab } from '../graph/GraphTab';
@@ -7,6 +7,7 @@ import { InjectTab } from '../inject/InjectTab';
 import { LauncherTab } from '../launcher/LauncherTab';
 import { NodeListTab } from '../nodelist/NodeListTab';
 import { RecordingsTab } from '../recordings/RecordingsTab';
+import { ScenariosTab } from '../scenarios/ScenariosTab';
 import { TrafficTab } from '../traffic/TrafficTab';
 
 export interface TabDefinition {
@@ -15,6 +16,8 @@ export interface TabDefinition {
   /** Keep the tab mounted while hidden (expensive views such as the graph). */
   keepMounted: boolean;
   render: (active: boolean) => ReactNode;
+  /** The tab needs the whole width: the detail pane on the right is hidden while it is shown. */
+  fullWidth?: boolean;
 }
 
 export const TABS: readonly TabDefinition[] = [
@@ -24,6 +27,8 @@ export const TABS: readonly TabDefinition[] = [
   { id: 'inject', label: 'tab.inject', keepMounted: true, render: () => <InjectTab /> },
   { id: 'launcher', label: 'tab.launcher', keepMounted: true, render: () => <LauncherTab /> },
   { id: 'recordings', label: 'tab.recordings', keepMounted: false, render: () => <RecordingsTab /> },
+  // Kept mounted: the record-mode screen keeps its expectations while you operate other tabs.
+  { id: 'scenarios', label: 'tab.scenarios', keepMounted: true, fullWidth: true, render: () => <ScenariosTab /> },
 ];
 
 export const DEFAULT_TAB = 'graph';

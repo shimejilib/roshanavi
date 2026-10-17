@@ -25,6 +25,7 @@ from .media.viewer import MediaViewer
 from .lifecycle import LifecycleService
 from .params import ParamService
 from .ros_runtime import RosRuntime
+from .scenario.service import ScenarioService
 from .traffic import DEFAULT_WINDOW_SEC
 from .traffic_backend import PROBE_OFF, TrafficService
 from .tracing import merge as trace_merge
@@ -78,6 +79,8 @@ class Lab:
         self._timer: Any = None
         self.housekeeping_runs = 0
         self._fd_guard = FdGuard()
+        # Scenarios (docs/design/scenarios.md): files next to the current project file.
+        self.scenarios = ScenarioService(self, lambda: self.launcher.project.path)
 
     def start(self) -> 'Lab':
         if self._generate_samples:  # perception demo media (ffmpeg; first run only)
@@ -136,6 +139,7 @@ class Lab:
         return self.tracing_status()
 
     def stop(self) -> None:
+        self.scenarios.close()  # cancel a running scenario first: its teardown uses the rest
         self.launcher.close()  # idempotent; child processes go first
         self.tracing.close()  # idempotent; the worker destroys its LTTng sessions
         self.recorder.close()  # SIGINT so the bag is finalized

@@ -1,0 +1,27 @@
+# stamp を引き継がないノードの処理時間: image_filter を keep_stamp:=false で動かすと、出力の
+# header.stamp は「いまの時刻」になり、入力と stamp で対応づけられない。match: order は
+# 受信順で対応づける近似 (取りこぼしがあるとずれるので throughput と一緒に使う)。
+version: 1
+name: perception_order
+description: keep_stamp:=false の image_filter の処理時間を受信順の近似で測る
+setup:
+  - run:
+      package: roshanavi_examples
+      executable: image_filter
+      name: scenario_image_filter_now
+      params: {keep_stamp: false}
+      remaps: {image: /scenario/order/image, image_gray: /scenario/order/gray,
+               image_edges: /scenario/order/edges}
+steps:
+  - start:
+      id: camera
+      topic: /scenario/order/image
+      type: sensor_msgs/msg/Image
+      media: {source: samples/blobs.mp4, kind: video, encoding: rgb8, camera_info: false}
+      loop: true
+  - expect: {topic: /scenario/order/gray, within: 5.0}
+  - throughput: {input: /scenario/order/image, output: /scenario/order/gray, for: 4.0,
+                 min_ratio: 0.9}
+  - latency: {input: /scenario/order/image, output: /scenario/order/gray, match: order,
+              for: 4.0, p95_ms: 200}
+  - stop: camera

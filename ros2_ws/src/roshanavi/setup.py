@@ -39,6 +39,7 @@ setup(
             'dummy = roshanavi.dummy_node:main',
             'transform = roshanavi.transform_node:main',
             'function = roshanavi.function_node:main',
+            'scenario = roshanavi.scenario.cli:main',
         ],
     },
 )

@@ -21,7 +21,8 @@ from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (data_kinds, msgutil, security, server_functions, server_launch_import,
-               server_launcher, server_media, server_nodes, server_tracing, server_transforms)
+               server_launcher, server_media, server_nodes, server_scenarios, server_tracing,
+               server_transforms)
 from .api_errors import ApiError, parse_window
 from .echo import EchoError
 from .files import FileAccessError, list_files
@@ -160,7 +161,11 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.post('/api/inject', status_code=201)
     def post_inject(req: InjectRequest) -> Dict[str, Any]:
-        return lab.injector.start(req.to_spec())
+        job = lab.injector.start(req.to_spec())
+        # Record mode: the operation becomes a scenario step (docs/design/scenarios.md).
+        lab.scenarios.recorder.note_op({'kind': 'inject', 'job_id': job['id'],
+                                        'request': req.dict(exclude_none=True)})
+        return job
 
     @app.get('/api/inject')
     def list_inject() -> Dict[str, Any]:
@@ -172,7 +177,9 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.delete('/api/inject/{job_id}')
     def delete_inject(job_id: str) -> Dict[str, Any]:
-        return lab.injector.stop(job_id)
+        job = lab.injector.stop(job_id)
+        lab.scenarios.recorder.note_op({'kind': 'inject_stop', 'job_id': job_id})
+        return job
 
     @app.post('/api/inject/{job_id}/pause')
     def pause_inject(job_id: str) -> Dict[str, Any]:
@@ -276,6 +283,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_tracing.register(app, lab)
     server_transforms.register(app, lab)
     server_functions.register(app, lab)
+    server_scenarios.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -290,7 +298,9 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
                             '/api/data-kinds', '/api/inject',
                             '/api/files', '/api/tracing', '/api/targets', '/api/workspace', '/api/build',
                             '/api/project', '/api/dummies', '/api/functions', '/api/media/types',
+                            '/api/scenarios', '/api/scenario-runs', '/api/scenario-record',
                             '/api/recordings', '/api/nodes/{node}/parameters',
                             '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',
-                            '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}']}
+                            '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}',
+                            '/ws/scenarios']}
     return app

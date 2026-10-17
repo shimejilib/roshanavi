@@ -1,0 +1,22 @@
+# いちばん小さなシナリオ: demo_nodes_cpp の talker を起動して、出力と周期を確かめる。
+#   ros2 run roshanavi scenario run examples/scenarios/chatter_smoke.yaml
+version: 1
+name: chatter_smoke
+description: 'talker を起動し、"Hello World: <番号>" が約 1 Hz で届くことを確かめる'
+setup:
+  # cmd は ros2 run / ros2 launch だけ (Launcher と同じ検査を通る)。
+  - cmd: [ros2, run, demo_nodes_cpp, talker, --ros-args, -r, __node:=smoke_talker,
+          -r, chatter:=/scenario/smoke/chatter]
+    wait_for_node: /smoke_talker
+steps:
+  - expect:
+      topic: /scenario/smoke/chatter
+      within: 3.0
+      where:
+        - {field: data, op: regex, value: '^Hello World: \d+$'}
+  - rate: {topic: /scenario/smoke/chatter, for: 3.5, min_hz: 0.7, max_hz: 1.3}
+  - never:   # 空のメッセージは来ない
+      topic: /scenario/smoke/chatter
+      for: 1.0
+      where:
+        - {field: data, op: eq, value: ''}

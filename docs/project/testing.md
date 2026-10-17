@@ -85,18 +85,33 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | C-11 | 同時に多数ジョブ (50 本) | 上限超過は 429、既存ジョブに影響しない | 🟡 |
 | C-12 | QoS 指定 (best_effort / transient_local) | 指定どおりに publish され、後から来た subscriber が受け取れる (latched) | ⬜ |
 
-### D. シナリオ (P3)
+### D. シナリオ (P6)
+
+仕様: [scenarios.md](../design/scenarios.md)。
 
 | ID | 項目 | 期待結果 | 状態 |
 |---|---|---|---|
-| D-01 | inject → expect pass | pass、JUnit XML 出力、exit 0 | ⬜ |
-| D-02 | expect が timeout | fail、exit 1、失敗理由 (受信件数・最後の値) を出す | ⬜ |
-| D-03 | inject 直後に出る応答を取りこぼさない | 事前購読によって pass する | ⬜ |
-| D-04 | where 演算子 (eq/range/approx/regex/exists/配列添字) | 各演算子が正しく判定する | ⬜ |
-| D-05 | expect_rate | 範囲内なら pass、外なら fail | ⬜ |
-| D-06 | setup プロセス起動・wait_for_node・後片付け | 成功・失敗どちらでもプロセスが残らない | ⬜ |
-| D-07 | 不正 YAML / 未知キー | 行番号付きのスキーマエラー | ⬜ |
-| D-08 | ディレクトリ一括実行 | 全件を実行し、集計を JUnit に出す | ⬜ |
+| D-01 | inject → expect pass、CLI と JUnit | `send` → `expect` が成功、CLI は exit 0、JUnit XML (セットアップ + ステップ + ガードの testcase) が読める | ✅ (`test_scenario_ros.py`) |
+| D-02 | expect が timeout | 失敗、CLI は exit 1、受信件数・条件に合った件数・最後に届いた値・合わなかった条件と実際の値を出す | ✅ (`test_scenario_unit.py`、`test_scenario_ros.py`) |
+| D-03 | send 直後の応答を取りこぼさない | 事前購読 + 直前の入力から数える窓で、すぐ返る応答 (5 回続けて) を受ける。起動直後のノード (launch_pytest) でも取りこぼさない (発見を最大 3 秒待つ) | ✅ (`test_scenario_ros.py`) |
+| D-04 | where の op とフィールドのパス | `eq ne lt le gt ge range approx regex contains exists len_eq len_range`、ドット + 配列の番号、bool と数の区別、大きい配列は長さと先頭、無いフィールド・範囲外・配列でないものは平易な理由 | ✅ (`test_scenario_unit.py`) |
+| D-05 | rate | `stats.window_rate` と同じ値、範囲内なら成功、止まったら「止まりました」、2 件未満は「測れません」 | ✅ (`test_scenario_unit.py`、`chatter_smoke`) |
+| D-06 | setup の起動・wait_for_node・後片付け | 成功・セットアップの失敗 (ノードが現れない・パッケージが無い)・中止のどれでもプロセスが残らない。`cmd` は ros2 run / launch だけ | ✅ (`test_scenario_ros.py`、`test_scenario_unit.py`) |
+| D-07 | 不正 YAML / 未知キー | パスと行番号付きの平易なエラー (未知のキー・種類・必須・値の範囲・version・stop の参照・YAML の構文) | ✅ (`test_scenario_unit.py`) |
+| D-08 | ディレクトリ一括実行 | 全件を実行し、JUnit にまとめる。1 件でも失敗 (ファイルの誤りを含む) なら exit 1、パスが無ければ 2 | ✅ (`test_scenario_ros.py`) |
+| D-09 | throughput / latency (unit) | 比と取りこぼしの説明、header.stamp と受信順 (近似、取りこぼしでずれる) の対応づけ、p95 の上限超え、stamp が合わなければ match: order を案内 | ✅ (`test_scenario_unit.py`) |
+| D-10 | ガード | シナリオの間ずっと見張り、wait の途中で破れたらそのステップを中断して失敗、残りは未実行 | ✅ (`test_scenario_unit.py`、`test_scenario_ros.py`) |
+| D-11 | サンプルのシナリオが実ノードで通る | chatter_smoke・state_machine・function_shout・perception (throughput + latency を stamp で)・perception_order (受信順、近似) | ✅ (`test_scenario_ros.py`) |
+| D-12 | 壊したサンプルが説明付きで失敗する | 期待値の違い (実際は "IDLE")、トピック名の打ち間違い (似た名前の送信者を候補に)、keep_stamp:=false を stamp で対応づけ | ✅ (`test_scenario_ros.py`) |
+| D-13 | 原因の候補 (unit) | 送信者がいない (似た名前)・受信者がいない・QoS が合わない・複数の型、型が分からず購読できない | ✅ (`test_scenario_unit.py`、`test_scenario_ros.py`) |
+| D-14 | プロジェクトの起動設定 | `start: {target}` / `stop` / `stop: {target}`、終わったら元の状態に戻す、無い ID はエラー | ✅ (`test_scenario_ros.py`) |
+| D-15 | launch_pytest から使う | `examples/launch_pytest/` のテストが launch で起動したノードに対して成功する | ✅ (`test_scenario_ros.py`) |
+| D-16 | API: ファイル | 保存 (同名は 409)・取得・YAML のまま保存 (コメントを残す)・行番号付きの 422・検査・削除、id の包含 (`..`・symlink で外へ・ほかの種類)、サンプルは読み取り専用、Host / Origin / Content-Type | ✅ (`test_scenario_server.py`) |
+| D-17 | API: 実行 | 非同期の実行と途中経過 (`/ws/scenarios`)、履歴と結果のファイル、1 つずつ (409)、中止、失敗の説明と原因の候補、誤ったファイルはエラーの結果 | ✅ (`test_scenario_server.py`) |
+| D-18 | 記録モード (API) | 見張るトピックのタイムライン (速いトピックは 10 件の後は毎秒 10 件)、注入の開始・停止の操作、止めた後の操作は記録しない、区間の周期・件数の比の計測 | ✅ (`test_scenario_server.py`) |
+| D-19 | 記録モードのロジック (vitest) | フィールドの自動選択 (スカラー eq・小数 approx・番号付きの文字列は正規表現・stamp / カウンタ / 長さの変わる配列 / 大きな配列は外す)、within = max(0.5, 実測 × 3)、操作 → ステップ (stop の対応・QoS)、待ち時間の組み立て、しきい値の提案、編集の補助 | ✅ (`scenarios/record.test.ts`、`scenarios/editSteps.test.ts`、`scenarios/messages.test.ts`) |
+| D-20 | E2E: 記録 → 実行 → 壊す | 見張る /shouted を選んで記録 → お試し送信で /chatter に送る → タイムラインの答えをクリック → 「これが来るはず」(data にチェック) → 保存 → 実行で成功 → 期待値をフォームで変えて保存 → 実行で失敗し、届いた値と合わなかった条件が見える。サンプルのシナリオもタブから成功 | ✅ (`e2e/scenario.spec.ts`) |
+| D-21 | E2E: 記録モードの区間 | Shift+クリックで区間 → 周期のカードに実測から提案したしきい値、来ないはずのカード、破棄 (throughput / latency の画面操作は未自動化、ロジックと計測 API は自動テスト済み) | ✅ (`e2e/scenario.spec.ts`) |
 
 ### E. API・セキュリティ
 

@@ -1,0 +1,17 @@
+# launch_pytest から使うシナリオ。ノードは test_state_machine_launch.py の launch で起動するので、
+# setup は書かない (roshanavi の runner は判定だけをする)。
+version: 1
+name: state_machine_launch_pytest
+steps:
+  - send: {topic: /lp/cmd, kind: string, value: start}
+  - expect:
+      topic: /lp/state
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: RUNNING}
+  - send: {topic: /lp/cmd, kind: string, value: stop}
+  - expect:
+      topic: /lp/state
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: IDLE}

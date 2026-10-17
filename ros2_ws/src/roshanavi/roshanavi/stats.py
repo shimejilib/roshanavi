@@ -124,16 +124,18 @@ def rate_samples(samples: Sequence[Sample], retained: Sequence[Sample], now: flo
     return samples, window, 'too_few'
 
 
-def window_rate(times: Sequence[float], now: float, window: float
-                ) -> Tuple[Optional[float], Optional[str]]:
+def window_rate(times: Sequence[float], now: float, window: float,
+                retain_sec: float = MAX_WINDOW_SEC) -> Tuple[Optional[float], Optional[str]]:
     """Event rate over the last ``window`` s from ascending event times (seconds).
 
     Same semantics as :meth:`TopicStats.snapshot`: (n-1)/(t_last-t_first) over the
     events inside the window, the longest window for slow streams (``'extended'``),
     0 for a stopped stream. ``(None, 'too_few')`` when it cannot be measured yet
     (fewer than 2 events), so callers show "measuring" rather than a number.
+    ``retain_sec`` is how far back events are looked at (scenario ``rate`` steps pass
+    their own duration, so a 20 s step is judged over all 20 s and never extended).
     """
-    retained = [Sample(t, 0) for t in times if t >= now - MAX_WINDOW_SEC and t <= now]
+    retained = [Sample(t, 0) for t in times if t >= now - retain_sec and t <= now]
     in_window = [s for s in retained if s.t >= now - window]
     stale = bool(retained) and is_silent(retained, now)
     used, _span, note = rate_samples(in_window, retained, now, window, stale)

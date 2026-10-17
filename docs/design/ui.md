@@ -8,7 +8,7 @@
 - Graph (**ライブ通信マップ**, [ui.md#ライブ通信マップ](ui.md#ライブ通信マップ-graph-タブ))
 - Traffic: ソート可能な表 + 行内 uPlot スパークライン。停止トピック (last_seen > 3 s) を強調。
 - Inject: トピック選択 → 型自動入力 → テンプレ YAML エディタ → mode 別フォーム → 開始。実行中ジョブ一覧と停止ボタン。
-- Scenarios: examples ディレクトリのシナリオ一覧 / 実行 / ステップ別結果表示。
+- **シナリオ** (Scenarios): プロジェクトとサンプルのシナリオの一覧 / 実行 / ステップ別の結果 / 編集 / 削除 / 記録モード ([ui.md#実装メモ (P6: シナリオ)](ui.md#実装メモ-p6-シナリオ))。
 - Launcher ([ui.md#実装メモ (P3: Launcher)](ui.md#実装メモ-p3-launcher)): パッケージ選択 → 起動設定 → 起動対象の一覧・ログ・ビルド。
 
 ## ライブ通信マップ (Graph タブ)
@@ -176,3 +176,11 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - 関数ノード: 地図のツールバー「＋ 関数ノードを作る」(`function/CreateFunctionDialog.tsx`)。モジュール (ワークスペースの Python パッケージ) → 関数 (シグネチャ付き。ファイル:行と docstring を表示) → 呼び出し方 (引数の数から推す: 0 → 周期、1 → 受信ごと、必須 2 以上 → 複数入力) → 入力 (引数ごとに トピック + データの種類。注釈から種類を推す) → 出力 (戻り値の注釈から種類を推す)。純ロジック `function/functionForm.ts`。編集時 (地図の右クリック「関数ノードの設定を変更」) は動作状況 (`FunctionStatusPanel.tsx`: 状態・数・最後のエラーと場所) と「ROS ノードのコードとして書き出す」。右ペインのノードの「起動」欄にも同じ動作状況を出す。
 - ノード一覧 ([ui.md#実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)](ui.md#実装メモ-p45b-ノード一覧lifecyclelaunch-の取り込み)) の行と一括操作の計画は、`GET /api/node-list` の同じ応答 (`rows` と `targets`) から作る (`nodelist/bulk.ts planFromSnapshot`)。以前は行が 2 秒ごとのポーリング、計画が WebSocket の `live.targets` で、停止直後に一括起動すると計画が空になることがあった (issue #1)。
 - i18n: `i18n/messagesKinds.ts`、`i18n/messagesFunction.ts`。スタイル: `styles-function.css`。スクリーンショット: [`data-kind-picker.png`](../images/data-kind-picker.png) (`e2e/datakind.spec.ts`)、[`function-dialog.png`](../images/function-dialog.png) (`e2e/function.spec.ts`)。
+
+## 実装メモ (P6: シナリオ)
+仕様と判定のルールは [scenarios.md](scenarios.md)。
+- **シナリオ** タブ (`scenarios/ScenariosTab.tsx`、`keepMounted`: 記録中にほかのタブへ行っても期待を失わない。`fullWidth`: このタブでは右ペインを出さない)。左に一覧 (このプロジェクトのシナリオ・サンプル。最後の結果のバッジ、実行・編集・削除 (確認ダイアログ)。サンプルは「コピーして編集」)、右に結果・編集・記録の画面。
+- 結果 (`RunResultView.tsx`): 全体の成否と要約、セットアップ・ガード・ステップごとに ✔ / ✘ / − / ■、失敗の説明、「原因の候補:」、`近似` バッジ (`match: order`)、「くわしい数値」(受信件数・最後に届いた値・Hz・比・p50/p95 など)。実行中は `/ws/scenarios` で進み具合が更新され、「中止」できる。
+- 編集 (`ScenarioEditor.tsx`): ステップのフォーム (トピック・秒数・しきい値・`where` の条件 (フィールド / 比べ方 / 値 / 許す差)・送る値、並べ替え・削除・追加)。開始・停止・再生の細かい設定とセットアップ・ガードは、詳細設定モードの YAML (検査は保存前に `POST /api/scenarios/validate`、誤りは行番号付き) で変える。純ロジック `editSteps.ts`。
+- 記録モード (`RecordView.tsx`、`FieldPicker.tsx`、純ロジック `record.ts`): 見張るトピックを選んで開始 → 上部に「● シナリオを記録中」のバッジ (`RecordingBadge`、クリックで記録の画面へ) → ほかのタブの操作とメッセージが時刻付きのタイムラインに並ぶ (操作は青い行) → メッセージをクリックして「これが来るはず」(フィールドのチェックボックス・値・何秒以内) / Shift+クリックで区間を選んで「ずっと条件どおり・来ないはず・周期・件数の比・処理時間」→ 期待のカード (種類・数値を変えられる) → 「できるステップ」の一覧を見ながら名前を付けて保存。記録のタイムラインと状態は `ScenarioLiveProvider` (`/ws/scenarios`) が持つ。
+- i18n: `i18n/messagesScenario.ts`。スタイル: `styles-scenario.css`。スクリーンショット: [`scenario-record.png`](../images/scenario-record.png)、[`scenario-result.png`](../images/scenario-result.png) (`e2e/scenario.spec.ts`)。

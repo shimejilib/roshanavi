@@ -1,0 +1,40 @@
+# センサー処理パイプライン: 動画 → image_filter → blob_detector。
+# 検出が出ること、取りこぼし (throughput)、処理時間 (latency, header.stamp で対応づけ) を確かめる。
+# 動画 samples/blobs.mp4 は roshanavi のサーバーが起動時に data ディレクトリへ作る
+# (CLI では --data-dir にそのディレクトリを渡す)。
+version: 1
+name: perception
+description: 画像を流すと検出が出て、9 割以上のフレームが処理され、p95 が 200 ms 以内
+setup:
+  - run:
+      package: roshanavi_examples
+      executable: image_filter
+      name: scenario_image_filter
+      params: {keep_stamp: true}             # 出力が入力の header.stamp を引き継ぐ
+      remaps: {image: /scenario/camera/image, image_gray: /scenario/camera/gray,
+               image_edges: /scenario/camera/edges}
+  - run:
+      package: roshanavi_examples
+      executable: blob_detector
+      name: scenario_blob_detector
+      remaps: {image: /scenario/camera/gray, detections: /scenario/camera/detections}
+steps:
+  - start:
+      id: camera
+      topic: /scenario/camera/image
+      type: sensor_msgs/msg/Image
+      media: {source: samples/blobs.mp4, kind: video, encoding: rgb8, frame_id: camera,
+              camera_info: false}
+      loop: true
+  - expect:
+      topic: /scenario/camera/detections
+      within: 5.0
+      where:
+        - {field: detections, op: len_range, min: 1}
+  - throughput: {input: /scenario/camera/image, output: /scenario/camera/detections, for: 5.0,
+                 min_ratio: 0.9}
+  - latency: {input: /scenario/camera/image, output: /scenario/camera/detections,
+              match: header.stamp, for: 5.0, p95_ms: 200}
+  - stop: camera
+  - wait: 0.5
+  - never: {topic: /scenario/camera/detections, for: 1.0}   # 入力が止まれば出力も止まる

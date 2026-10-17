@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-jazzy-audio-common-msgs \
         ros-jazzy-vision-msgs \
         ros-jazzy-lifecycle \
+        ros-jazzy-launch-pytest \
         lttng-tools \
         python3-bt2 \
     && rm -rf /var/lib/apt/lists/*

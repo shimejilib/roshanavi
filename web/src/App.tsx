@@ -5,6 +5,8 @@ import { t } from './i18n';
 import { ErrorBoundary } from './lib/ErrorBoundary';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { LiveProvider, useLive } from './state/LiveProvider';
+import { RecordingBadge } from './scenarios/ScenariosTab';
+import { ScenarioLiveProvider } from './scenarios/ScenarioLive';
 import { DEFAULT_TAB, TABS } from './tabs/registry';
 
 function ConnectionStatus() {
@@ -38,10 +40,11 @@ function Shell() {
             </button>
           ))}
         </nav>
+        <RecordingBadge onOpen={() => setTab('scenarios')} />
         <SettingsMenu />
         <ConnectionStatus />
       </header>
-      <div className="workspace">
+      <div className={TABS.find((d) => d.id === tab)?.fullWidth ? 'workspace full-width' : 'workspace'}>
         <main className="tab-panels">
           {TABS.map((def) => {
             const active = tab === def.id;
@@ -53,7 +56,7 @@ function Shell() {
             );
           })}
         </main>
-        <DetailPane />
+        {!TABS.find((d) => d.id === tab)?.fullWidth && <DetailPane />}
       </div>
       <ErrorBoundary scope="dialog">
         <DialogHost />
@@ -65,9 +68,11 @@ function Shell() {
 export function App() {
   return (
     <LiveProvider>
-      <AppStateProvider initialTab={DEFAULT_TAB}>
-        <Shell />
-      </AppStateProvider>
+      <ScenarioLiveProvider>
+        <AppStateProvider initialTab={DEFAULT_TAB}>
+          <Shell />
+        </AppStateProvider>
+      </ScenarioLiveProvider>
     </LiveProvider>
   );
 }

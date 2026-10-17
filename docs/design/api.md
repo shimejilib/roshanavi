@@ -18,7 +18,15 @@
 | POST | `/api/launch-import/commit` | 案から取り込む `{preview_id, mode: nodes\|whole, indices, role}` (自動保存) |
 | GET | `/api/interfaces/{pkg}/{msg\|srv\|action}/{Name}` | 型の定義 `{type, text, expanded, truncated}` ([launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)) |
 | GET | `/api/files` | data_dir 内のファイル一覧 (stream/bag 選択用) |
-| GET/POST | `/api/scenarios`, `/api/scenarios/run` | シナリオ一覧・実行 (結果は JSON) |
+| GET / POST | `/api/scenarios` | シナリオの一覧 (プロジェクト + サンプル、各 `last_result`、`project_dir`) / 保存 `{spec\|yaml, file?, overwrite?}` (201、同名は 409) ([scenarios.md#サーバー](scenarios.md#サーバー-scenarios-タブ-servicepy--storepy)) |
+| GET / PUT / DELETE | `/api/scenarios/{id}` | id は一覧の `project:<file>` / `example:<file>` だけ。取得 `{yaml, spec, errors}` / 更新 `{spec\|yaml}` / 削除 (サンプルは 403 `read_only`)。誤りは 422 `invalid_scenario` + `errors[{path, line, message}]` |
+| POST | `/api/scenarios/validate` | 保存せずに検査 `{spec\|yaml}` → `{ok, errors, spec, yaml}` (常に 200) |
+| POST | `/api/scenarios/{id}/run` | 実行を始める (202、結果の途中経過を返す)。1 つずつ (409 `run_busy`) |
+| GET | `/api/scenario-runs`, `/api/scenario-runs/{run_id}` | 結果の履歴 (新しい 50 件) と実行中の結果 / 1 件の結果 (ステップごとの `status`・`message`・`hints`・`details`) |
+| POST | `/api/scenario-runs/{run_id}/cancel` | 実行の中止 (後片付けは行う) |
+| POST / GET / DELETE | `/api/scenario-record[?since=]` | 記録モードの開始 `{watch[]}` (最大 8) / 状態とタイムライン (`events[{seq, t, kind: op\|msg, ...}]`) / 停止 |
+| POST | `/api/scenario-record/measure` | 記録した区間の計測 `{kind: rate\|throughput\|latency, start, end, topic\|input+output, match}` (しきい値の提案用) |
+| WS | `/ws/scenarios` | 0.25 秒ごとに `{record: {active, session, events(新しい分)}, running, run?(実行中か変化時)}` |
 | WS | `/ws/live?window=` | 1 秒毎に `{traffic, graph?(変化時), jobs, server_time}` を push。traffic 各エントリに直近 1 秒の受信数 `recent_count`、`window_sec`、`stale` |
 | WS | `/ws/echo/{topic}` | エコー |
 | GET / POST | `/api/workspace`, `/api/workspace/refresh` | パッケージ・実行ファイル・launch ファイル一覧 ([launcher.md#Launcher](launcher.md#launcher-p3)) |
@@ -43,6 +51,7 @@
 | POST | `/api/recordings/stop` | 録画の停止 (SIGINT で bag を確定) |
 | DELETE | `/api/recordings/{name}` | 録画の削除 (recordings ディレクトリの直下のみ) |
 
+- 記録モードの間、`POST /api/inject`・`DELETE /api/inject/{id}`・`POST /api/targets/{id}/start|stop|restart` は成功した操作を記録に足す ([scenarios.md#UI での作り方: 記録モード](scenarios.md#ui-での作り方-記録モード-主軸))。
 - `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null) も毎秒送る。
 - traffic の各エントリ (REST / WS 共通) には `publishers[]` (送信者ごとの値と根拠, rates.py)、`subscribers[]` (受信者ごとの理論値, [map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b))、`rate_window_sec` / `rate_note` ([map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b)) が付く。
 

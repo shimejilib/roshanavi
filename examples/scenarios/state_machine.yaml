@@ -1,0 +1,33 @@
+# 自作ノードの状態遷移: roshanavi_examples の state_machine (cmd → state)。
+# guards はシナリオの間ずっと見張る条件。どのステップの最中でも ERROR になれば失敗にする。
+version: 1
+name: state_machine
+description: start で RUNNING、stop で IDLE に戻る。途中で一度も ERROR にならない
+setup:
+  - run:
+      package: roshanavi_examples
+      executable: state_machine
+      name: scenario_state_machine
+      params: {publish_period_sec: 0.0}     # 状態が変わったときだけ送る
+      remaps: {cmd: /scenario/sm/cmd, state: /scenario/sm/state}
+guards:
+  - never:
+      topic: /scenario/sm/state
+      where:
+        - {field: data, op: eq, value: ERROR}
+steps:
+  - send: {topic: /scenario/sm/cmd, data: {data: start}}      # メッセージのフィールドで書く
+  - expect:
+      topic: /scenario/sm/state
+      within: 1.0
+      where:
+        - {field: data, op: eq, value: RUNNING}
+  - send: {topic: /scenario/sm/cmd, kind: string, value: stop}  # データの種類で書く
+  - expect:
+      topic: /scenario/sm/state
+      within: 1.0
+      where:
+        - {field: data, op: eq, value: IDLE}
+  - never:   # 何も送らなければ状態は変わらない
+      topic: /scenario/sm/state
+      for: 1.0

@@ -1,0 +1,27 @@
+# 関数ノード: ROS を import しない普通の関数 roshanavi_examples.logic.shout を
+# /chatter → /shouted のノードとして起動し、大文字 + "!" になって返ることを確かめる。
+version: 1
+name: function_shout
+description: text_shout と同じ関数ノード。送った文字列が大文字になって返る
+setup:
+  - function:
+      name: scenario_shout
+      module: roshanavi_examples.logic
+      function: shout
+      inputs: [{topic: /chatter, kind: string}]
+      output: {topic: /shouted, kind: string}
+steps:
+  - send: {topic: /chatter, kind: string, value: hello roshanavi}
+  - expect:
+      topic: /shouted
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: HELLO ROSHANAVI!}
+  - start: {id: ticks, topic: /chatter, kind: string, value: 'tick ${i}', rate_hz: 5}
+  - always:   # 届くものはすべて大文字 (小文字を含まない) で、"!" で終わる
+      topic: /shouted
+      for: 1.5
+      min_count: 3
+      where:
+        - {field: data, op: regex, value: '^[^a-z]*!$'}
+  - stop: ticks

@@ -18,7 +18,7 @@
 - [design/ui.md](design/ui.md): タブ構成、ライブ通信マップ、右クリックメニュー、各パネルの実装メモ、UI の実行・E2E の方法。画面を触るとき。
 - [design/api.md](design/api.md): REST / WebSocket の一覧、既定ポート、入力検証、Host / Origin / Content-Type の検査。API を足すとき。
 - [design/security.md](design/security.md): セキュリティ上の判断の索引 (ネットワーク・式・パス・サブプロセス・他人のプロセス)。新しい機能を足す前の確認に。
-- [design/scenarios.md](design/scenarios.md): シナリオの仕様 (**実装予定**)。シナリオ機能 (P6) を作るとき。
+- [design/scenarios.md](design/scenarios.md): シナリオ (P6): ファイルの形式・判定のルール・CLI / Python API・サーバー・記録モード。
 
 ## planned — 未実装の設計
 

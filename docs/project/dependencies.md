@@ -62,6 +62,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 |---|---|
 | `python3-pytest` | テスト |
 | `python3-httpx` | FastAPI の TestClient |
+| `launch_pytest` (`ros-jazzy-launch-pytest`) | シナリオを launch_pytest から使う例 (`examples/launch_pytest/`) とそのテスト。`package.xml` は `test_depend` |
 | `ros-jazzy-demo-nodes-cpp`, `ros-jazzy-demo-nodes-py`, `ros-jazzy-example-interfaces` | テストとデモの相手役ノード |
 | `ros-jazzy-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
 | `roshanavi_test_nodes` (同梱の ament パッケージ。rclcpp, std_msgs, sensor_msgs) | トレース計測のテスト用ノード (遅いコールバックなど) |
