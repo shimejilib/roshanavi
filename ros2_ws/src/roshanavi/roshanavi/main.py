@@ -61,6 +61,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         default=os.environ.get('ROSHANAVI_PROJECT_TEMPLATE') or None,
                         help='copy this project file to --project when that file does not '
                              'exist yet (never overwrites; e.g. the demo project)')
+    parser.add_argument('--examples-dir',
+                        default=os.environ.get('ROSHANAVI_EXAMPLES_DIR') or None,
+                        help='folder of example projects (<name>/roshanavi.yaml) offered in the '
+                             'settings menu; default: two levels above --project-template')
+    parser.add_argument('--no-sample-media', action='store_true',
+                        help='do not generate the perception demo media (data-dir/samples) '
+                             'with ffmpeg on start')
     parser.add_argument('--no-autostart', action='store_true',
                         help='do not start the project targets marked autostart')
     parser.add_argument('--record-warn-free-mb', type=float, default=1024.0,
@@ -107,6 +114,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         LOG.error('workspace %s does not exist', args.workspace)
         return 2
     _bootstrap(args)
+    examples_dir = args.examples_dir or (
+        os.path.dirname(os.path.dirname(os.path.abspath(args.project_template)))
+        if args.project_template else None)
     lab = Lab(data_dir=args.data_dir, show_self=args.show_self,
               monitor_heavy=args.monitor_heavy, workspace=args.workspace,
               project_path=args.project, autostart=not args.no_autostart,
@@ -114,7 +124,8 @@ def main(argv: Optional[List[str]] = None) -> int:
                                              args.record_stop_free_mb,
                                              args.record_stop_free_pct),
               probe=args.probe, tracing=args.tracing,
-              trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024).start()
+              trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024,
+              examples_dir=examples_dir, generate_samples=not args.no_sample_media).start()
     atexit.register(lab.launcher.close)
     atexit.register(lab.tracing.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))

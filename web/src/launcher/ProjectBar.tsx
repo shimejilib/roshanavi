@@ -4,12 +4,14 @@ import { useEffect, useState } from 'react';
 import { api, describeError } from '../api/client';
 import type { ProjectState } from '../api/types';
 import { t } from '../i18n';
+import { useAppState } from '../state/AppState';
 
 /** `version` changes (launch list edits) trigger a re-check of the autosave state. */
 export function ProjectBar({ version }: { version: string }) {
   const [state, setState] = useState<ProjectState | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const { openDialog } = useAppState();
 
   useEffect(() => {
     let cancelled = false;
@@ -60,6 +62,9 @@ export function ProjectBar({ version }: { version: string }) {
             {t('launcher.reload')}
           </button>
           <span className="muted small">{t('launcher.reloadHelp')}</span>
+          <button type="button" onClick={() => openDialog({ kind: 'projects' })} data-testid="project-switch">
+            {t('project.switch')}
+          </button>
         </div>
       </details>
     </div>

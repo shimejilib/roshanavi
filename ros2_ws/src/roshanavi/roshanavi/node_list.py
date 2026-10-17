@@ -22,6 +22,9 @@ def _origin(target: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
               'imported_from': spec.get('imported_from')}
     if target.get('kind') == 'dummy':
         origin.update(package='roshanavi', executable='dummy', topic=spec.get('topic'))
+    if target.get('kind') == 'transform':
+        output = spec.get('output') or {}
+        origin.update(package='roshanavi', executable='transform', topic=output.get('topic'))
     return {k: v for k, v in origin.items() if v is not None}
 
 

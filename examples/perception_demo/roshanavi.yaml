@@ -1,0 +1,61 @@
+# roshanavi perception demo: video file -> image_filter -> blob_detector, audio file -> audio_level
+# The sample files (data_dir/samples/blobs.mp4 and tone.wav) are generated with ffmpeg when the
+# server starts. Open this project from the ⚙ settings menu (「プロジェクトを切り替える」).
+version: 1
+targets:
+- id: image_filter
+  kind: run
+  package: roshanavi_examples
+  executable: image_filter
+  name: image_filter
+  params: {keep_stamp: true, process_delay_ms: 0}
+  remaps: {image: /camera/image, image_gray: /camera/gray, image_edges: /camera/edges}
+  role: mine
+  autostart: true
+- id: blob_detector
+  kind: run
+  package: roshanavi_examples
+  executable: blob_detector
+  name: blob_detector
+  params: {threshold: 200, min_area: 30}
+  remaps: {image: /camera/gray, detections: /camera/detections}
+  role: mine
+  autostart: true
+- id: audio_level
+  kind: run
+  package: roshanavi_examples
+  executable: audio_level
+  name: audio_level
+  params: {input_type: stamped}
+  remaps: {audio: /audio, level_db: /audio/level_db, silence: /audio/silence}
+  role: mine
+  autostart: true
+dummies:
+- id: camera
+  name: dummy_camera
+  topic: /camera/image
+  type: sensor_msgs/msg/Image
+  mode: media
+  source: samples/blobs.mp4
+  loop: true
+  media: {kind: video, encoding: rgb8, frame_id: camera}
+  autostart: true
+- id: microphone
+  name: dummy_microphone
+  topic: /audio
+  type: audio_common_msgs/msg/AudioDataStamped
+  mode: media
+  source: samples/tone.wav
+  loop: true
+  media: {kind: audio, sample_rate: 16000, channels: 1, chunk_samples: 1024}
+  autostart: true
+transforms:
+# 変換ノード: how many blobs are in each frame, as a plain number (std_msgs/Int32).
+- id: blob_count
+  name: blob_count
+  inputs:
+  - {topic: /camera/detections, type: vision_msgs/msg/Detection2DArray, alias: msg}
+  output: {topic: /camera/blob_count, type: std_msgs/msg/Int32}
+  mapping: {data: '${len(msg.detections)}'}
+  autostart: true
+watch_topics: [/camera/gray, /camera/detections, /audio/level_db]

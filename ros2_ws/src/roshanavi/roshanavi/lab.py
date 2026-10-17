@@ -13,8 +13,9 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import psutil
 
-from . import graph, rates
+from . import graph, rates, sample_media
 from .echo import EchoManager
+from .fd_guard import FdGuard
 from .injector import Injector
 from .launch_import.importer import LaunchImporter
 from .launcher.service import Launcher
@@ -51,8 +52,11 @@ class Lab:
                  workspace: Optional[str] = None, project_path: Optional[str] = None,
                  autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None,
                  disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF,
-                 tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU):
+                 tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU,
+                 examples_dir: Optional[str] = None, generate_samples: bool = False):
         self.data_dir = data_dir
+        self.examples_dir = examples_dir
+        self._generate_samples = generate_samples
         self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
         self.importer = LaunchImporter(self.launcher, data_dir)
@@ -73,8 +77,11 @@ class Lab:
         self._period = period_sec
         self._timer: Any = None
         self.housekeeping_runs = 0
+        self._fd_guard = FdGuard()
 
     def start(self) -> 'Lab':
+        if self._generate_samples:  # perception demo media (ffmpeg; first run only)
+            sample_media.ensure_in_background(self.data_dir)
         self.runtime.start()
         self.traffic.start()
         # Before the first housekeeping: the Launcher's autostart must find the init capture on.
@@ -92,6 +99,7 @@ class Lab:
             self.traffic.sync(raw)
             self.traffic.tick()
             self.tracing.poll()
+            self._fd_guard.check()
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')

@@ -38,7 +38,7 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
     logs: () => owner && app.openLogs(owner.id),
     editTarget: () => owner && app.openLauncher({ kind: 'edit', targetId: owner.id }),
     buildRestart: async () => {
-      if (!owner || owner.kind === 'dummy') return;
+      if (!owner || (owner.kind !== 'run' && owner.kind !== 'launch')) return;
       await api.build((owner.spec as TargetSpec).package, true);
       app.openLogs(BUILD_LOG_ID);
     },
@@ -49,10 +49,12 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
     pause: () => setPaused(true),
     resume: () => setPaused(false),
     editDummy: () => owner && app.openDialog({ kind: 'createInput', dummyId: owner.id }),
+    editTransform: () => owner && app.openDialog({ kind: 'createTransform', transformId: owner.id }),
     exportLaunch: () => owner && app.openDialog({ kind: 'exportLaunch', dummyId: owner.id }),
     view: () => app.select({ kind: 'topic', id: topic }),
     tryInject: () => app.openInject(topic),
     createInput: () => app.openDialog({ kind: 'createInput', topic, type: types.length === 1 ? types[0] : undefined }),
+    createTransform: () => app.openDialog({ kind: 'createTransform', topic, type: types.length === 1 ? types[0] : undefined }),
     record: () => app.openRecord(topic),
     monitorOn: () => api.setMonitor(`${topicPath('/api/traffic', topic)}/monitor`, true),
     monitorOff: () => api.setMonitor(`${topicPath('/api/traffic', topic)}/monitor`, false),

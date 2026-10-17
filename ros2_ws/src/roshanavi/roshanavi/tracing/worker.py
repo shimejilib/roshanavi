@@ -144,10 +144,12 @@ class Worker:
         self.model.clear_rates()
 
     def close(self) -> None:
-        self.lttng.destroy(self.rt_name)
-        self.lttng.destroy(self.init_name)
-        self.lttng.close()
-        shutil.rmtree(self.out_dir, ignore_errors=True)
+        try:
+            self.lttng.destroy(self.rt_name)
+            self.lttng.destroy(self.init_name)
+        finally:  # the daemon this worker started must go even when destroying failed
+            self.lttng.close()
+            shutil.rmtree(self.out_dir, ignore_errors=True)
 
     # -- one rotation ------------------------------------------------------------------
     def _archives(self, kind: str) -> List[str]:
@@ -317,6 +319,17 @@ def _emitter() -> Any:
     return emit
 
 
+def _raise_fd_limit() -> None:
+    """Headroom for the lttng CLI pipes and bt2 file handles (the soft limit is often 1024)."""
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = hard if hard != resource.RLIM_INFINITY else 65536
+    if soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_NOFILE, (min(want, 65536), hard))
+        except (ValueError, OSError):
+            pass
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     parser = argparse.ArgumentParser(prog='roshanavi tracing worker')
     parser.add_argument('--prefix', required=True)
@@ -325,6 +338,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level='INFO', stream=sys.stderr,
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    _raise_fd_limit()
     emit = _emitter()
     worker = Worker(args.prefix, args.out, args.rt_per_cpu, emit)
     try:

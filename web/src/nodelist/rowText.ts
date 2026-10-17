@@ -7,6 +7,7 @@ export function originText(row: Pick<NodeRow, 'origin'>): string {
   const o = row.origin;
   if (o.kind === 'external') return t('nodes.origin.external');
   if (o.kind === 'dummy') return o.topic ? t('nodes.origin.dummy', { topic: o.topic }) : t('nodes.origin.dummyNoTopic');
+  if (o.kind === 'transform') return o.topic ? t('nodes.origin.transform', { topic: o.topic }) : t('nodes.origin.transformNoTopic');
   const base = o.kind === 'launch' ? `${o.package ?? '?'} / ${o.launch_file ?? '?'}` : `${o.package ?? '?'} / ${o.executable ?? '?'}`;
   return o.imported_from ? `${base} ${t('nodes.origin.imported', { file: o.imported_from })}` : base;
 }

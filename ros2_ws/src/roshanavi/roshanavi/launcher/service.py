@@ -28,13 +28,13 @@ from .dummy_config import export, format_errors
 from .errors import LauncherError
 from .manager import ProcessManager
 from .project import DEFAULT_FILE_NAME, ProjectStore
-from .schema import DummySpec, ProjectSpec, QosSpec, TargetSpec, clean_dict
+from .schema import DummySpec, ProjectSpec, QosSpec, TargetSpec, TransformSpec, clean_dict
 
 LOG = logging.getLogger(__name__)
 
 AUTOSTART_DELAY_SEC = 2.0  # let DDS discovery see pre-existing nodes first (baseline)
 PERSISTABLE_MODES = ('once', 'periodic', 'stream', 'media')
-Spec = Union[TargetSpec, DummySpec]
+Spec = Union[TargetSpec, DummySpec, TransformSpec]
 
 
 def id_from_name(name: str, taken: Iterable[str]) -> str:
@@ -77,13 +77,26 @@ class Launcher:
             return self.project_state()
         self.load_error = None
         self._autosave_blocked = False
-        self.manager.replace_all([*spec.targets, *spec.dummies])
+        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms])
         self._watch_topics = list(spec.watch_topics)
         return self.project_state()
 
+    def open_project(self, path: str) -> Dict[str, Any]:
+        """Switch to another project file: stop everything, load it, autostart its targets."""
+        self.project = ProjectStore(path)
+        state = self.reload_project()
+        # Only after the new targets are registered: the housekeeping thread may run
+        # _maybe_autostart at any moment and must not see the old registry.
+        self._created = self._clock() - AUTOSTART_DELAY_SEC  # no DDS warm-up needed any more
+        self._autostart_pending = True
+        LOG.info('project switched to %s', self.project.path)
+        return state
+
     def current_project(self) -> ProjectSpec:
         targets, dummies = self.manager.specs()
-        return ProjectSpec(targets=targets, dummies=dummies, watch_topics=self._watch_topics)
+        return ProjectSpec(targets=targets, dummies=dummies,
+                           transforms=self.manager.transforms(),
+                           watch_topics=self._watch_topics)
 
     def project_state(self) -> Dict[str, Any]:
         current = self.current_project()
@@ -93,7 +106,7 @@ class Launcher:
                 'project': clean_dict(current)}
 
     def put_project(self, spec: ProjectSpec) -> Dict[str, Any]:
-        self.manager.replace_all([*spec.targets, *spec.dummies])
+        self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms])
         self._watch_topics = list(spec.watch_topics)
         return self.save_project()
 
@@ -190,12 +203,15 @@ class Launcher:
     def export_dummies(self, directory: str, ids: Sequence[str] = ()) -> Dict[str, Any]:
         target_dir = validate.contained_dir(directory, self.workspace.root)
         _, dummies = self.manager.specs()
+        transforms = self.manager.transforms()
         if ids:
-            unknown = set(ids) - {d.id for d in dummies}
+            unknown = set(ids) - {d.id for d in [*dummies, *transforms]}
             if unknown:
-                raise LauncherError('not_found', f'no such dummy: {sorted(unknown)}', 404)
+                raise LauncherError('not_found', f'no such dummy / transform: {sorted(unknown)}',
+                                    404)
             dummies = [d for d in dummies if d.id in set(ids)]
-        return export(dummies, target_dir, self.manager.data_dir)
+            transforms = [d for d in transforms if d.id in set(ids)]
+        return export(dummies, target_dir, self.manager.data_dir, transforms)
 
     def close(self) -> None:
         self.builder.close()

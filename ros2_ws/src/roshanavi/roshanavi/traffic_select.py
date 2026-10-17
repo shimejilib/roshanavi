@@ -14,17 +14,11 @@ from typing import Any, Dict, List, Sequence, Set
 from rclpy.qos import ReliabilityPolicy
 
 from .graph import RawGraph, topic_is_live
+from .heavy_types import HEAVY_TYPES  # noqa: F401 - re-exported for existing imports
 
 LOG = logging.getLogger(__name__)
 
 DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$')
-# Types that are costly to subscribe to; monitored only on explicit opt-in.
-HEAVY_TYPES = (
-    'sensor_msgs/msg/Image',
-    'sensor_msgs/msg/CompressedImage',
-    'sensor_msgs/msg/PointCloud2',
-    'sensor_msgs/msg/PointCloud',
-)
 
 
 class TopicSelector:

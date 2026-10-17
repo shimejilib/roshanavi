@@ -21,7 +21,7 @@ from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (msgutil, security, server_launch_import, server_launcher, server_media,
-               server_nodes, server_tracing)
+               server_nodes, server_tracing, server_transforms)
 from .api_errors import ApiError, parse_window
 from .echo import EchoError
 from .files import FileAccessError, list_files
@@ -261,6 +261,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_nodes.register(app, lab)
     server_launch_import.register(app, lab)
     server_tracing.register(app, lab)
+    server_transforms.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')

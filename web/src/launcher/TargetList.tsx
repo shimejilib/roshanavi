@@ -66,7 +66,7 @@ function TargetCard({ target, active, onLogs, onEdit, onError }: { target: Targe
         )}
         <button type="button" disabled={busy || !alive} onClick={() => void act(() => api.targetAction(target.id, 'restart'))}>{t('launcher.restart')}</button>
         <button type="button" onClick={() => onLogs(target.id)} aria-pressed={active}>{t('launcher.logs')}</button>
-        {target.kind !== 'dummy' && <button type="button" onClick={() => onEdit(target.spec as TargetSpec)}>{t('common.edit')}</button>}
+        {(target.kind === 'run' || target.kind === 'launch') && <button type="button" onClick={() => onEdit(target.spec as TargetSpec)}>{t('common.edit')}</button>}
         <button
           type="button"
           disabled={busy}

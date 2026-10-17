@@ -44,6 +44,16 @@ describe('map menu by node role', () => {
     expect(items.every((i) => i.enabled)).toBe(true);
   });
 
+  it('gives transform nodes edit / export but no pause and no build', () => {
+    const tf: Target = {
+      ...target('tf', 'run'), kind: 'transform', role: 'transform',
+      spec: { id: 'tf', name: 'tf', mode: 'map', inputs: [{ topic: '/a', type: 'std_msgs/msg/String' }], output: { topic: '/b' } },
+    };
+    expect(menuRole(node('/tf', { target_id: 'tf' }), [tf])).toBe('transform');
+    const items = menuItems({ kind: 'node', nodeId: '/tf' }, ctx({ node: node('/tf', { role: 'transform', target_id: 'tf' }), targets: [tf] }));
+    expect(actions(items)).toEqual(['stop', 'restart', 'editTransform', 'exportLaunch', 'logs', 'params', 'isolate']);
+  });
+
   it('lets inject jobs pause but not be edited', () => {
     const job = { id: '1', state: 'running', pausable: true, paused: false } as Job;
     const items = menuItems({ kind: 'node', nodeId: 'dummy:1' }, ctx({ node: node('dummy:1', { job_id: '1', role: 'dummy' }), jobs: [job] }));
@@ -68,7 +78,8 @@ describe('map menu for topics, edges and the blank area', () => {
   it('topic menu follows monitoring state and type', () => {
     const entry = { monitored: true } as TrafficEntry;
     const items = menuItems({ kind: 'topic', topic: '/t' }, ctx({ traffic: entry, topicTypes: ['std_msgs/msg/String'] }));
-    expect(actions(items)).toEqual(['view', 'tryInject', 'createInput', 'record', 'monitorOff', 'typeDef', 'flowOnly']);
+    expect(actions(items)).toEqual(['view', 'tryInject', 'createInput', 'createTransform', 'record', 'monitorOff', 'typeDef', 'flowOnly']);
+    expect(items.find((i) => i.action === 'createTransform')?.label).toBe('このトピックを受けて変換するノードを作る');
     const heavy = menuItems({ kind: 'topic', topic: '/img' }, ctx({ traffic: { monitored: false } as TrafficEntry, topicTypes: ['a/msg/A', 'b/msg/B'] }));
     expect(actions(heavy)).toContain('monitorOn');
     expect(enabled(heavy, 'typeDef')).toBe(false);

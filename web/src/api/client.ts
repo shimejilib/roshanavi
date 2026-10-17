@@ -1,6 +1,7 @@
 // REST client. Every failure becomes an ApiError with the server's error code.
 
 import type { TracingStatus } from './tracingTypes';
+import type { PreviewResult, ProjectList, TransformSpec } from './transformTypes';
 import { t, tDynamic } from '../i18n';
 import type {
   BuildStatus,
@@ -112,6 +113,13 @@ export const api = {
     request<Target>('POST', `/api/inject/${enc(jobId)}/persist`, { name, autostart }),
   updateDummy: (spec: DummySpec) => request<Target>('PUT', `/api/dummies/${enc(spec.id)}`, spec),
   addDummy: (spec: DummySpec, start = true) => request<Target>('POST', `/api/dummies${start ? '?start=true' : ''}`, spec),
+  addTransform: (spec: TransformSpec, start = true) =>
+    request<Target>('POST', `/api/transforms${start ? '?start=true' : ''}`, spec),
+  updateTransform: (spec: TransformSpec) => request<Target>('PUT', `/api/transforms/${enc(spec.id)}`, spec),
+  previewTransform: (spec: TransformSpec, samples: Record<string, Record<string, unknown>>) =>
+    request<PreviewResult>('POST', '/api/transforms/preview', { spec, samples }),
+  projects: () => request<ProjectList>('GET', '/api/projects'),
+  openProject: (id: string) => request<ProjectState>('POST', '/api/projects/open', { id }),
   exportDummies: (directory: string, ids: string[] = []) =>
     request<ExportResult>('POST', '/api/dummies/export', { directory, ids }),
 

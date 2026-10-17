@@ -53,7 +53,7 @@ export function LauncherTab() {
       setForm(null);
     } else {
       const target = live.targets.find((tg) => tg.id === launcherRequest.targetId);
-      if (target && target.kind !== 'dummy') edit(target.spec as TargetSpec);
+      if (target && (target.kind === 'run' || target.kind === 'launch')) edit(target.spec as TargetSpec);
     }
     clearLauncherRequest();
     // Handle each request once.

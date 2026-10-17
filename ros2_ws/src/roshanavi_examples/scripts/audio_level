@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Entry point installed as `ros2 run roshanavi_examples audio_level` (code: roshanavi_examples/audio_level.py)."""
+import sys
+
+from roshanavi_examples.audio_level import main
+
+if __name__ == '__main__':
+    sys.exit(main())

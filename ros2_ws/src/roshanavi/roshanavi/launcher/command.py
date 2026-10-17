@@ -12,7 +12,7 @@ from typing import List, Sequence
 from . import validate
 from .discovery import Workspace
 from .errors import LauncherError
-from .schema import DummySpec, TargetSpec, param_text
+from .schema import DummySpec, TargetSpec, TransformSpec, param_text
 
 PARAMS_FILE_EXTS = ('.yaml', '.yml')
 
@@ -78,6 +78,38 @@ def validate_dummy(spec: DummySpec) -> None:
     validate.ros_name('topic', spec.topic)
     if not spec.topic.startswith('/'):
         raise LauncherError('invalid_topic', f'topic must be absolute (start with /): {spec.topic}')
+
+
+def _absolute_topic(topic: str) -> None:
+    validate.ros_name('topic', topic)
+    if not topic.startswith('/'):
+        raise LauncherError('invalid_topic', f'topic must be absolute (start with /): {topic}')
+
+
+def validate_transform(spec: TransformSpec) -> None:
+    validate.target_id(spec.id)
+    validate.node_name(spec.name)
+    validate.namespace(spec.namespace)
+    for inp in spec.inputs:
+        _absolute_topic(inp.topic)
+    _absolute_topic(spec.output.topic)
+    if spec.output.topic in {inp.topic for inp in spec.inputs}:
+        raise LauncherError('invalid_topic', f'output topic {spec.output.topic} is also an '
+                            'input (the node would receive its own output)')
+
+
+def node_command(executable: str, name: str, namespace: str, config_path: str) -> List[str]:
+    args = ['-r', f'__node:={name}']
+    ns = validate.namespace(namespace)
+    if ns:
+        args += ['-r', f'__ns:={ns}']
+    return [ros2_binary(), 'run', 'roshanavi', executable, '--config', config_path,
+            '--ros-args', *args]
+
+
+def transform_command(spec: TransformSpec, config_path: str) -> List[str]:
+    validate_transform(spec)
+    return node_command('transform', spec.name, spec.namespace, config_path)
 
 
 def dummy_command(spec: DummySpec, config_path: str) -> List[str]:

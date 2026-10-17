@@ -3,10 +3,10 @@
 import type { MappingConfidence, TargetSpec } from './types';
 
 export type RowControl = 'target' | 'lifecycle' | 'none';
-export type RowRole = 'mine' | 'dependency' | 'dummy' | 'other';
+export type RowRole = 'mine' | 'dependency' | 'dummy' | 'transform' | 'other';
 
 export interface RowOrigin {
-  kind: 'run' | 'launch' | 'dummy' | 'external';
+  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'external';
   package?: string;
   executable?: string;
   launch_file?: string;

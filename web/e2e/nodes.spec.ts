@@ -19,7 +19,23 @@ async function confirm(page: Page) {
   await page.getByTestId('confirm-ok').click();
 }
 
+// Targets the bulk test acts on, and leftovers of other specs / earlier runs.
+const BULK_TARGETS = ['talker', 'listener'];
+const LEFTOVERS = ['e2e_talker', 'e2e_listener', 'e2e_dummy', ...IMPORTED];
+
+/** Known starting state set via API: no foreign targets, talker + listener running. */
+async function resetState(page: Page) {
+  for (const id of LEFTOVERS) await page.request.delete(`/api/targets/${id}`);
+  for (const id of BULK_TARGETS) await page.request.post(`/api/targets/${id}/start`);
+  await expect.poll(async () => {
+    const body = (await (await page.request.get('/api/targets')).json()) as { targets: { id: string; status: string }[] };
+    return BULK_TARGETS.map((id) => body.targets.find((x) => x.id === id)?.status);
+  }, { timeout: 20_000 }).toEqual(['running', 'running']);
+}
+
 test.beforeAll(() => mkdirSync(SHOTS, { recursive: true }));
+test.beforeEach(({ page }) => resetState(page));
+test.afterEach(({ page }) => resetState(page));
 
 test('bulk stop and start talker + listener with checkboxes', async ({ page }) => {
   await openNodes(page);
@@ -27,8 +43,11 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await expect(page.getByTestId('node-check-/external_talker')).toBeDisabled();
   await expect(page.getByTestId('nodes-import-hint')).toBeVisible();
   await page.getByTestId('node-check-/listener').check();
-  // Keyboard: ↓ moves to the next row's checkbox (/talker sorts after /listener), Space selects it.
+  // Keyboard: ↓ moves to the next row's checkbox, Space selects it. Rows sort by launch-list
+  // id: listener, state_machine (a stopped sample node of the demo project), talker.
   await page.getByTestId('node-check-/listener').focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(page.getByTestId('node-check-target:state_machine')).toBeFocused();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByTestId('node-check-/talker')).toBeFocused();
   await page.keyboard.press('Space');
@@ -48,8 +67,14 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await page.getByTestId('node-check-target:listener').check();
   await expect(page.getByTestId('nodes-selected')).toContainText('2 個選択');
   await expect(page.getByTestId('nodes-bulk-start')).toBeEnabled();
-  await page.getByTestId('nodes-bulk-start').click();
-  await confirm(page);
+  // The row list (polled) and the live target state (websocket) can disagree for a moment right
+  // after the stop; a start requested against the stale one is refused without a dialog. Retry the
+  // request until the dialog opens; its content and the outcome are still asserted below.
+  await expect(async () => {
+    await page.getByTestId('nodes-bulk-start').click();
+    await expect(page.getByTestId('confirm-dialog')).toBeVisible({ timeout: 2_000 });
+  }).toPass({ timeout: 15_000 });
+  await page.getByTestId('confirm-ok').click();
   await page.getByTestId('nodes-status').selectOption('all');
   await expect(page.getByTestId('node-row-/talker')).toHaveAttribute('data-status', /starting|running/, { timeout: 20_000 });
   await expect(page.getByTestId('node-row-/listener')).toHaveAttribute('data-status', /starting|running/, { timeout: 20_000 });

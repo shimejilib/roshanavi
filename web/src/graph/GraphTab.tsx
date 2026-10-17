@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Diagnostic } from '../api/types';
+import { ErrorBoundary } from '../lib/ErrorBoundary';
 import { t } from '../i18n';
 import { buildablePackages } from '../launcher/packages';
 import { useWorkspace } from '../launcher/useWorkspace';
@@ -74,6 +75,9 @@ export function GraphTab({ active }: { active: boolean }) {
         <button type="button" className="primary" onClick={() => openDialog({ kind: 'createInput' })} data-testid="create-input">
           {t('input.create')}
         </button>
+        <button type="button" onClick={() => openDialog({ kind: 'createTransform' })} data-testid="create-transform">
+          {t('transform.create')}
+        </button>
         <input type="search" placeholder={t('graph.filter')} aria-label={t('graph.filter')} value={query} onChange={(e) => setQuery(e.target.value)} />
         <label className="check">
           <input type="checkbox" checked={hideHidden} onChange={(e) => setHideHidden(e.target.checked)} />
@@ -92,6 +96,7 @@ export function GraphTab({ active }: { active: boolean }) {
       <div className="graph-body">
         <div className="graph-main">
           {elements.length === 0 && live.graph && <p className="graph-empty">{t('graph.empty')}</p>}
+          <ErrorBoundary scope="map">
           <GraphView
             elements={elements}
             traffic={live.traffic}
@@ -107,6 +112,7 @@ export function GraphTab({ active }: { active: boolean }) {
               <MapMenu key={`${anchor.x}:${anchor.y}`} anchor={anchor} buildable={buildable} commands={commands} onClose={close} />
             )}
           />
+          </ErrorBoundary>
           <Legend palette={palette} />
         </div>
         <DiagnosticsPanel diagnostics={diagnostics} onFocus={focusDiagnostic} />

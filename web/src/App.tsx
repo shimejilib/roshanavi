@@ -1,6 +1,7 @@
 import { DetailPane } from './detail/DetailPane';
 import { DialogHost } from './dialogs/DialogHost';
 import { t } from './i18n';
+import { ErrorBoundary } from './lib/ErrorBoundary';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { LiveProvider, useLive } from './state/LiveProvider';
 import { DEFAULT_TAB, TABS } from './tabs/registry';
@@ -45,14 +46,16 @@ function Shell() {
             if (!active && !def.keepMounted) return null;
             return (
               <section key={def.id} role="tabpanel" className="tab-panel" hidden={!active}>
-                {def.render(active)}
+                <ErrorBoundary scope="tab">{def.render(active)}</ErrorBoundary>
               </section>
             );
           })}
         </main>
         <DetailPane />
       </div>
-      <DialogHost />
+      <ErrorBoundary scope="dialog">
+        <DialogHost />
+      </ErrorBoundary>
     </div>
   );
 }

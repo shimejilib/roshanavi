@@ -18,6 +18,8 @@ import time
 import xml.etree.ElementTree as ET
 from typing import Callable, Dict, Iterable, List, Optional, Sequence
 
+import psutil
+
 from .config import ChannelSize
 
 LOG = logging.getLogger(__name__)
@@ -25,6 +27,7 @@ LOG = logging.getLogger(__name__)
 CMD_TIMEOUT_SEC = 15.0
 SESSIOND_READY_SEC = 10.0
 SESSIOND_STOP_SEC = 5.0
+SESSIOND_EXIT_WAIT_SEC = 8.0   # a daemon that is shutting down is waited for, not duplicated
 _READABLE = re.compile(r'is now readable at (\S+)')
 _PR_SET_PDEATHSIG = 1
 
@@ -64,6 +67,8 @@ class Lttng:
             raise LttngError('not_installed', 'lttng is not installed') from exc
         except subprocess.TimeoutExpired as exc:
             raise LttngError('timeout', f'lttng {args[0]} timed out') from exc
+        except OSError as exc:  # e.g. EMFILE / ENOMEM at fork or pipe(): never escapes as a crash
+            raise LttngError('os_error', f'lttng {args[0]}: {exc}') from exc
         if proc.returncode != 0:
             text = (proc.stderr or proc.stdout).strip().splitlines()
             message = text[-1] if text else f'exit code {proc.returncode}'
@@ -100,6 +105,9 @@ class Lttng:
         """Reuse a running daemon, otherwise start one owned by this process."""
         if self.sessiond_alive():
             return
+        self._wait_for_dying_sessiond()
+        if self.sessiond_alive():
+            return
         try:
             self._sessiond = subprocess.Popen(
                 ['lttng-sessiond', '--no-kernel'], stdin=subprocess.DEVNULL,
@@ -117,6 +125,23 @@ class Lttng:
                 return
             time.sleep(0.1)
         raise LttngError('sessiond_failed', 'lttng-sessiond did not become ready')
+
+    @staticmethod
+    def _own_sessiond_pids() -> List[int]:
+        return [p.pid for p in psutil.process_iter(['name', 'uids'])
+                if p.info.get('name') == 'lttng-sessiond'
+                and getattr(p.info.get('uids'), 'real', None) == os.getuid()]
+
+    def _wait_for_dying_sessiond(self) -> None:
+        """A previous worker's daemon (SIGTERMed by PR_SET_PDEATHSIG) may still be exiting.
+
+        Starting a second one next to it left two sessiond / consumerd pairs behind.
+        """
+        deadline = time.monotonic() + SESSIOND_EXIT_WAIT_SEC
+        while self._own_sessiond_pids() and time.monotonic() < deadline:
+            if self.sessiond_alive():
+                return
+            time.sleep(0.2)
 
     def close(self) -> None:
         proc, self._sessiond = self._sessiond, None

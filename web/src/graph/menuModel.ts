@@ -16,8 +16,8 @@ export type MenuTarget =
 export type MenuAction =
   | ControlAction
   | 'logs' | 'editTarget' | 'buildRestart' | 'params' | 'isolate'
-  | 'pause' | 'resume' | 'editDummy' | 'exportLaunch' | 'details' | 'lifecycle'
-  | 'view' | 'tryInject' | 'createInput' | 'record' | 'monitorOn' | 'monitorOff' | 'typeDef' | 'flowOnly'
+  | 'pause' | 'resume' | 'editDummy' | 'editTransform' | 'exportLaunch' | 'details' | 'lifecycle'
+  | 'view' | 'tryInject' | 'createInput' | 'createTransform' | 'record' | 'monitorOn' | 'monitorOff' | 'typeDef' | 'flowOnly'
   | 'qosDetails' | 'whyNotDelivered'
   | 'addTopic' | 'launchNode' | 'relayout' | 'fit';
 
@@ -39,15 +39,16 @@ export interface MenuContext {
   topicTypes?: readonly string[];
 }
 
-/** owned = launcher target (mine / dependency), dummy = persistent dummy, job = inject job. */
-export type MenuRole = 'owned' | 'dummy' | 'job' | 'external';
+/** owned = launcher target (mine / dependency), dummy = persistent dummy, transform = 変換ノード, job = inject job. */
+export type MenuRole = 'owned' | 'dummy' | 'transform' | 'job' | 'external';
 
 export function menuRole(node: GraphNode | undefined, targets: readonly Target[]): MenuRole {
   if (!node) return 'external';
   if (node.job_id) return 'job';
   const target = node.target_id ? targets.find((tg) => tg.id === node.target_id) : undefined;
   if (!target) return 'external';
-  return target.kind === 'dummy' ? 'dummy' : 'owned';
+  if (target.kind === 'dummy' || target.kind === 'transform') return target.kind;
+  return 'owned';
 }
 
 const item = (action: MenuAction, enabled = true, reason?: string): MenuItem => ({
@@ -66,7 +67,7 @@ function controlItems(node: GraphNode | undefined, targets: readonly Target[]): 
 }
 
 function buildItem(target: Target | undefined, buildable: ReadonlySet<string>): MenuItem {
-  const pkg = target && target.kind !== 'dummy' ? (target.spec as TargetSpec).package : null;
+  const pkg = target && (target.kind === 'run' || target.kind === 'launch') ? (target.spec as TargetSpec).package : null;
   return item('buildRestart', pkg !== null && buildable.has(pkg), t('menu.reason.notWorkspace'));
 }
 
@@ -85,6 +86,9 @@ function baseNodeItems(ctx: MenuContext): MenuItem[] {
   }
   if (role === 'dummy') {
     return [...controls, item('pause'), item('resume'), item('editDummy'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
+  }
+  if (role === 'transform') {
+    return [...controls, item('editTransform'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
   }
   if (role === 'job') {
     const job = ctx.jobs.find((j) => j.id === node?.job_id);
@@ -108,6 +112,7 @@ function topicItems(ctx: MenuContext): MenuItem[] {
     item('view'),
     item('tryInject'),
     item('createInput'),
+    item('createTransform'),
     item('record'),
     monitored ? item('monitorOff', ctx.traffic !== undefined) : item('monitorOn'),
     item('typeDef', singleType, t('menu.reason.typeUnknown')),

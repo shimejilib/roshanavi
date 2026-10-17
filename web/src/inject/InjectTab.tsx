@@ -110,6 +110,9 @@ export function InjectTab() {
         <button type="button" className="primary" onClick={() => openDialog({ kind: 'createInput', topic: form.topic || undefined, type: form.type || undefined })} data-testid="inject-create-input">
           {t('input.create')}
         </button>
+        <button type="button" onClick={() => openDialog({ kind: 'createTransform', topic: form.topic || undefined, type: form.type || undefined })} data-testid="inject-create-transform">
+          {t('transform.create')}
+        </button>
       </div>
       <form
         className="inject-form"

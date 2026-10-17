@@ -152,7 +152,9 @@ def test_repo_demo_project_is_valid():
         pytest.skip('examples/ is not mounted in this environment')
     spec = parse_project(open(path).read())
     roles = {t.id: (t.role, t.autostart) for t in spec.targets}
-    assert roles == {'talker': ('mine', True), 'listener': ('dependency', True)}
+    samples = {name: ('mine', False) for name in
+               ('image_filter', 'blob_detector', 'audio_level', 'state_machine')}
+    assert roles == {'talker': ('mine', True), 'listener': ('dependency', True), **samples}
 
 
 def test_autosave_is_off_for_a_project_that_failed_to_load(tmp_path, data_dir):

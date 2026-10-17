@@ -19,7 +19,14 @@ export function format(template: string, params: Params = {}): string {
 
 export function t(key: MessageKey, params?: Params): string {
   const table = locales[current] ?? ja;
-  return format(table[key] ?? ja[key], params);
+  // A key built at runtime may have no message; show the key rather than throwing (a throw during
+  // render blanks the whole screen).
+  const template: string | undefined = table[key] ?? ja[key];
+  if (template === undefined) {
+    console.error(`missing UI message: ${String(key)}`);
+    return String(key);
+  }
+  return format(template, params);
 }
 
 /** Lookup for keys built at runtime (e.g. `error.${code}`); falls back to `fallback`. */

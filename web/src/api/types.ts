@@ -2,8 +2,9 @@
 
 import type { SubscriberTrace, TracingStatus } from './tracingTypes';
 import type { MediaOptions, RecordingStatus } from './mediaTypes';
+import type { TransformSpec } from './transformTypes';
 
-export type Role = 'mine' | 'dependency' | 'dummy' | 'other';
+export type Role = 'mine' | 'dependency' | 'dummy' | 'transform' | 'other';
 
 export interface Qos {
   reliability: string;
@@ -272,9 +273,9 @@ export interface TargetNode {
 
 export interface Target {
   id: string;
-  kind: 'run' | 'launch' | 'dummy';
-  role: 'mine' | 'dependency' | 'dummy';
-  spec: TargetSpec | DummySpec;
+  kind: 'run' | 'launch' | 'dummy' | 'transform';
+  role: 'mine' | 'dependency' | 'dummy' | 'transform';
+  spec: TargetSpec | DummySpec | TransformSpec;
   status: TargetStatus;
   exit_code: number | null;
   problem: string | null;
@@ -333,7 +334,13 @@ export interface ProjectState {
   save_error?: string | null;
   /** False while a project file that failed to load is protected from overwriting. */
   autosave?: boolean;
-  project: { version: number; targets?: TargetSpec[]; dummies?: DummySpec[]; watch_topics?: string[] };
+  project: {
+    version: number;
+    targets?: TargetSpec[];
+    dummies?: DummySpec[];
+    transforms?: TransformSpec[];
+    watch_topics?: string[];
+  };
 }
 
 export interface ExportResult {

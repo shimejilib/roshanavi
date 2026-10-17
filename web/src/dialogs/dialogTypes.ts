@@ -3,6 +3,9 @@
 export type DialogRequest =
   /** Create a persistent input (dummy) node; with `dummyId`, edit that one. */
   | { kind: 'createInput'; topic?: string; type?: string; dummyId?: string }
+  /** Create a transform node (変換ノード) from `topic`; with `transformId`, edit that one. */
+  | { kind: 'createTransform'; topic?: string; type?: string; transformId?: string }
+  | { kind: 'projects' }
   | { kind: 'params'; nodeId: string }
   | { kind: 'interface'; type: string }
   | { kind: 'edge'; topic: string; node: string; dir: 'pub' | 'sub' }

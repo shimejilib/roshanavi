@@ -30,12 +30,15 @@ ROS 2 システムの「通信の可視化」「ダミー入力の注入」「�
 - 利用者のノードと同じ ROS 環境で動く必要があるため、**本番の形はネイティブ実行** (利用者のワークスペースに入れて colcon build、将来は apt)。
 - Docker は開発・CI・デモ用に位置づける。Docker で使う場合は、利用者のワークスペースをマウントする。
 
-### 同梱サンプルノード (`roshanavi_examples`)
-チュートリアル、デモ、自動テストの対象を兼ねる。
-- `image_filter`: Image → グレースケール + エッジの Image (stamp 引き継ぎあり/なしをパラメータで切替 → latency の両モード検証用)
-- `blob_detector`: Image → 検出結果 (配列長・座標の判定用)
-- `audio_level`: 音声 → 音量 (dB) と無音検出
-- `state_machine`: `/cmd` (start/stop/fault) → `/state` (IDLE/RUNNING/ERROR) (guards・状態遷移の判定用)
+### 同梱サンプルノード (`roshanavi_examples`, P5)
+チュートリアル、デモ、自動テストの対象を兼ねる。教材なので、各ファイルの先頭に「何を受けて何を出すか・パラメータ・実行例」を書き、本文もコメントを多めにする。詳細は §4.19。
+- `image_filter` (C++): Image → グレースケール + エッジの Image (stamp 引き継ぎあり/なしをパラメータ `keep_stamp` で切替 → latency の両モード検証用。`process_delay_ms` で遅い処理を再現)
+- `blob_detector` (C++): Image → `vision_msgs/Detection2DArray` (明るい塊の bbox とスコア。配列長・座標の判定用)
+- `audio_level` (Python): 音声 (AudioDataStamped / Int16MultiArray) → 音量 (dB) と無音フラグ (ヒステリシス付き)
+- `state_machine` (Python): `/cmd` (start/stop/fault/reset) → `/state` (IDLE/RUNNING/ERROR) (guards・状態遷移の判定用)
+
+### 変換ノード (コードを書かずに作る、P5)
+トピックを受けて、式で変換して別のトピックに送るノードを GUI で作る (未実装ノードの代役・型や名前の違うトピックのつなぎ・遅延や間引きを入れた意地悪テスト)。詳細は §4.18。
 
 ## 1. ゴールと非ゴール
 
@@ -68,10 +71,14 @@ roshanavi/
                                # (C++ の計測ノードのビルドに要る ament_cmake / rosidl / rclcpp / gtest は ros-base に含まれる)
   docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
   examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, §4.14)
+  examples/perception_demo/    # 認識パイプラインのデモ (動画 → image_filter → blob_detector、音声 → audio_level, §4.14)
   docs/DESIGN.md
   ros2_ws/src/roshanavi_msgs/  # ament_cmake: 計測ノードとの内部 msg (ProbeConfig / ProbeStats ほか, §4.3.1)
   ros2_ws/src/roshanavi_probe/ # ament_cmake (C++17, rclcpp): 計測ノード (§4.3.1)
   ros2_ws/src/roshanavi_test_nodes/ # ament_cmake: テスト・ベンチマーク用の C++ ノード (rate_talker / slow_listener, §4.3.2)
+  ros2_ws/src/roshanavi_examples/   # ament_cmake + ament_cmake_python: 同梱サンプルノード (§4.19)
+                               # src/ (C++: image_filter / blob_detector / image_ops)、roshanavi_examples/ (Python:
+                               # audio_level / state_machine)、launch/ (ノードごと)、test/test_image_ops.cpp (gtest)
     include/roshanavi_probe/   # stats.hpp (純粋な統計, ROS 非依存) / probe_node.hpp
     src/                       # stats.cpp / stats_msg.cpp (msg への変換) / probe_node.cpp / main.cpp
     test/test_stats.cpp        # gtest (統計の計算)
@@ -89,7 +96,13 @@ roshanavi/
       tracing/         # 詳細計測モード (§4.3.2): config / lttng / reader / model / worker / service / merge
       server_tracing.py # /api/tracing
       msgutil.py       # 型解決 / テンプレ生成 / dict⇄msg / 表示用切り詰め
-      expr.py          # AST ホワイトリスト式評価器 (eval 禁止)
+      expr.py          # AST ホワイトリスト式評価器 (eval 禁止)。expr_base.py (エラー・上限) / expr_funcs.py (関数)
+      msg_view.py      # 変換ノードの式から読む、受信メッセージの読み取り専用ビュー (§4.5)
+      transform/       # 変換ノード (§4.18): compute (式) / pipeline (間引き・遅延・結合) / runner (ROS) / preview
+      transform_node.py # エントリ: `ros2 run roshanavi transform --config <yaml>`
+      server_transforms.py # 変換ノード・試算・プロジェクトの切り替えの REST
+      sample_media.py  # パーセプションデモ用のサンプル動画・音声を ffmpeg で生成 (初回のみ)
+      heavy_types.py   # 大きい型 (画像・点群) の一覧
       injector.py      # 注入ジョブ管理
       echo.py          # オンデマンド購読 → 最新メッセージ
       rates.py         # 地図のエッジ用の送信元ごとの Hz (純関数, §4.3)
@@ -208,6 +221,8 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 ### 4.3.2 詳細計測モード (トレース計測, P4.7)
 受信側のノードの **中で** 実際に受け取った数・処理した数・1 回の処理にかかった時間を、ROS 2 に組み込まれたトレースポイント (ros2_tracing / LTTng) で測る。既定はオフで、トラフィックタブの「詳細計測モード」で有効にした間だけ記録する。
 
+**ファイル記述子 (fd) の扱い**: `reader.read_chunk` は終了時に bt2 のイテレータ (グラフが自分自身を参照する循環) を解放し、チャンクのファイルを閉じる (`metadata` は babeltrace2 2.0.x が閉じないので残りの fd を明示的に閉じる)。これを怠ると 5 秒ごとに 1 チャンクぶん (CPU 数+1 本) の fd が漏れ、約 3 分で `RLIMIT_NOFILE` (1024) に達して worker が `Too many open files` で落ちる。`lttng` CLI の `OSError` は `LttngError` に変換し、worker の再起動時は終了途中の `lttng-sessiond` を待って 2 つ目を作らない。サーバー自身の fd が `RLIMIT_NOFILE` の 70% を超えると警告ログを出す (`fd_guard.py`)。サーバー (ROS ノードとして LTTng-UST に登録される) 側の `(deleted)` な `shm-ust-consumer-*` などは CPU 数に比例する LTTng-UST 自身の固定分で、増え続けない。回帰テストは `test_tracing_fds.py`。
+
 **構成 (どの層のツールか)**
 ```
 [対象ノード]  アプリのコード
@@ -291,6 +306,12 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 - 変数: `i` (送信回数, 0 始まり), `t` (ジョブ開始からの秒), `now` (epoch 秒)。
 - 関数: `sin cos tan abs min max round floor ceil sqrt random uniform(a,b) randint(a,b) str int float`、定数 `pi e`。
 - 属性アクセス・添字・内包表記・lambda は拒否。べき指数や文字列長に上限 (DoS 防止)。
+- **入力メッセージのフィールド参照 (P5, 変換ノード用)**: `Expression(source, message_names=("msg", ...))` で作った式だけが、その名前の入力メッセージのフィールドを `msg.linear.x`・`msg.data[0]` の形で読める。
+  - 静的な検査: `ast.Attribute` / `ast.Subscript` は、連なりの根元が `message_names` の名前 (`ast.Name`) のときだけ許可。フィールド名は `[A-Za-z][A-Za-z0-9_]*` (`_` 始まり = `__class__` などは拒否)。添字は整数の式だけ (スライス・タプル・文字列の定数は拒否)。名前は `[a-z][a-z0-9_]{0,31}` で、変数・定数・関数名とは重ならない。`message_names` が空 (注入のペイロード) なら従来どおり属性・添字はすべて拒否。
+  - 実行時: 受信したメッセージは `message_to_ordereddict` で素のデータ (dict / list / スカラー) にしてから `MsgView` (`msg_view.py`) で包む。`.name` は `view.field(name)` = 辞書の検索、`[i]` は `view.item(i)` = 整数添字 (bool は不可、|i| ≤ 1,000,000、範囲外は `index_range`)。`getattr` は一切使わないので、Python のオブジェクトの属性には届かない。土台が `MsgView` でなければ `not_struct`。ビューは変更不可・反復不可・ハッシュ不可。ビュー同士・数値との四則演算は `whole_message` で拒否。
+  - 文字列化 (`str(msg)`・埋め込み) は JSON で、長さの上限 (10,000 文字) を超えると拒否。テンプレートの `${...}` 全体がビューなら素の dict / list に戻して値にする (例: `header: ${msg.header}`)。
+  - 追加した関数: `upper lower strip replace` (文字列。`replace` は結果の長さを先に計算して上限を超えるなら拒否)、`len` (文字列・配列)、`clamp(x, lo, hi)`、`now_stamp()` (いまの時刻の `{sec, nanosec}`)。`int()` / `float()` はビューを拒否。
+  - エラーには `code` (`syntax` / `unknown_name` / `unknown_function` / `not_allowed` / `bad_field` / `field_base` / `no_field` / `not_struct` / `not_array` / `bad_index` / `index_range` / `whole_message` / `not_string` / `not_number` / `bad_argument` / `too_long` / `too_large` / `too_deep` / `eval_failed` / `no_message`) と `params` を付け、UI が平易な日本語にする (`transform/previewText.ts`)。
 - メッセージ dict 中の文字列 `"${...}"` を式として評価。全体が `${...}` 一つなら評価結果の型をそのまま、文字列中に埋め込みなら文字列置換。
 
 ### 4.6 injector
@@ -357,7 +378,10 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 | POST | `/api/project/save`, `/api/project/reload` | 現在の内容を保存 / ファイルから読み直す |
 | POST / PUT | `/api/dummies[?start=true]`, `/api/dummies/{id}` | 恒久ダミー (入力ノード) の登録 / 更新 (`DummySpec`)。`start=true` で登録と同時に起動 |
 | POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
-| POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` |
+| POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` (P5: 変換ノードも) |
+| POST / PUT | `/api/transforms[?start=true]`, `/api/transforms/{id}` | 変換ノードの登録 / 更新 (`TransformSpec`, §4.18) |
+| POST | `/api/transforms/preview` | 変換の試算 `{spec, samples}` → `{ok, passed, output, errors[]}` (常に 200) |
+| GET / POST | `/api/projects`, `/api/projects/open` | 切り替えられるプロジェクトの一覧 / 一覧の `id` を開く (§4.10) |
 | WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |
 | GET | `/api/media/types?topic=` | 対応型 `[{type, kind}]`。topic を付けると端点の型 (`endpoints`) と自動判定 (`detected`, `detected_supported`) |
 | WS | `/ws/capture` | ブラウザ入力。最初にテキストで開始メッセージ、続けてバイナリフレーム (§4.11) |
@@ -447,6 +471,13 @@ dummies:
   rate_hz: 5
   qos: {reliability: reliable, durability: volatile, depth: 10}
   autostart: true
+transforms:               # 変換ノード (P5, §4.18)。id は targets / dummies と合わせて一意
+- id: chatter_upper
+  name: chatter_upper
+  inputs: [{topic: /chatter, type: std_msgs/msg/String, alias: msg}]
+  output: {topic: /chatter_upper, type: std_msgs/msg/String}
+  mapping: {data: '${upper(msg.data)}'}
+  autostart: true
 watch_topics: [/chat]
 ```
 - pydantic のスキーマで検証する。未知のキーは拒否し、エラーはパス付き (`targets.0.colour: extra fields not permitted`、YAML の構文エラーは行・列付き)。
@@ -461,6 +492,8 @@ watch_topics: [/chat]
 - Launcher が `kind: dummy` のターゲットとして管理する (役割 `dummy`、ノード名を `__node:=` で渡すので対応づけは exact)。設定 YAML (`{dummy: <DummySpec>, data_dir}`) はサーバーの一時ディレクトリに書く。
 - 注入タブの実行中ジョブから「常駐ノードにする」で、同じペイロード・モード・レート・QoS の恒久ダミーを作って起動し、元のジョブは止める (`POST /api/inject/{id}/persist`)。
 - **書き出し**: ワークスペース内の指定ディレクトリ (realpath で包含を検査、なければ作る) に `<id>.yaml` と `roshanavi_dummies.launch.py` を書く。`ros2 launch <dir>/roshanavi_dummies.launch.py` で、roshanavi のサーバー / UI なしで動く。ただし roshanavi パッケージのインストールは必要 (各ノードが `roshanavi dummy` を実行するため。生成ファイルの先頭に明記)。ノード名・ID は検証済みの値だけを `repr()` で埋め込む。
+
+- **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。サーバーを再起動すると `--project` のファイルに戻る。
 
 ### 4.10.1 恒久ダミーの一時停止
 - dummy ノードは bool パラメータ `paused` を宣言する。true にすると注入ジョブを一時停止する (ノードは動き続ける)。地図の「一時停止・再開」はこのパラメータを §4.13 の API で変える (`ros2 param set` でも同じ)。
@@ -532,7 +565,8 @@ watch_topics: [/chat]
 **型の定義 (`interfaces.py`)** — `rosidl_runtime_py.get_interface_path` でインストール済みの `.msg/.srv/.action` を読み、入れ子の型をタブで字下げして展開する (`ros2 interface show` 相当。入れ子のコメントは省く。深さ 6・2000 行まで、循環はたどらない)。名前は `pkg/(msg|srv|action)/Name` のみ。
 
 ### 4.14 デモ構成 (P4.5a)
-- `examples/demo_project/roshanavi.yaml`: `talker` (demo_nodes_cpp, role mine, autostart, ノード名 talker) と `listener` (demo_nodes_cpp, role dependency, autostart)。compose の `lab` は `--project-template` でこれを指定し、`/data/roshanavi.yaml` が無いときだけコピーする。デモ開始時点で talker / listener を地図から停止・再起動でき、ログも見られる。(P5 以降: サンプルノードの起動設定を autostart off で足す)
+- `examples/demo_project/roshanavi.yaml`: `talker` (demo_nodes_cpp, role mine, autostart, ノード名 talker) と `listener` (demo_nodes_cpp, role dependency, autostart)。compose の `lab` は `--project-template` でこれを指定し、`/data/roshanavi.yaml` が無いときだけコピーする。デモ開始時点で talker / listener を地図から停止・再起動でき、ログも見られる。(P5) サンプルノード 4 つの起動設定を autostart なしで足した (既存の `./data/roshanavi.yaml` は上書きしないので、すでにあるラボには入らない。プロジェクトの切り替えでサンプルを開くと入る)。
+- (P5) `examples/perception_demo/roshanavi.yaml`: 入力ノード `dummy_camera` (`samples/blobs.mp4` → `/camera/image`、media / loop) → `image_filter` (`/camera/gray`, `/camera/edges`) → `blob_detector` (`/camera/detections`) → 変換ノード `blob_count` (`/camera/blob_count`, `std_msgs/Int32` = `len(msg.detections)`)、入力ノード `dummy_microphone` (`samples/tone.wav` → `/audio`, AudioDataStamped) → `audio_level` (`/audio/level_db`, `/audio/silence`)。すべて autostart。サンプルのファイルはリポジトリに入れず、サーバーの起動時に ffmpeg で `<data_dir>/samples/` に作る (`sample_media.py`、無いものだけ。`--no-sample-media` で無効): `blobs.mp4` (10 秒・320x240・15 fps。ffmpeg の `testsrc` を 25% に暗くし、その上を明るい円が 2 つ動く。`geq` で描く) と `tone.wav` (12 秒・16 kHz mono。440 Hz 2 秒 / 無音 2 秒の繰り返し)。一時ファイルに書いてから rename。
 - `demo` コンテナは「roshanavi が起動していないノード」の例: `external_talker` が `/external/chatter` に送り、`external_listener` が受ける。`/chatter` とは混ざらず、地図に「操作できるノード」と「見るだけのノード (停止は無効)」が並ぶ。
 - (P4.5b) `demo` コンテナは外部の lifecycle ノード `lc_talker` (unconfigured で起動) も動かす (§4.15)。launch の取り込みのデモ用に `roshanavi/demo_system.launch.py` を同梱する (§4.16)。
 
@@ -580,6 +614,61 @@ watch_topics: [/chat]
 - **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
 - **受信者ごとの理論値** (`sub_rates.py`, 純関数): 受信側のノードの中で実際に受け取った量は外から測れない (§6.1)。受信者の値は、QoS が合う送信者が送っている量 = 届くはずの量: 全送信者が合う → トピック全体の実測、一部だけ → 合う送信者の値 (rates.py の分割) の和 (分けられなければ null)、1 つも合わない → 0 と `delivered: false`。計測ノードの経路 (§4.3.1) では、全送信者が合うときも送信者ごとの実測値の和を使う (止まった送信者の分がすぐ消える)。同じノードが同じトピックに複数の publisher を持っていても 1 回だけ数える。`basis` は `theoretical` / `not_delivered`。詳細計測モード (§4.3.2) でトレースが対象のノードを測れていれば `measured` に置き換わる (理論値は `hz_expected` に残る)。
 - **遅いトピック**: 計算期間 (1 / 5 / 10 秒) より遅いトピックは、期間内のメッセージが 2 個未満になり 0 Hz と誤読される。生きている (`stale` でない) のに 2 個未満なら最長の 10 秒で計算し直し `rate_note: extended`、`rate_window_sec: 10` を付ける。10 秒でも 2 個未満なら `rate_note: too_few` (hz は 0、UI は「—」)。
+
+### 4.18 変換ノード (P5)
+入力ノード (ダミー) は「一方的に送る」だけだった。変換ノードは **トピックを受信し、変換して別のトピックに送る** ノードを、コードを書かずに GUI で作る。ROS 1 の `topic_tools transform` (Python 式で変換) に相当する機能を、安全な式評価 (§4.5) と GUI で提供する位置づけ。
+
+用途:
+- **未実装・未到着のノードの代役 (モック)**: パイプラインの途中のノードがまだ無いとき、それらしい出力を返す代役を置いて、自分のノードを先に試す。
+- **つなぎ合わせ**: 名前や型が合わないトピック同士を変換してつなぐ。
+- **意地悪テスト**: 遅延・間引き・取りこぼしを入れて、下流のノードの耐性を確かめる。
+
+| 機能 | 設定 (`TransformSpec`) | 例 |
+|---|---|---|
+| フィールドの対応づけ (式) | `mapping`: 出力の型のテンプレートに `${...}` を書いたもの | `data: ${upper(msg.data)}`、`linear: {x: ${msg.linear.x * 0.5}}` |
+| 条件で送る / 捨てる | `condition` (式。偽なら送らない) | `msg.data != ''` |
+| 型の変換 | `output.type` と `mapping` | `std_msgs/String` → `std_msgs/Int32` (`data: ${int(msg.data)}`) |
+| そのまま中継 | `mode: relay` (型も中身もそのまま。直列化したまま中継) | 名前だけ変える。画像・点群も可 |
+| 入力をそのまま送る | `mode: map` で `mapping` なし (入力 1 つ、同じ型) | 条件・遅延だけ足す |
+| 遅延 | `delay: {min_ms, max_ms?}` (一定、または範囲の一様乱数) | `{min_ms: 100, max_ms: 300}` |
+| 間引き | `throttle_hz` (最大 N Hz) | `5` |
+| 取りこぼし | `drop_ratio` (0〜1) | `0.1` |
+| 複数入力 | `inputs` (最大 8) + `alias` + `trigger` (`any` か入力の別名) | `msg1.data + msg2.data` |
+
+**仕様の検査** (`launcher/schema.py TransformSpec`, pydantic): 別名の既定は入力 1 つなら `msg`、複数なら `msg1`, `msg2` …。別名は一意で、`i t now pi e` は使えない。`relay` は入力 1 つ・`mapping` / `condition` なし・型を変えない (出力の型は省略可で入力の型)。大きい型 (`heavy_types.py`: Image / CompressedImage / PointCloud2 / PointCloud) は `relay` だけ (フィールドの式は使わない。中継・遅延・間引き・取りこぼしのみ)。複数入力は `mapping` 必須。`trigger` は `any` か入力の別名。ワークスペースに依存する検査 (`launcher/command.py validate_transform`): ノード名・名前空間、トピックは絶対名、**出力トピックが入力のどれかと同じなら拒否** (自分の出力を受けて無限に回るため)。
+
+**実体** (`transform_node.py` + `transform/`): `ros2 run roshanavi transform --config <yaml> --ros-args -r __node:=<name>` (設定 YAML は `{transform: <TransformSpec>}`)。恒久ダミー (§4.10) と同じく `RosRuntime` の上で動く独立したノード。
+- 流れ (`transform/pipeline.py`、rclpy なしでテスト): 受信 → (複数入力) 最新値の結合 → 取りこぼし → 条件と対応づけ (map) → 間引き → 遅延 → 送信。取りこぼしを先にして捨てる分の計算を省く。間引きは条件の後 (捨てたメッセージで枠を使わない)。間引きの間隔は 5% の余裕を持たせる (10 Hz を 10 Hz に間引くとき、揺らぎで半分になるのを防ぐ)。遅延は 1 本のスレッドが期限順に送る (`DelayQueue`、待ちは最大 10,000 件で、溢れたら `overflow` に数えて捨てる)。範囲の遅延では後のメッセージが追い越すことがある (実際のネットワークと同じ)。
+- 結合 (`Joiner`): 入力ごとに最新の値を持つ。全部の入力が 1 回以上届くまでは送らない (`waiting`)。`trigger: any` はどれかの更新で、別名を指定すればその入力の受信時だけ計算する。
+- `relay`: `raw=True` で購読し、受け取ったバイト列をそのまま `publish` する (デシリアライズしない。画像も軽い)。
+- `map`: 受信したメッセージを `MsgView` にし、`transform/compute.py Computer` (条件と対応づけを一度だけコンパイル) で出力の素データを作り、`msgutil.build` で出力のメッセージにする。変数は `i` (受信回数、0 始まり)、`t` (起動からの秒)、`now`。式のコンパイルエラーは起動時に終了コード 2 (フィールドの場所付き)。実行時のエラー (範囲外の添字など) はそのメッセージだけ捨てて `errors` に数え、ログは 10 秒に 1 回。
+- QoS: 入力は best effort (reliable と best effort のどちらの送信者からも受けられる)、出力は `output.qos` (既定 reliable / volatile / 10)。
+- 10 秒ごとに数 (受信・送信・条件で捨てた・取りこぼし・間引き・エラー) をログに出す (変わったときだけ)。
+
+**管理**: プロジェクトファイルの `transforms:` (ダミーの `kind` を増やすのではなく別の一覧にした。`DummySpec` は注入の設定で、入力・出力・式の形がまったく違うため)。Launcher の起動リストで ID を共有し (targets / dummies / transforms で一意)、`kind: transform`、役割 `transform` (地図はダミーと同系統の紫、凡例「変換ノード」、ノード一覧の役割「変換」)。起動・停止・再起動・ログ・自動起動・自動再起動・`launch` への書き出しはダミーと同じ (`POST /api/dummies/export` は変換ノードも書き出し、launch ファイルの Node は `executable='transform'`)。API: `POST /api/transforms` (`?start=true`)、`PUT /api/transforms/{id}`。削除・起動・停止・ログは `/api/targets/{id}`。
+
+**試算 (プレビュー)** (`transform/preview.py`、`POST /api/transforms/preview {spec, samples}`): ノードと同じ `Computer` と `msgutil.build` で、送らずに計算だけする。`samples` は入力の別名ごとの素の dict (UI が `/ws/echo` で受けた最新のメッセージ。届いていなければ省略し、サーバーが入力の型の既定値で代わりに計算して `templated` に別名を返す)。常に 200 で `{ok, passed, output, errors[{path, code, message, params}], templated, relay}` を返す (仕様の検査エラーも `spec_invalid` として同じ形)。`passed: false` かつエラーなしは「条件に合わないので送らない」。出力の型に合わない値は `build_invalid_value` などを、メッセージの先頭のフィールドの場所に付ける。サンプルは最大 8 個、深さ 32 まで。エコーは長い配列を先頭 32 個に切り詰めた形 (`{_truncated, length, head}`) で送るため、32 個を超える配列のフィールドを使う式はプレビューと実際の結果が違うことがある (既知の制限)。
+
+**詳細計測モード (§4.3.2) での見え方**: 変換ノードは rclpy なので、トレースで測れるのは **受信数だけ** (処理数・処理時間は「未対応」、理由 `rclpy`)。送信は C++ 計測ノード (§4.3.1) で送信ノードごとに実測される。編集画面にもこの注意を書く。
+- 制約: 式は 1 メッセージあたり Python で評価するので、数百 Hz を超える入力や大きい配列のフィールド計算には向かない (大きい型は relay のみ)。
+
+### 4.19 同梱サンプルノード (`roshanavi_examples`, P5)
+チュートリアル、デモ、自動テストの対象を兼ねる。初めて ROS を触る人が読む前提で、各ファイルの先頭に「何を受けて何を出すか・パラメータ・実行例・なぜその言語か」を書き、処理の中身にもコメントを付ける。各ノードに `launch/<name>.launch.py` (引数でトピックとパラメータを変える) がある。
+
+**言語の分け方**: 画像の 2 つは C++ (rclcpp)、ほかの 2 つは Python (rclpy)。詳細計測モード (§4.3.2) で、C++ のノードは受信・処理・処理時間まで、Python のノードは受信数だけが測れる。その違いを同じデモの中で見比べられるようにわざと混ぜた。画像処理は C++ の方が自然 (1 画素ずつのループ) で、状態遷移や音量の計算は Python の方が短く読みやすい。
+
+| ノード | 言語 | 受信 → 送信 | パラメータ | 詳細計測モードで測れるもの |
+|---|---|---|---|---|
+| `image_filter` | C++ | `image` (Image: rgb8 / bgr8 / rgba8 / bgra8 / mono8) → `image_gray`、`image_edges` (どちらも mono8、同じ大きさ) | `keep_stamp` (bool, true: 入力の `header.stamp` を引き継ぐ / false: いまの時刻)、`process_delay_ms` (int, 遅い処理の再現) | 受信・処理・処理時間。`process_delay_ms` を大きくすると「処理が追いついていません」 |
+| `blob_detector` | C++ | `image` → `detections` (`vision_msgs/Detection2DArray`。bbox の中心・大きさ、`class_id: blob`、`score` = 平均の明るさ / 255、header は入力のまま。見つからなくても空の配列を毎回送る) | `threshold` (0〜255, 200)、`min_area` (30)、`max_detections` (20) | 受信・処理・処理時間 |
+| `audio_level` | Python | `audio` (`input_type: stamped` → `audio_common_msgs/AudioDataStamped` の S16LE、`int16` → `std_msgs/Int16MultiArray`) → `level_db` (Float32、RMS の dBFS、無音は -120)、`silence` (Bool) | `input_type`、`silence_below_db` (-45)、`sound_above_db` (-35): 2 つのしきい値の間では状態を変えない (ヒステリシス) | 受信数だけ |
+| `state_machine` | Python | `cmd` (String: start / stop / fault / reset、大文字小文字は無視) → `state` (String: IDLE / RUNNING / ERROR) | `initial_state` (IDLE)、`publish_period_sec` (1.0, 0 で変化時だけ) | 受信数だけ |
+
+- 画像処理は OpenCV を使わず `include/roshanavi_examples/image_ops.hpp` の純粋な関数 (グレースケール: 整数の BT.601 の重み、エッジ: 3x3 Sobel の |gx|+|gy| を 255 で頭打ち・端は 0、塊: 4 近傍の塗りつぶし (再帰しない)、面積の大きい順) にまとめ、gtest (`test_image_ops`) で ROS なしにテストする。ノードは ROS のメッセージとの変換だけ。パラメータは毎回読むので、実行中の変更 (地図のパラメータ・`ros2 param set`) がすぐ効く。壊れた画像 (大きさが足りない・未対応の encoding) は 5 秒に 1 回の警告で捨てる。
+- QoS: 購読は best effort (SensorDataQoS。どの送信者からも受けられる)、送信は reliable (どの購読者でも受けられる)。`state_machine` の `state` は transient local (後から購読したノードにもいまの状態が届く)。
+- Python のノードは計算の部分 (`level_db`・`SilenceDetector`・`StateMachine`) を ROS なしのクラス・関数にし、pytest で直接テストする。ROS の import は `main()` の中。
+- `audio_common_msgs` は `input_type: stamped` のときだけ必要 (package.xml は exec_depend)。`vision_msgs` は新しい依存 (`ros-jazzy-vision-msgs`)。
+- 起動設定の例: `examples/demo_project` (autostart なし)、`examples/perception_demo` (§4.14)。
 
 ## 5. シナリオ (G4)
 
@@ -820,10 +909,18 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - Hz の後ろの「(受信時刻で概算)」は、止まったトピック (hz 0 / `stale`) には付けない (`timing.hzBasisNote`)。
 - ツールバーに計測の経路 (C++ 計測ノードの CPU、または Python で測っている理由) を出す (`data-testid="traffic-measurement"`)。スクリーンショット: `traffic-endpoints.png`, `traffic-by-node.png` (`e2e/smoke.spec.ts`)。
 
+### 6.8 実装メモ (P5: 変換ノードの編集画面・プロジェクトの切り替え)
+- 「＋ 変換ノードを作る」(地図のツールバーと注入タブ、「＋ 入力ノードを作る」の隣)、トピックの右クリック「このトピックを受けて変換するノードを作る」(入力にそのトピックと型が入る)、変換ノードの右クリック「変換の内容を変更」「launch に書き出し」。役割 `transform` のメニューは起動・停止・再起動・ログ・パラメータ・I/O だけを見る (一時停止とビルドは無い)。
+- 編集画面 (`transform/CreateTransformDialog.tsx`): ノード名、入力 (トピック・型・式での名前。「＋ 入力を足す」で最大 8、複数なら「送るタイミング」)、変換のしかた (式で作る / そのまま中継。大きい型は中継だけで理由を出す)、出力トピックと型、出力メッセージ (YAML。出力の型のテンプレートから作り、入力に同じフィールドがあれば `${msg.<path>}` で埋める = 最初は「そのまま写す」対応づけ。YAML を触った後は上書きしない)、送る条件、**プレビュー**、遅延・間引き・取りこぼし、自動起動。
+- プレビュー (`TransformPreview.tsx`): 左に入力の最新メッセージ (`/ws/echo` を入力ごとに購読、`useLatestMessages.ts`)、右にサーバーの試算 (`useTransformPreview.ts`、300 ms のデバウンス)。届いていない入力は「型の既定値で計算しています」。式のエラーは出力のフィールドごとに平易な日本語で出す (`previewText.ts` がエラーの `code` と `params` を訳す。知らない code はサーバーの英文を添える)。フォームの段階で作れない (トピック名が不正など) ときはその理由を出す。純ロジック `transformForm.ts` (既定値・仕様の組み立てと検査・編集時の復元・入力を増減したときの別名の振り直し)。
+- ⚙ 設定メニュー (ランチャーのプロジェクト行) の「プロジェクトを切り替える」(`transform/ProjectsDialog.tsx`): サンプルと保存済みのプロジェクトを並べ、確認 (いま動いているものを止める旨) の後に開く。サンプルにはコピー先のパスを示す。
+- 画面の保護: `lib/ErrorBoundary.tsx` をアプリ全体・各タブ・地図・右ペイン・ダイアログに置き、描画中の例外は日本語の「エラーが起きました」パネル (エラー内容・再読み込み・知らせてほしい旨) に置き換わる。1 か所の不具合で全画面が真っ黒にならない。`t()` は存在しないキーでも例外を投げずキーを表示する (原因: `detail.role.transform` が未定義で変換ノードを選ぶと全画面が消えた。回帰: `e2e/transform-crash.spec.ts`、`i18n.test.ts`)。
+- i18n: `i18n/messagesTransform.ts`。スタイル: `styles-transform.css`。スクリーンショット: `docs/screenshots/transform-editor.png` (`e2e/transform.spec.ts`)、`perception-demo-map.png` (`e2e/perception.spec.ts`)。
+
 ## 7. テスト方針
-- unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
+- unit: expr (許可/拒否ケース, DoS 上限, 入力メッセージのフィールド参照の境界), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
 - 統合 (rclpy, Docker 内): publisher → traffic に Hz が出る / injector periodic → 受信数 / scenario 実行 pass・fail 両方 / API を TestClient で叩く。
-- `docker compose run --rm test` 一発で全テスト。
+- `docker compose run --rm test` 一発で全テスト (C++ の gtest: `test_stats`・`test_image_ops`、pytest)。
 
 ## 8. フェーズ
 1. ✅ P1 バックエンド核 + Docker (graph / traffic / msgutil / expr / injector / echo / server + テスト)
@@ -835,6 +932,6 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 5b. ✅ P4.5b ノード一覧タブ・launch の分解取り込み・lifecycle・送受信ごとのトラフィック (§4.15-4.17, §6.6-6.7)
 5c. ✅ P4.6 C++ 計測ノード (`roshanavi_msgs` / `roshanavi_probe`): 送信ノードごとの実測、Python の計測は代替経路に (§4.3.1)
 5d. ✅ P4.7 詳細計測モード (LTTng のトレース): 受信・処理の実測、処理時間、処理が追いついていない診断 (§4.3.2)
-6. P5 サンプルノード (`roshanavi_examples`)
+6. ✅ P5 サンプルノード (`roshanavi_examples`, §4.19)・変換ノード (§4.18)・パーセプションデモとプロジェクトの切り替え (§4.10, §4.14)
 7. P6 シナリオ (runner / CLI / JUnit / 記録モード / Scenarios タブ)
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF

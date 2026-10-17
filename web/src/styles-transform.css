@@ -1,0 +1,25 @@
+/* Transform node editor (変換ノード) and the project switcher. */
+.transform-form fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; }
+.transform-form legend { font-size: 13px; font-weight: 600; padding: 0 4px; }
+.transform-input-row { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) 7em auto; gap: 6px; align-items: center; }
+.transform-input-row .alias { font-family: var(--mono, monospace); }
+.transform-preview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, #7c3aed 45%, var(--border));
+  border-radius: var(--radius);
+  background: color-mix(in srgb, #7c3aed 5%, transparent);
+}
+.transform-preview h4 { margin: 0 0 6px; font-size: 13px; }
+.transform-preview .echo-body { max-height: 220px; margin: 0; }
+.field-errors { margin: 0 0 6px; padding-left: 1.2em; }
+.project-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.project-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 10px; border: 1px solid var(--border); border-radius: var(--radius); }
+@media (max-width: 720px) {
+  .transform-preview { grid-template-columns: minmax(0, 1fr); }
+  .transform-input-row { grid-template-columns: minmax(0, 1fr); }
+}
+.transform-inputs > button { align-self: flex-start; }
+.transform-form .transform-preview { scroll-margin-top: 12px; }

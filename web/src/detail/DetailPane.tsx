@@ -2,6 +2,7 @@
 // launcher controls, media viewers) add their own sections here.
 
 import { t } from '../i18n';
+import { ErrorBoundary } from '../lib/ErrorBoundary';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
 import { NodeDetail } from './NodeDetail';
@@ -17,11 +18,13 @@ export function DetailPane() {
           ×
         </button>
       )}
-      {!selection && <p className="muted">{t('detail.empty')}</p>}
-      {selection?.kind === 'topic' && (
-        <TopicDetail topic={selection.id} graph={live.graph} entry={live.traffic.get(selection.id)} />
-      )}
-      {selection?.kind === 'node' && <NodeDetail nodeId={selection.id} graph={live.graph} />}
+      <ErrorBoundary scope="detail" resetKey={selection ? `${selection.kind}:${selection.id}` : null}>
+        {!selection && <p className="muted">{t('detail.empty')}</p>}
+        {selection?.kind === 'topic' && (
+          <TopicDetail topic={selection.id} graph={live.graph} entry={live.traffic.get(selection.id)} />
+        )}
+        {selection?.kind === 'node' && <NodeDetail nodeId={selection.id} graph={live.graph} />}
+      </ErrorBoundary>
     </aside>
   );
 }

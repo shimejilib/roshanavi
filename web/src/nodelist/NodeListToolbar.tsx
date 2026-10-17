@@ -4,7 +4,7 @@ import type { ControlAction } from '../graph/nodeControl';
 import { t } from '../i18n';
 import type { RoleFilter, RowFilter, StatusFilter } from './model';
 
-const ROLES: RoleFilter[] = ['all', 'mine', 'dependency', 'dummy', 'other'];
+const ROLES: RoleFilter[] = ['all', 'mine', 'dependency', 'dummy', 'transform', 'other'];
 const STATUSES: StatusFilter[] = ['all', 'running', 'stopped', 'problem'];
 const ACTIONS: ControlAction[] = ['start', 'stop', 'restart'];
 

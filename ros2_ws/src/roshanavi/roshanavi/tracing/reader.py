@@ -5,12 +5,15 @@ tuples (``model.K_*`` first): converting bt2 field objects is the dominant
 cost (~13 µs / event measured), so nothing else is touched.
 """
 
+import gc
+import os
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, Iterator, Tuple
 
 from . import model as m
 
 Event = Tuple[Any, ...]
+_FD_DIR = '/proc/self/fd'
 
 
 @dataclass
@@ -73,31 +76,69 @@ def read_chunk(path: str, info: ChunkInfo) -> Iterator[Event]:
     import bt2
     event_msg = bt2._EventMessageConst
     discarded_msg = bt2._DiscardedEventsMessageConst
-    for msg in bt2.TraceCollectionMessageIterator(path):
-        kind = type(msg)
-        if kind is discarded_msg:
-            info.discarded += msg.count or 0
+    iterator = bt2.TraceCollectionMessageIterator(path)
+    msg = ev = ctx = p = None
+    try:
+        for msg in iterator:
+            kind = type(msg)
+            if kind is discarded_msg:
+                info.discarded += msg.count or 0
+                continue
+            if kind is not event_msg:
+                continue
+            ev = msg.event
+            name = ev.name
+            ts = msg.default_clock_snapshot.value
+            ctx = ev.common_context_field
+            pid = int(ctx['vpid'])
+            p = ev.payload_field
+            info.events += 1
+            if name == 'ros2:rmw_take':
+                yield (m.K_TAKE, ts, pid, int(p['rmw_subscription_handle']))
+            elif name == 'ros2:callback_start':
+                yield (m.K_CB_START, ts, pid, int(ctx['vtid']), int(p['callback']),
+                       bool(p['is_intra_process']))
+            elif name == 'ros2:callback_end':
+                yield (m.K_CB_END, ts, pid, int(ctx['vtid']), int(p['callback']))
+            elif name == 'ros2:rmw_publish':
+                yield (m.K_PUBLISH, ts, pid, int(p['rmw_publisher_handle']))
+            else:
+                known = _INIT.get(name)
+                if known is not None:
+                    procname = str(ctx['procname']) if 'procname' in ctx else ''
+                    yield (known[0], ts, pid, procname, *known[1](p))
+    finally:
+        # The bt2 iterator owns a graph whose listeners point back at it (a reference
+        # cycle), so refcounting never frees it: every CTF stream file of the chunk (one
+        # per CPU, plus the metadata) stayed open - deleted but not closed - until a
+        # random GC pass. Drop the cycle now so the descriptors are closed.
+        msg = ev = ctx = p = iterator = None
+        release_trace_handles(path)
+
+
+def release_trace_handles(path: str) -> int:
+    """Close every descriptor still open on a file of the chunk at ``path``.
+
+    First the unreachable bt2 graphs are collected (that closes the stream files). The
+    ``metadata`` file of babeltrace2 2.0.x is opened by C code that never closes it, so the
+    leftovers are closed here; nothing reads the chunk any more. Returns how many.
+    """
+    gc.collect()
+    prefix = os.path.join(os.path.realpath(path), '')
+    closed = 0
+    try:
+        names = os.listdir(_FD_DIR)
+    except OSError:
+        return 0
+    for name in names:
+        try:
+            target = os.readlink(os.path.join(_FD_DIR, name))
+        except OSError:
             continue
-        if kind is not event_msg:
-            continue
-        ev = msg.event
-        name = ev.name
-        ts = msg.default_clock_snapshot.value
-        ctx = ev.common_context_field
-        pid = int(ctx['vpid'])
-        p = ev.payload_field
-        info.events += 1
-        if name == 'ros2:rmw_take':
-            yield (m.K_TAKE, ts, pid, int(p['rmw_subscription_handle']))
-        elif name == 'ros2:callback_start':
-            yield (m.K_CB_START, ts, pid, int(ctx['vtid']), int(p['callback']),
-                   bool(p['is_intra_process']))
-        elif name == 'ros2:callback_end':
-            yield (m.K_CB_END, ts, pid, int(ctx['vtid']), int(p['callback']))
-        elif name == 'ros2:rmw_publish':
-            yield (m.K_PUBLISH, ts, pid, int(p['rmw_publisher_handle']))
-        else:
-            known = _INIT.get(name)
-            if known is not None:
-                procname = str(ctx['procname']) if 'procname' in ctx else ''
-                yield (known[0], ts, pid, procname, *known[1](p))
+        if target.startswith(prefix):
+            try:
+                os.close(int(name))
+                closed += 1
+            except OSError:
+                pass
+    return closed

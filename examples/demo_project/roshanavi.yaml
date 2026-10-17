@@ -16,3 +16,36 @@ targets:
   name: listener
   role: dependency
   autostart: true
+# Sample nodes (roshanavi_examples, DESIGN §0.1). Not started automatically: start them from
+# the map or the launch list. See examples/perception_demo for a wired-up pipeline.
+- id: image_filter
+  kind: run
+  package: roshanavi_examples
+  executable: image_filter
+  name: image_filter
+  params: {keep_stamp: true, process_delay_ms: 0}
+  remaps: {image: /camera/image, image_gray: /camera/gray, image_edges: /camera/edges}
+  role: mine
+- id: blob_detector
+  kind: run
+  package: roshanavi_examples
+  executable: blob_detector
+  name: blob_detector
+  params: {threshold: 200, min_area: 30}
+  remaps: {image: /camera/gray, detections: /camera/detections}
+  role: mine
+- id: audio_level
+  kind: run
+  package: roshanavi_examples
+  executable: audio_level
+  name: audio_level
+  params: {input_type: stamped}
+  remaps: {audio: /audio, level_db: /audio/level_db, silence: /audio/silence}
+  role: mine
+- id: state_machine
+  kind: run
+  package: roshanavi_examples
+  executable: state_machine
+  name: state_machine
+  remaps: {cmd: /cmd, state: /state}
+  role: mine

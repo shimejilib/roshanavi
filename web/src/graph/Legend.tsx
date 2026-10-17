@@ -12,6 +12,7 @@ export function Legend({ palette }: { palette: Palette }) {
     { key: 'graph.legend.mine', className: 'sw-node', color: palette.roles.mine },
     { key: 'graph.legend.dependency', className: 'sw-node', color: palette.roles.dependency },
     { key: 'graph.legend.dummy', className: 'sw-node', color: palette.roles.dummy },
+    { key: 'graph.legend.transform', className: 'sw-node', color: palette.roles.transform },
     { key: 'graph.legend.other', className: 'sw-node', color: palette.roles.other },
     { key: 'graph.legend.topic', className: 'sw-topic', color: palette.topicBorder },
     { key: 'graph.legend.stale', className: 'sw-line dashed', color: palette.stale },

@@ -15,12 +15,12 @@ from typing import Any, Dict, List, Sequence, Tuple
 
 from . import command
 from .discovery import Workspace
-from .dummy_config import config_text, write_atomic
+from .dummy_config import config_text, transform_config_text, write_atomic
 from .env import child_env
 from .errors import LauncherError
 from .process import SIGINT_TIMEOUT_SEC, SIGTERM_TIMEOUT_SEC
-from .schema import DummySpec, TargetSpec
-from .target import Spec, Target, kind_of
+from .schema import DummySpec, TargetSpec, TransformSpec
+from .target import Spec, Target, kind_of, role_of
 
 LOG = logging.getLogger(__name__)
 
@@ -43,14 +43,21 @@ class ProcessManager:
     def _argv(self, spec: Spec) -> List[str]:
         if isinstance(spec, DummySpec):
             command.validate_dummy(spec)
-            path = os.path.join(self._runtime_dir, f'{spec.id}.yaml')
-            try:
-                write_atomic(path, config_text(spec, self.data_dir))
-            except OSError as exc:
-                raise LauncherError('spawn_failed', f'cannot write dummy config: {exc}',
-                                    500) from exc
+            path = self._write_config(spec.id, config_text(spec, self.data_dir))
             return command.dummy_command(spec, path)
+        if isinstance(spec, TransformSpec):
+            command.validate_transform(spec)
+            path = self._write_config(spec.id, transform_config_text(spec))
+            return command.transform_command(spec, path)
         return command.target_command(spec, self._ctx)
+
+    def _write_config(self, spec_id: str, text: str) -> str:
+        path = os.path.join(self._runtime_dir, f'{spec_id}.yaml')
+        try:
+            write_atomic(path, text)
+        except OSError as exc:
+            raise LauncherError('spawn_failed', f'cannot write node config: {exc}', 500) from exc
+        return path
 
     def _env(self) -> Dict[str, str]:
         return child_env(self.workspace.env, self.workspace.unsourced_prefixes())
@@ -58,6 +65,8 @@ class ProcessManager:
     def validate(self, spec: Spec) -> None:
         if isinstance(spec, DummySpec):
             command.validate_dummy(spec)
+        elif isinstance(spec, TransformSpec):
+            command.validate_transform(spec)
         else:
             command.target_command(spec, self._ctx)
 
@@ -87,8 +96,11 @@ class ProcessManager:
         target = self._get(target_id)
         if spec.id != target_id:
             raise LauncherError('invalid_request', 'the id of a target cannot be changed')
-        if (kind_of(spec) == 'dummy') != (kind_of(target.spec) == 'dummy'):
-            raise LauncherError('invalid_request', 'cannot turn a dummy into a target')
+        managed = ('dummy', 'transform')
+        if kind_of(spec) != kind_of(target.spec) and (kind_of(spec) in managed
+                                                      or kind_of(target.spec) in managed):
+            raise LauncherError('invalid_request', f'cannot turn a {kind_of(target.spec)} '
+                                f'into a {kind_of(spec)}')
         self.validate(spec)
         target.update_spec(spec)
         return target.to_dict()
@@ -175,9 +187,11 @@ class ProcessManager:
         dummies = [t.spec for t in self._all() if isinstance(t.spec, DummySpec)]
         return targets, dummies
 
+    def transforms(self) -> List[TransformSpec]:
+        return [t.spec for t in self._all() if isinstance(t.spec, TransformSpec)]
+
     def roles(self) -> Dict[str, str]:
-        return {t.id: ('dummy' if isinstance(t.spec, DummySpec) else t.spec.role)
-                for t in self._all()}
+        return {t.id: role_of(t.spec) for t in self._all()}
 
     def process_refs(self) -> List[tuple]:
         return [ref for ref in (t.process_ref() for t in self._all()) if ref is not None]

@@ -4,6 +4,8 @@ import { CreateInputDialog } from '../input/CreateInputDialog';
 import { ImportLaunchDialog } from '../launchImport/ImportLaunchDialog';
 import { LifecycleDialog } from '../lifecycle/LifecycleDialog';
 import { ParamsDialog } from '../params/ParamsDialog';
+import { ProjectsDialog } from '../transform/ProjectsDialog';
+import { CreateTransformDialog } from '../transform/CreateTransformDialog';
 import { useAppState } from '../state/AppState';
 import { EdgeDialog } from './EdgeDialog';
 import { ExportLaunchDialog } from './ExportLaunchDialog';
@@ -15,6 +17,10 @@ export function DialogHost() {
   switch (dialog.kind) {
     case 'createInput':
       return <CreateInputDialog topic={dialog.topic} type={dialog.type} dummyId={dialog.dummyId} />;
+    case 'createTransform':
+      return <CreateTransformDialog topic={dialog.topic} type={dialog.type} transformId={dialog.transformId} />;
+    case 'projects':
+      return <ProjectsDialog />;
     case 'params':
       return <ParamsDialog key={dialog.nodeId} nodeId={dialog.nodeId} />;
     case 'interface':

@@ -288,3 +288,33 @@
 | L-16 | ベンチマーク (オン・オフ) | 10 トピック × 100 Hz と 720p 画像 30 Hz で、対象ノードの CPU・遅延、roshanavi の CPU、ディスク、件/秒、取りこぼし (DESIGN §4.3.2) | 👀 (`scripts/bench_tracing.py`) |
 | L-17 | 別コンテナのノード | demo コンテナの external_listener は `not_traced` | 👀 (ラボで確認) |
 | L-18 | 他の RMW (Cyclone DDS) | rmw_take / rmw_publish のトレースポイントがある | ⬜ |
+
+## M. サンプルノード・変換ノード・パーセプションデモ (P5)
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| M-01 | 画像の純粋な関数 (gtest) | rgb8 / bgr8 の輝度の重み、行の詰め物 (step)、未対応の encoding・足りないバッファは理由付きで失敗。Sobel: 平らなら 0、段差の両側で 255、端は 0、小さすぎる画像は全部 0。塊: 2 つを面積順、しきい値・最小面積・最大数、斜めだけで接する画素は別、100 万画素の塊でも落ちない | ✅ (`roshanavi_examples/test/test_image_ops.cpp`) |
+| M-02 | image_filter (実ノード) | 160x120 rgb8 → gray / edges が 160x120 mono8 (step 160)、四角の中は 240・背景 0、縁だけエッジ。`keep_stamp:=true` は入力の stamp (1234.5678)、false はいまの時刻。frame_id は引き継ぐ | ✅ (`test_examples.py`) |
+| M-03 | image_filter の遅い処理 | `process_delay_ms:=250` で 20 Hz を送っても出力の間隔の中央値 ≥ 0.2 秒 | ✅ (`test_examples.py`) |
+| M-04 | blob_detector (実ノード) | 30x30・20x20・12x12 の四角、`min_area:=200` → 検出 2 件、最大の bbox は中心 (75, 55)・大きさ 30x30、class_id `blob`、score = 240/255、header の stamp は入力のまま | ✅ (`test_examples.py`) |
+| M-05 | audio_level の計算 (unit) | 無音・空は -120 dB、16384 一定で -6.02 dB、振幅 0.5 の sine で -9.03 dB。S16LE のバイト列 (奇数の末尾は無視)。ヒステリシス: 2 つのしきい値の間では状態を保つ、逆順のしきい値は拒否 | ✅ (`test_examples.py`) |
+| M-06 | audio_level (実ノード) | Int16MultiArray で音 / 無音を 1 秒ずつ → level_db に -9.03 と -120、silence が true と false の両方。AudioDataStamped (既定) で -6.02 dB | ✅ (`test_examples.py`) |
+| M-07 | state_machine の遷移 (unit・実ノード) | IDLE → start → RUNNING → stop → IDLE、fault → ERROR、ERROR では start を無視、reset → IDLE、知らないコマンドは無視。実ノードでも /cmd に送ると /state がその値になり、周期の送信でも保たれる | ✅ (`test_examples.py`) |
+| M-08 | 式: 入力メッセージのフィールド参照 | `msg.data`、`msg.linear.x * 0.5`、`msg.values[-1]`、計算した添字、`msg.points[1].x`、複数入力 (`msg1` / `msg2` / 任意の別名)、`${msg.header}` は素の dict、`now_stamp()`、upper lower strip replace len clamp | ✅ (`test_expr_fields.py`) |
+| M-09 | 式: 安全の境界 | `__class__` `__dict__` `_data` などの `_` 始まり、実在するメソッド名 (`plain` `field`) も辞書の検索だけで no_field。文字列の定数・呼び出しの結果・変数・定数への属性、入力名以外の名前は拒否。getattr / type / vars / `__import__` / メソッド呼び出し、内包表記 (入れ子も)・ジェネレータ・lambda・スライス・タプル添字・文字列の添字・walrus・f-string・star 引数は拒否。巨大な添字 (10**9, 2**1000)・範囲外・bool 添字、文字列の連結・繰り返し・replace の膨張・巨大なべき・長い JSON 化・深い `.a.a.a…` は上限で拒否。注入のペイロード (名前なし) は従来どおり属性・添字をすべて拒否。ビューは変更・削除・反復できない。別名の予約語・形式の検査 | ✅ (`test_expr_fields.py`) |
+| M-10 | 変換の仕様の検査 | 既定の別名 (msg / msg1, msg2)、relay は入力 1 つ・式なし・型を変えない、大きい型は relay だけ、trigger・別名の一意と予約語、複数入力は mapping 必須、遅延の範囲、取りこぼし 0〜1、間引き > 0。プロジェクトファイルの往復、targets / dummies / transforms をまたぐ ID の重複 | ✅ (`test_transform_compute.py`) |
+| M-11 | 対応づけ・条件・型の変換・入力のままの送信 | upper、条件で捨てる (エラーなし)、`int(msg.data) * 2` で Int32、変換できない値はフィールドの場所付きのエラー、ネストした Twist と clamp、mapping なしは入力をそのまま、コンパイルエラーをフィールドごとに (条件・構文・未知の名前) | ✅ (`test_transform_compute.py`) |
+| M-12 | 間引き・遅延・取りこぼし・結合 (unit) | 取りこぼし 30% (乱数の種で 28〜32%)、100 Hz → 10 Hz に間引き (間隔 ≥ 95 ms)、±2 ms の揺らぎでは間引かない、一定の遅延と範囲の遅延 (平均 0.15 秒)、結合は全部が届くまで待ち、trigger の入力でだけ送る、遅延の待ちは期限順・上限で overflow・送信の失敗で止まらない | ✅ (`test_transform_pipeline.py`) |
+| M-13 | 変換ノード (実 ROS) | upper と条件、Image (64x48 rgb8) をバイト列のまま中継、50 Hz → 5 Hz の間引き (間隔 ≥ 0.15 秒)、400 ms の遅延 (≥ 0.39 秒)、取りこぼし 50% (30〜70%)、2 入力を trigger で結合、式のエラーでは起動しない | ✅ (`test_transform_ros.py`) |
+| M-14 | 変換ノードの実行ファイルと書き出し | `ros2 run roshanavi transform --config` が自分の名前で送る (SIGINT で 0)、式のエラーは終了コード 2。書き出した launch (`executable='transform'`) を `ros2 launch` で動かせる | ✅ (`test_transform_ros.py`) |
+| M-15 | 変換ノードの API | `POST /api/transforms?start=true` → kind / role `transform`、自動保存、地図に役割 transform、出力が届く。PUT で変更、入力と同じ出力トピックは 400、削除でプロジェクトから消える | ✅ (`test_transform_ros.py`) |
+| M-16 | 試算 (プレビュー) | 出力、届いていない入力は型の既定値 (`templated`)、フィールドのエラー (no_field と fields の一覧)、条件で送らない、型に合わない値は build_ のエラー、仕様のエラー・知らない別名、relay は入力のまま、API は常に 200 (サンプル 9 個・余計な項目は 422) | ✅ (`test_transform_compute.py`) |
+| M-17 | プロジェクトの切り替え | サンプルと保存済みを一覧、サンプルは初回だけ data/projects にコピー (編集は上書きされない)、一覧に無い ID (パス) は開けない、API で perception_demo を開くと起動リストが入れ替わり、元のプロジェクトファイルには書かない。同梱の 2 つのプロジェクトが検証を通る (サンプルノードは demo_project では autostart なし)。切り替え後は新しいプロジェクトの autostart が必ず動く (古い起動リストを止めている最中の housekeeping と競合しない) | ✅ (`test_project_catalog.py`, `test_project.py`) |
+| M-18 | サンプルの動画・音声の生成 | blobs.mp4 と tone.wav (16 kHz・mono・16 bit・12 秒) を作る、2 回目は作らない (mtime が変わらない)、途中のファイルが残らない | ✅ (`test_project_catalog.py`) |
+| M-19 | 編集画面のロジック (vitest) | 既定値 (ノード名・出力トピック・大きい型は relay)、テンプレートから「そのまま写す」対応づけ、仕様の組み立て (条件・遅延・間引き・取りこぼし %)、relay は式を落とす、各エラーの平易な文、プレビュー用の緩い検査、複数入力の別名の振り直しと trigger、編集時の復元 | ✅ (`transform/transformForm.test.ts`) |
+| M-20 | 式のエラーの日本語 (vitest) | code と params から文 (フィールドの一覧・関数名・かっこの閉じ忘れ)、知らない code はサーバーの文を添える、条件・フィールド・全体への振り分け | ✅ (`transform/previewText.test.ts`) |
+| M-21 | 地図の右クリック (vitest) | トピックに「このトピックを受けて変換するノードを作る」、変換ノードは 起動・停止・再起動・変更・書き出し・ログ・パラメータ・I/O (一時停止とビルドは無い) | ✅ (`graph/menuModel.test.ts`) |
+| M-22 | E2E: /chatter → /chatter_upper | トピックの右クリックから作成、入力と型が入っている、`msg.nope` はフィールドの場所に日本語のエラー、プレビューの左に Hello World・右に HELLO WORLD、作成すると地図に役割 transform、エコーが大文字、プロジェクトに保存、ノードのメニューに「変換の内容を変更」 | ✅ (`e2e/transform.spec.ts`) |
+| M-23 | E2E: パーセプションデモ | ⚙ からサンプルの perception_demo を開く → image_filter / blob_detector / audio_level / dummy_camera / blob_count (transform) が地図に出る、/camera/gray の画像ビューアが 320 px 幅、/camera/blob_count のエコー。最後に元のプロジェクトに戻す | ✅ (`e2e/perception.spec.ts`) |
+| M-24 | 詳細計測モードでのサンプルノード | image_filter / blob_detector は受信・処理・処理時間、`process_delay_ms` を上げると「処理が追いついていません」。audio_level / state_machine / 変換ノードは受信数だけ (rclpy) | 🟡 (仕組みは L-08 / L-09 と同じ。サンプルノードでの確認は未整備) |
+| M-25 | 変換ノードの高い入力レート | 数百 Hz の入力で CPU と遅れ (Python の式評価の限界) | ⬜ |
