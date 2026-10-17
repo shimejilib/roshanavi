@@ -19,12 +19,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import msgutil, security, server_launcher
+from . import msgutil, security, server_launcher, server_media
 from .echo import EchoError
 from .files import FileAccessError, list_files
 from .jobs import InjectError, InjectSpec
 from .lab import Lab
 from .launcher.errors import LauncherError
+from .media.errors import MediaError
+from .media.options import MediaOptions
 
 LOG = logging.getLogger(__name__)
 
@@ -42,7 +44,7 @@ class QosModel(BaseModel):
 
 
 class InjectRequest(BaseModel):
-    mode: Literal['once', 'periodic', 'stream', 'bag']
+    mode: Literal['once', 'periodic', 'stream', 'bag', 'media']
     topic: Optional[constr(max_length=256)] = None
     type: Optional[constr(max_length=256)] = None
     payload: Optional[Dict[str, Any]] = None
@@ -53,6 +55,7 @@ class InjectRequest(BaseModel):
     qos: QosModel = Field(default_factory=QosModel)
     bag_rate: confloat(gt=0, le=100) = 1.0
     topics: List[constr(max_length=256)] = Field(default_factory=list, max_items=100)
+    media: Optional[MediaOptions] = None
 
     class Config:
         extra = 'forbid'
@@ -61,7 +64,8 @@ class InjectRequest(BaseModel):
         return InjectSpec(mode=self.mode, topic=self.topic, type=self.type, payload=self.payload,
                           rate_hz=self.rate_hz, count=self.count, source=self.source,
                           loop=self.loop, qos=self.qos.dict(), bag_rate=self.bag_rate,
-                          bag_topics=tuple(self.topics))
+                          bag_topics=tuple(self.topics),
+                          media=self.media.dict() if self.media else None)
 
 
 class MonitorRequest(BaseModel):
@@ -89,7 +93,7 @@ def _install_error_handlers(app: FastAPI) -> None:
         return _error(status, getattr(exc, 'code', 'error'), str(exc))
 
     for exc_type in (InjectError, EchoError, msgutil.MsgUtilError, FileAccessError,
-                     LauncherError):
+                     LauncherError, MediaError):
         app.add_exception_handler(exc_type, _domain_error)
 
     @app.exception_handler(StarletteHTTPException)
@@ -188,7 +192,8 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
             payload: Dict[str, Any] = {'traffic': lab.traffic_view(),
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
-                                       'build': lab.launcher.builder.status()}
+                                       'build': lab.launcher.builder.status(),
+                                       'recording': lab.recorder.status()['active']}
             if digest != state['hash']:
                 payload['graph'] = {**snapshot, 'hash': digest}
                 state['hash'] = digest
@@ -226,6 +231,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     _install_error_handlers(app)
     _register_rest(app, lab)
     server_launcher.register(app, lab)
+    server_media.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -238,6 +244,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
             return {'name': 'roshanavi', 'ui': None,
                     'api': ['/api/graph', '/api/traffic', '/api/types', '/api/inject',
                             '/api/files', '/api/targets', '/api/workspace', '/api/build',
-                            '/api/project', '/api/dummies', '/ws/live', '/ws/echo/{topic}',
-                            '/ws/logs/{log_id}']}
+                            '/api/project', '/api/dummies', '/api/media/types',
+                            '/api/recordings', '/ws/live', '/ws/echo/{topic}',
+                            '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}']}
     return app

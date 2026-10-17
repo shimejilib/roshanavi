@@ -1,5 +1,6 @@
 // Pure reducer for /ws/live frames (unit-tested).
 
+import type { RecordingStatus } from '../api/mediaTypes';
 import type { BuildStatus, GraphSnapshot, Job, LiveMessage, Target, TrafficEntry } from '../api/types';
 
 export interface LiveData {
@@ -8,6 +9,7 @@ export interface LiveData {
   jobs: Job[];
   targets: Target[];
   build: BuildStatus | null;
+  recording: RecordingStatus | null;
   /** Increments on every applied frame (drives particle pulses). */
   tick: number;
   receivedAt: number;
@@ -19,6 +21,7 @@ export const EMPTY_LIVE: LiveData = {
   jobs: [],
   targets: [],
   build: null,
+  recording: null,
   tick: 0,
   receivedAt: 0,
 };
@@ -37,6 +40,7 @@ export function applyLive(prev: LiveData, msg: LiveMessage, nowMs: number): Live
     jobs: msg.jobs,
     targets: msg.targets ?? prev.targets,
     build: msg.build ?? prev.build,
+    recording: msg.recording === undefined ? prev.recording : msg.recording,
     tick: prev.tick + 1,
     receivedAt: nowMs,
   };

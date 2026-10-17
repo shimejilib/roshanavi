@@ -2,7 +2,7 @@ import type { DataFile, InjectMode } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import type { InjectForm } from './buildRequest';
 
-export const MODES: InjectMode[] = ['once', 'periodic', 'stream', 'bag'];
+export const MODES: InjectMode[] = ['once', 'periodic', 'stream', 'bag', 'media'];
 
 interface ModeFieldsProps {
   form: InjectForm;
@@ -35,7 +35,7 @@ export function ModeSelector({ form, onChange }: Omit<ModeFieldsProps, 'files'>)
       <legend>{t('inject.mode')}</legend>
       {MODES.map((mode) => (
         <label key={mode} className="radio">
-          <input type="radio" name="inject-mode" value={mode} checked={form.mode === mode} onChange={() => onChange({ mode })} />
+          <input type="radio" name="inject-mode" value={mode} checked={form.mode === mode} onChange={() => onChange(mode === 'media' ? { mode, rateHz: '' } : { mode })} />
           {t(`inject.mode.${mode}` as MessageKey)}
         </label>
       ))}

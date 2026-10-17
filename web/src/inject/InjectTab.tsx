@@ -8,10 +8,13 @@ import { useLive } from '../state/LiveProvider';
 import { buildInjectRequest, DEFAULT_FORM, parsePayload, templateToYaml, type InjectForm } from './buildRequest';
 import { JobsList } from './JobsList';
 import { ModeFields, ModeSelector, QosFields } from './ModeFields';
+import { CapturePanel } from '../media/CapturePanel';
+import { MediaFields, TypeDetection } from '../media/MediaFields';
+import { useMediaTypes } from '../media/useMediaTypes';
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 
-function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean): { items: T[]; error: string | null } {
+function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean, reloadKey = ''): { items: T[]; error: string | null } {
   const [items, setItems] = useState<T[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -23,8 +26,8 @@ function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean): { items: 
     return () => {
       cancelled = true;
     };
-    // `load` is a stable module-level function.
-  }, [enabled]);
+    // `load` is a stable module-level function; `reloadKey` refetches (e.g. on mode change).
+  }, [enabled, reloadKey]);
   return { items, error };
 }
 
@@ -38,8 +41,9 @@ export function InjectTab() {
   // Until the user edits the YAML, changing the type replaces it with the new template.
   const [yamlTouched, setYamlTouched] = useState(false);
   const types = useRemoteList(api.types, true);
-  const needsFiles = form.mode === 'stream' || form.mode === 'bag';
-  const files = useRemoteList<DataFile>(() => api.files().then((r) => r.files), needsFiles);
+  const needsFiles = form.mode === 'stream' || form.mode === 'bag' || form.mode === 'media';
+  const files = useRemoteList<DataFile>(() => api.files().then((r) => r.files), needsFiles, form.mode);
+  const mediaTypes = useMediaTypes(form.topic, form.mode === 'media');
 
   const topicTypes = useMemo(
     () => new Map((live.graph?.topics ?? []).map((tp) => [tp.name, tp.types])),
@@ -133,6 +137,7 @@ export function InjectTab() {
                 ))}
               </datalist>
               {typeAuto && <span className="muted small">{t('inject.typeAuto')}</span>}
+              {form.mode === 'media' && <span className="muted small">{t('inject.typeAutoHint')}</span>}
               {types.error && <span className="error-text small">{types.error}</span>}
             </label>
           </>
@@ -147,7 +152,24 @@ export function InjectTab() {
             <code className="hint small">{t('inject.exprExamples')}</code>
           </label>
         )}
-        <ModeFields form={form} files={files.items} onChange={update} />
+        {form.mode === 'media' ? (
+          <>
+            <TypeDetection info={mediaTypes.info} />
+            <MediaFields
+              topic={form.topic}
+              source={form.source}
+              rateHz={form.rateHz}
+              count={form.count}
+              loop={form.loop}
+              media={form.media}
+              files={files.items}
+              typeInfo={mediaTypes.info}
+              onChange={update}
+            />
+          </>
+        ) : (
+          <ModeFields form={form} files={files.items} onChange={update} />
+        )}
         {files.error && <p className="error-text small">{files.error}</p>}
         {form.mode !== 'bag' && <QosFields form={form} onChange={update} />}
         <button type="submit" className="primary" disabled={busy} data-testid="inject-start">
@@ -159,7 +181,10 @@ export function InjectTab() {
           </p>
         )}
       </form>
-      <JobsList jobs={live.jobs} targets={live.targets} />
+      <div className="inject-side">
+        <CapturePanel topics={[...topicTypes.keys()]} />
+        <JobsList jobs={live.jobs} targets={live.targets} />
+      </div>
     </div>
   );
 }

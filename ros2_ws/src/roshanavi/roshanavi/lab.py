@@ -1,4 +1,4 @@
-"""Composition root: runtime + graph + traffic + injector + echo + launcher.
+"""Composition root: runtime + graph + traffic + injector + echo + launcher + media.
 
 A single 1 s housekeeping timer (executor thread) collects the ROS graph,
 updates the graph snapshot, syncs traffic subscriptions and ticks the hz
@@ -15,6 +15,9 @@ from . import graph, rates
 from .echo import EchoManager
 from .injector import Injector
 from .launcher.service import Launcher
+from .media.diskguard import DiskGuard, DiskThresholds
+from .media.recorder import Recorder
+from .media.viewer import MediaViewer
 from .ros_runtime import RosRuntime
 from .traffic import DEFAULT_WINDOW_SEC, TrafficMonitor
 
@@ -30,7 +33,8 @@ class Lab:
                  period_sec: float = HOUSEKEEPING_PERIOD_SEC,
                  clock: Callable[[], float] = time.monotonic,
                  workspace: Optional[str] = None, project_path: Optional[str] = None,
-                 autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None):
+                 autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None,
+                 disk_thresholds: DiskThresholds = DiskThresholds()):
         self.data_dir = data_dir
         self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
@@ -39,8 +43,11 @@ class Lab:
         self.traffic = TrafficMonitor(self.runtime, window_sec=window_sec,
                                       exclude=traffic_exclude, clock=clock,
                                       monitor_heavy=monitor_heavy)
-        self.injector = Injector(self.runtime, data_dir, clock=clock)
+        self.injector = Injector(self.runtime, data_dir, clock=clock,
+                                 extra_roots=(self.launcher.workspace.root,))
         self.echo = EchoManager(self.runtime)
+        self.viewer = MediaViewer(self.runtime)
+        self.recorder = Recorder(data_dir, DiskGuard(data_dir, disk_thresholds))
         self._period = period_sec
         self._timer: Any = None
         self.housekeeping_runs = 0
@@ -71,6 +78,7 @@ class Lab:
 
     def stop(self) -> None:
         self.launcher.close()  # idempotent; child processes go first
+        self.recorder.close()  # SIGINT so the bag is finalized
         if not self.runtime.running:
             return
         if self._timer is not None:
@@ -78,6 +86,7 @@ class Lab:
             self._timer = None
         self.injector.close()
         self.echo.close()
+        self.viewer.close()
         self.traffic.close()
         self.runtime.stop()
 

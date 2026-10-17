@@ -3,6 +3,7 @@
 import { dump, load } from 'js-yaml';
 import type { InjectMode, InjectRequest } from '../api/types';
 import { t } from '../i18n';
+import { buildMediaOptions, DEFAULT_MEDIA_FORM, type MediaForm } from '../media/buildMediaRequest';
 
 export interface InjectForm {
   topic: string;
@@ -18,6 +19,7 @@ export interface InjectForm {
   reliability: 'reliable' | 'best_effort';
   durability: 'volatile' | 'transient_local';
   depth: string;
+  media: MediaForm;
 }
 
 export const DEFAULT_FORM: InjectForm = {
@@ -34,6 +36,7 @@ export const DEFAULT_FORM: InjectForm = {
   reliability: 'reliable',
   durability: 'volatile',
   depth: '10',
+  media: DEFAULT_MEDIA_FORM,
 };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -69,9 +72,10 @@ export function buildInjectRequest(form: InjectForm): Result<InjectRequest> {
   const req: InjectRequest = { mode: form.mode };
   if (form.mode !== 'bag') {
     if (!form.topic.trim()) return { ok: false, error: t('inject.needTopic') };
-    if (!form.type.trim()) return { ok: false, error: t('inject.needType') };
+    // media: an empty type means "use the type of the topic's existing endpoints"
+    if (!form.type.trim() && form.mode !== 'media') return { ok: false, error: t('inject.needType') };
     req.topic = form.topic.trim();
-    req.type = form.type.trim();
+    if (form.type.trim()) req.type = form.type.trim();
     req.qos = { reliability: form.reliability, durability: form.durability, depth: positive(form.depth) ?? 10 };
   }
   if (needsMessage(form.mode)) {
@@ -84,11 +88,16 @@ export function buildInjectRequest(form: InjectForm): Result<InjectRequest> {
     if (rate == null) return { ok: false, error: t('inject.needRate') };
     req.rate_hz = rate;
   }
-  if (form.mode === 'periodic') {
+  if (form.mode === 'media') {
+    const rate = positive(form.rateHz);
+    if (form.rateHz.trim() && rate == null) return { ok: false, error: t('inject.needRate') };
+    if (rate != null) req.rate_hz = rate;
+  }
+  if (form.mode === 'periodic' || form.mode === 'media') {
     const count = positive(form.count);
     if (count != null) req.count = Math.floor(count);
   }
-  if (form.mode === 'stream' || form.mode === 'bag') {
+  if (form.mode === 'stream' || form.mode === 'bag' || form.mode === 'media') {
     if (!form.source) return { ok: false, error: t('inject.needSource') };
     req.source = form.source;
     req.loop = form.loop;
@@ -97,6 +106,11 @@ export function buildInjectRequest(form: InjectForm): Result<InjectRequest> {
     req.bag_rate = positive(form.bagRate) ?? 1;
     const topics = form.bagTopics.split(',').map((s) => s.trim()).filter(Boolean);
     if (topics.length) req.topics = topics;
+  }
+  if (form.mode === 'media') {
+    const media = buildMediaOptions(form.media);
+    if (!media.ok) return media;
+    req.media = media.value;
   }
   return { ok: true, value: req };
 }

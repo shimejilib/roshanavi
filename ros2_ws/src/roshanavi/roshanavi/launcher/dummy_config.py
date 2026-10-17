@@ -102,7 +102,8 @@ def format_errors(exc: ValidationError, prefix: str = '') -> str:
 def inject_spec(spec: DummySpec) -> InjectSpec:
     return InjectSpec(mode=spec.mode, topic=spec.topic, type=spec.type, payload=spec.payload,
                       rate_hz=spec.rate_hz, count=spec.count, source=spec.source,
-                      loop=spec.loop, qos=spec.qos.dict())
+                      loop=spec.loop, qos=spec.qos.dict(),
+                      media=spec.media.dict() if spec.media else None)
 
 
 def has_control_chars(text: str) -> bool:

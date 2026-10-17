@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Literal, Optional, Union
 from pydantic import (BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr,
                       confloat, conint, constr, root_validator)
 
+from ..media.options import MediaOptions
 from . import validate
 
 ParamValue = Union[StrictBool, StrictInt, StrictFloat, StrictStr]
@@ -72,19 +73,24 @@ class DummySpec(_Strict):
     namespace: Optional[constr(max_length=256)] = None
     topic: constr(min_length=1, max_length=256)
     type: constr(min_length=1, max_length=256)
-    mode: Literal['once', 'periodic', 'stream']
+    mode: Literal['once', 'periodic', 'stream', 'media']
     payload: Optional[Dict[str, Any]] = None
     rate_hz: Optional[confloat(gt=0, le=1000)] = None
     count: Optional[conint(ge=1, le=10_000_000)] = None
     source: Optional[constr(max_length=1024)] = None
     loop: bool = False
     qos: QosSpec = Field(default_factory=QosSpec)
+    media: Optional[MediaOptions] = None
     autostart: bool = False
     auto_restart: bool = False
 
     @root_validator(skip_on_failure=True)
     def _mode_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         mode = values['mode']
+        if mode == 'media':
+            if not values.get('source'):
+                raise ValueError('mode "media" needs "source" (a file or folder in the data dir)')
+            return values
         if mode != 'once' and values.get('rate_hz') is None:
             raise ValueError(f'mode "{mode}" needs "rate_hz"')
         if mode == 'stream' and not values.get('source'):

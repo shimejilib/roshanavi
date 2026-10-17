@@ -64,7 +64,7 @@ ROS 2 システムの「通信の可視化」「ダミー入力の注入」「�
 
 ```
 roshanavi/
-  docker/Dockerfile            # ros:jazzy-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2
+  docker/Dockerfile            # ros:jazzy-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
   docker-compose.yml           # lab (サーバー, :8080) / demo (talker・listener 等) / test
   docs/DESIGN.md
   ros2_ws/src/roshanavi/       # ament_python パッケージ
@@ -78,6 +78,10 @@ roshanavi/
       expr.py          # AST ホワイトリスト式評価器 (eval 禁止)
       injector.py      # 注入ジョブ管理
       echo.py          # オンデマンド購読 → 最新メッセージ
+      rates.py         # 地図のエッジ用の送信元ごとの Hz (純関数, §4.3)
+      media/           # §4.11-4.12: adapters/ (型ごとの変換) / ffmpeg / sources / job / capture /
+                       #   viewer / recorder / diskguard / camera_info / imaging / options / factory
+      server_media.py  # メディア型の判定・ブラウザ入力・ビューア・録画の REST + WS
       launcher/        # §4.9-4.10: discovery / validate / command / process / target / manager /
                        #   build / env / schema / project / dummy_config / service
       process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース計測でも使う)
@@ -149,20 +153,23 @@ roshanavi/
   - `periodic`: `rate_hz` で送信、`count` 指定で自動終了。payload の `${}` は毎回評価 (= 式モードも兼ねる)。
   - `stream`: JSONL (1 行 1 メッセージ dict) または CSV (ヘッダ = フィールドパス, `a.b.c` 形式) を `rate_hz` で順送り、`loop` 可。
   - `bag`: `ros2 bag play <path> [--rate r] [--loop] [--topics ...]` をサブプロセス起動、停止で SIGINT。
+  - `media`: 画像・動画・音声ファイルを型に合わせて変換して送る (§4.6.1, §4.11)。
+  - (`capture`: ブラウザのマイク・カメラ。`/ws/capture` で始まり、ジョブ一覧と地図には同じ形で出る。§4.11)
 - ファイルパス (stream / bag) は設定された `data_dir` (既定 `/data`) 配下のみ許可 (realpath で検査、パストラバーサル防止)。
 - publisher はジョブごとに作成、終了時に破棄。
 
 ### 4.6.1 メディアファイル注入
-`data_dir` 内のファイルを、型に合わせて変換して送る。デコードは ffmpeg (サブプロセス、パイプ経由) を使う。
+`data_dir` 内のファイル (またはフォルダ) を、送信先トピックの型に合わせて変換して送る (`mode: "media"`)。デコードは ffmpeg (サブプロセス、パイプで逐次。ファイル全体をメモリに読まない)。詳細は §4.11。
 
 | 入力 | 送信形式 | 備考 |
 |---|---|---|
-| PNG/JPG/BMP (単体・フォルダ) | `sensor_msgs/Image` (encoding 指定可: rgb8/bgr8/mono8) または `CompressedImage` | フォルダは名前順にスライドショーとして周期送信する |
-| MP4/MKV/AVI | フレームに分解し、`Image` / `CompressedImage` で送る | 既定は動画の fps。`rate_hz`、開始・終了時刻、リサイズ、loop を指定可。`header.stamp` は送信時刻 |
-| WAV/MP3/FLAC/OGG | PCM に変換し、チャンクに分けて送る | サンプルレート・チャンネル数・チャンク長 (既定 20 ms) を指定可。実時間のペースで送る |
+| PNG/JPG/BMP/WebP (単体・フォルダ) | `sensor_msgs/Image` (rgb8/bgr8/mono8) / `CompressedImage` (jpeg/png) | フォルダは名前順のスライドショー。`rate_hz` (既定 1 Hz) で切り替え。単体の画像は止めるまで (または `count` 回) 繰り返す |
+| MP4/MOV/MKV/WebM/AVI | フレームに分解して `Image` / `CompressedImage` | 既定は動画の fps。`rate_hz` を指定すると ffmpeg の fps フィルタでその fps に間引き / 補間 (内容は実時間のまま)。開始・終了 (秒)、リサイズ (片方だけなら縦横比を保つ)、loop |
+| WAV/MP3/FLAC/OGG/M4A | PCM S16LE に変換し、チャンクごとに送る | サンプルレート (既定 16000)・チャンネル数 (既定 1)・チャンク長 (既定 1024 サンプル) を送信先に合わせて変換。実時間ペース (先読み + プレバッファ、遅れの方針 `late_policy`、§4.11)。揺らぎ・欠落の注入可 |
 
-- **音声の型**: ROS 2 コアに標準の音声 msg はない。`audio_common_msgs` (AudioData / AudioDataStamped / AudioInfo) が使える環境ならそれを優先し、なければ `std_msgs/UInt8MultiArray` (PCM S16LE) を既定にする。型はプロジェクト設定で選べる。
-- 巨大なファイルは逐次デコードし、メモリに全展開しない。
+- **型**: 指定がなければ、送信先トピックの既存の **subscriber の型** (受け手が期待する型)、なければ publisher の型を使う。誰も使っていなければ、対応型の一覧を示して選んでもらう (`media_type_required`)。対応外の型は、bag 再生 / 録画 (§4.12) を案内するエラー (`media_type_unsupported`)。
+- **音声の型**: `audio_common_msgs` (AudioData / AudioDataStamped + AudioInfo) が入っていればそれも選べる。無い環境ではその型が一覧から消えるだけで、`std_msgs/Int16MultiArray` など配列型は使える。
+- 恒久ダミーノード (§4.10) にもできる (`mode: media` + `media:` オプション。別プロセスの dummy ノードが同じ変換をする)。
 
 ### 4.6.2 latency の対応づけモード (§5)
 - `match: header.stamp` (既定): 出力が入力の stamp を引き継ぐノード向け。
@@ -197,8 +204,14 @@ roshanavi/
 | POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
 | POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` |
 | WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |
+| GET | `/api/media/types?topic=` | 対応型 `[{type, kind}]`。topic を付けると端点の型 (`endpoints`) と自動判定 (`detected`, `detected_supported`) |
+| WS | `/ws/capture` | ブラウザ入力。最初にテキストで開始メッセージ、続けてバイナリフレーム (§4.11) |
+| WS | `/ws/view/{topic}?sample_rate=` | 画像・音声ビューア。JSON のメタ情報の直後に 1 つのバイナリ (JPEG / PCM) |
+| GET / POST | `/api/recordings` | 録画の一覧 + 状態 / 開始 `{topics[], name}` (§4.12) |
+| POST | `/api/recordings/stop` | 録画の停止 (SIGINT で bag を確定) |
+| DELETE | `/api/recordings/{name}` | 録画の削除 (recordings ディレクトリの直下のみ) |
 
-- `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態) も毎秒送る。
+- `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null) も毎秒送る。
 
 - 入力は pydantic モデルで検証。既定 bind は `127.0.0.1` (Docker 内では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:8080:8080`)。
 - エラーは `{error: {code, message}}` で返す。
@@ -272,7 +285,7 @@ dummies:
   name: dummy_camera       # ROS ノード名
   topic: /camera/info
   type: std_msgs/msg/String
-  mode: periodic           # once | periodic | stream (bag は不可)
+  mode: periodic           # once | periodic | stream | media (bag は不可。media は `media:` にオプション)
   payload: {data: "frame ${i}"}
   rate_hz: 5
   qos: {reliability: reliable, durability: volatile, depth: 10}
@@ -289,6 +302,64 @@ watch_topics: [/chat]
 - Launcher が `kind: dummy` のターゲットとして管理する (役割 `dummy`、ノード名を `__node:=` で渡すので対応づけは exact)。設定 YAML (`{dummy: <DummySpec>, data_dir}`) はサーバーの一時ディレクトリに書く。
 - 注入タブの実行中ジョブから「常駐ノードにする」で、同じペイロード・モード・レート・QoS の恒久ダミーを作って起動し、元のジョブは止める (`POST /api/inject/{id}/persist`)。
 - **書き出し**: ワークスペース内の指定ディレクトリ (realpath で包含を検査、なければ作る) に `<id>.yaml` と `roshanavi_dummies.launch.py` を書く。`ros2 launch <dir>/roshanavi_dummies.launch.py` で、roshanavi のサーバー / UI なしで動く。ただし roshanavi パッケージのインストールは必要 (各ノードが `roshanavi dummy` を実行するため。生成ファイルの先頭に明記)。ノード名・ID は検証済みの値だけを `repr()` で埋め込む。
+
+### 4.11 メディア: アダプタ・ファイルソース・ブラウザ入力・ビューア (P4)
+
+`roshanavi/media/`。対象ユーザーが「自分の声やカメラ、手元の動画を、ノードが期待する型でそのまま流す」ための層。
+
+**アダプタ (`media/adapters/`)** — メディア (画像フレーム / PCM チャンク) ⇄ メッセージの変換を **型ごと** に持つ。レジストリは型名がキー。
+| 型 | 変換 | 付随メッセージ |
+|---|---|---|
+| `sensor_msgs/msg/Image` | rgb8 / bgr8 / mono8 (mono は BT.601)。`step = width × ch` | `CameraInfo` |
+| `sensor_msgs/msg/CompressedImage` | JPEG / PNG をそのまま格納 (`format: "jpeg"/"png"`) | `CameraInfo` |
+| `audio_common_msgs/msg/AudioData` / `AudioDataStamped` | PCM S16LE (インターリーブ) を `data` に | `AudioInfo` |
+| `std_msgs/msg/Int16MultiArray` / `UInt8MultiArray` / `Float32MultiArray` | int16 / S16LE バイト列 / ±1.0 の float。`layout.dim = [samples, channels]` | なし |
+- **CameraInfo**: 画像と同じ stamp・frame_id で毎フレーム送る。既定の送り先は同じ名前空間の `camera_info` (`/cam/image_raw` → `/cam/camera_info`、image_transport の慣習)。値は既定 (水平画角約 60° のピンホール、歪みなし) か、`camera_calibration` 形式の YAML (ワークスペースか data_dir の中のみ)。フレームの大きさが違えば内部パラメータを比例で直す。
+- **AudioInfo の名前 (決定)**: Jazzy の `audio_common` 0.4.x の `audio_capture` は、ノードの名前空間に `audio` (AudioData)・`audio_stamped`・`audio_info` を並べて出す (launch の既定は ns `audio` → `/audio/audio`, `/audio/audio_info`)。これに合わせ、既定は送信先と **同じ名前空間の `audio_info`** (`<topic>_info` ではない)。`audio_info_topic` で変更できる。内容は `channels, sample_rate, sample_format: S16LE, bitrate = rate × ch × 16, coding_format: wave`。QoS は RELIABLE / TRANSIENT_LOCAL / depth 1 で開始時に送り、VOLATILE の購読者のために 1 秒ごとにも送り直す。
+- **プラグイン**: entry point グループ `roshanavi.adapters`。`MediaAdapter` のサブクラス / インスタンス / それを返す callable を登録できる (`setup.py` に `entry_points={'roshanavi.adapters': ['my = my_pkg.adapter:MyAdapter']}`)。読み込みに失敗したプラグインはログに出して無視する。型のパッケージが無いアダプタ (例: audio_common_msgs 未インストール) は登録されない。
+- **型の判定 (`options.detect_type`)**: subscriber の型 → publisher の型の順。同じ側に複数の型があれば `media_type_ambiguous`。
+
+**ffmpeg の安全対策 (`media/ffmpeg.py`)** — 細工したファイル (HLS / concat のプレイリスト等) で URL 取得や data_dir 外の読み出しをさせない。
+- パスは `realpath` で data_dir の内側に限定 (`..`・絶対パス・外向き symlink を拒否) し、通常ファイルであること。フォルダは直下の画像だけを 1 つずつ同じ検査にかける。
+- **拡張子から demuxer を決めて `-f` で強制し、`-format_whitelist` にもその 1 つだけを入れる** (例: `.mp4` → `mov`)。hls / concat / dash / image2 の連番などの間接参照する demuxer は選ばれない。`.mp4` に名前を変えたプレイリストは mov として読めずに失敗する。mov の外部参照 (`enable_drefs`) は既定で無効のまま。
+- `-protocol_whitelist file,pipe` と、入力を `file:<絶対パス>` で渡すことで、http などのプロトコルや `concat:` 等の接頭辞を使わせない。
+- 先頭を見て `#EXTM3U` / `ffconcat` / `<MPD` / `#EXTINF` があれば ffmpeg に渡す前に平易なエラーにする。
+- argv のリストのみ (シェルなし)、`-nostdin`。プロセスは新しいセッションで起動し、停止時は SIGTERM → 2 秒 → SIGKILL のあと必ず `wait` する (ゾンビを残さない)。ジョブの停止でソースを閉じ、読み取り待ちのスレッドも抜ける。
+
+**ファイルソース (`media/sources.py`)** と **送信 (`media/job.py`)**
+- 画像は ffmpeg で 1 枚ずつ rawvideo / JPEG / PNG に変換 (目的の形式・大きさのファイルはそのまま)。スライドショーは 256 MB までキャッシュ。動画は `-vf fps=…,scale=…` で rawvideo (固定長) か image2pipe (JPEG は EOI、PNG は IEND で区切る) を読む。音声は `-f s16le -ar -ac` でチャンク単位に読み、最後の端数は無音で埋める。
+- **スレッドは 2 本** (ジョブごと)。**リーダー** (`media/prefetch.py`) が ffmpeg からデコードして先読みし、件数と容量 (96 MB) に上限のあるキューに積む。**ペーサー** (`media/job.py` のジョブスレッド) は「キューから取る → stamp → publish」だけを行い、デコード・パイプ読み・ループ時の ffmpeg 再起動を待たない。キューの深さは `prebuffer` + 4 件以上 (`max(prebuffer + 4, 2 × prebuffer)`)。
+- **プレバッファ**: 送信は、キューに `prebuffer_ms` 分 (既定 300 ms、`ceil(prebuffer_ms / 周期)` 件、最低 1 件) たまってから始める。ファイルの終わりかキューが満杯なら、その時点で始める。3 秒たまらなくても始める (ログに残す)。購読者のマッチ待ち (下記) とは並行して進む。
+- ペーサーは **`t0 + k × 周期`** の絶対時刻 (`time.monotonic`) まで `Event.wait` で眠る (rclpy タイマーではない。スピンやビジーウェイトはしない。起床の誤差は実測で 0.1〜0.7 ms)。周期は動画 `1/fps`、音声 `チャンク長 / サンプルレート`、画像 `1/rate_hz`。t0 はプレバッファが埋まった時点で決める。揺らぎ (`jitter_ms`、一様分布) は予定時刻に足すだけで累積しない。欠落 (`drop_ratio`) は読んだうえで送らない (`dropped` に数える)。stamp は送信時刻。ロジックは `media/pacing.py` (時計と sleep を差し替えられる純粋な `Pacer` / `run_paced`)。
+- **遅れた時の方針 `late_policy`** (ペーサーが予定より **1 周期を超えて** 遅れて起きた時、またはリーダーが追いつけずキューが空になった時):
+  - `shift` (既定): その時刻で t0 を取り直す。遅れた 1 個はすぐ送り、以降は通常の間隔で続く。まとめ送りは起きない。
+  - `catch_up`: t0 を変えず、追いつくまで続けて送る (まとめ送り。全体の長さは変わらない)。
+  - `drop`: 遅れた分は送らず捨てる (`late_skipped`)。以降は元の時刻割りに戻る。
+  - ジョブの状態に `late_events` (1 周期を超えた遅れの回数)、`max_lateness_ms` (最大の遅れ。1 周期以下も含む)、`late_policy`、`late_skipped` を出す。UI のジョブ一覧には遅れがあったときだけ「送信の遅れ N 回 (最大 M ms)」と出る。恒久ダミーノードも同じジョブ (同じコード) を使うので、同じオプション (`media.prebuffer_ms`, `media.late_policy`) と状態になる。
+- **GIL 競合の根本原因 (`ros_runtime.py`)**: 以前は音声が 150 ms 止まり、直後にまとめ送りされた。原因は ffmpeg でも変換・publish・ログでもなく、roshanavi の Executor スレッドが **ビジーループ**していたこと。Jazzy の rclpy は購読ごとに既定の QoS イベントハンドラ (incompatible QoS) を登録し、トラフィック監視の購読と注入の publisher が同じノードで同じトピックを使うと、`wait()` が即座に戻るのに取れるものがなく、Executor が Python でウェイトセットを作り直し続ける (1.5 秒で 3000〜5000 回)。この間 GIL を取り続けるので、他の Python スレッド (ペーサーを含む) の起床が 50〜250 ms 遅れた。`RosRuntime.create_subscription` は既定のイベントハンドラを登録しない (`NO_SUBSCRIPTION_EVENTS`) ことで解消した。プレバッファ・リーダー分離・`late_policy` は、この種の遅れ (ffmpeg の起動、CPU 競合、他スレッドの停止) の影響を送信に出さないための備え。
+- 最初の送信の前に既存の購読者とのマッチを最大 1 秒待つ (once と同じ)。publish はジョブのロックの中で状態を確かめてから行い、publisher の破棄は状態を変えた後 (既存ジョブと同じ規則)。
+
+**ブラウザ入力 (`media/capture.py`, `/ws/capture`)**
+- 最初のテキストメッセージ: `{kind: "audio"|"camera", topic, type?, frame_id, sample_rate, channels, chunk_samples, audio_info, fps, encoding, camera_info, reliability}` (pydantic、未知のキーは拒否)。型は省略すると §4.6.1 と同じ規則で判定。応答 `{event: "ready", job_id, type, companions[]}`、以後 1 秒ごとに `{event: "stats", sent, dropped}`。エラーは `{error: {code, message}}` を送ってから close 4400。
+- 以降のバイナリフレーム: マイクは PCM int16 (ブラウザの AudioContext を目的のサンプルレートで作り、AudioWorklet で 20 ms ごとに送る)、サーバーが `chunk_samples` に詰め直して送る。カメラは JPEG (getUserMedia → canvas → `toBlob('image/jpeg')`、選んだ fps・解像度)。`CompressedImage` ならそのまま、`Image` なら Pillow でデコードして送る。
+- 上限: 音声 1 フレーム 256 KB・実時間の 1.5 倍 (+1 秒) を超える量は捨てる。カメラ 1 フレーム 4 MB・30 fps (超えた分は間引いて `dropped`)。**1 トピックに 1 つ** (`capture_busy`, 409)。ジョブ数の上限は注入と共通。
+- ブラウザ入力は注入ジョブ (`mode: capture`) として登録するので、ジョブ一覧・地図の仮想ダミーノード・停止ボタン・録画のプリセットにそのまま出る。WS が切れたら (タブを閉じた等) ジョブを止め、publisher を破棄する。
+- 既存のセキュリティ middleware (Host / Origin) を通る。ブラウザのメディア取得はセキュアコンテキストが必要で、`localhost` はそれに当たる。
+- **遅れ (UI に明記)**: stamp はサーバーの受信時刻。ブラウザの取得・JPEG 変換・WebSocket の分、実機より数十 ms 遅れる。カメラの解像度・fps はブラウザと Web カメラ次第 (目安 640×480・30 fps)。
+
+**ビューア (`media/viewer.py`, `/ws/view/{topic}`)**
+- 開いている間だけ購読する (参照カウントで共有、最大 16 トピック)。重い型の traffic 統計は既定で非監視のまま (§4.3)。
+- 画像: 最新の 1 枚だけ保持し、**最大 10 fps**・**幅 640 px 以下**の JPEG にして送る (Pillow。幅 640 以下の JPEG はそのまま)。Image は rgb8/bgr8/mono8/rgba8/bgra8/8UC1/8UC3/mono16/16UC1 に対応 (16 bit は最大値で正規化)。
+- 音声: 受信したチャンクを (最大 256 個) ためて 0.1 秒ごとにモノラルの PCM で送る。audio_common の型は兄弟の `audio_info` からサンプルレート・チャンネル数を読み、配列型は UI で指定する (既定 16000)。`coding_format` が wave 以外 (mp3 など) は表示できない旨のエラー。
+
+### 4.12 録画 (P4)
+`media/recorder.py`, `media/diskguard.py`。「自分の声やカメラ映像で 1 回録る → 以後は毎回同じ入力で再現テスト」、テスト対象ノードの出力の保存に使う。
+- `ros2 bag record -s mcap -o data_dir/recordings/<YYYYmmdd-HHMMSS>_<名前>/ --topics …` をサブプロセスで起動 (同時に 1 つ、`recording_active` 409)。名前は英数字と `_` `-` (40 文字まで)、トピックは検証済みの名前だけを argv の要素として渡す。
+- 停止はプロセスグループに **SIGINT** → 10 秒 → SIGTERM → 5 秒 → SIGKILL。SIGINT で rosbag2 がキャッシュを書き出し `metadata.yaml` を書く。監視スレッドがプロセスの終了と空き容量を 1 秒ごとに見る。サーバー終了時も SIGINT で確定させる。
+- **空き容量**: data_dir のボリュームで、空きが 1 GiB 未満 **または** 5 % 未満で警告 (UI に表示)、256 MiB 未満または 1 % 未満で自動停止 (`stop_reason: disk_full`)。開始時点で停止の基準を下回っていれば開始しない (`disk_full`, 507)。基準は `--record-warn-free-mb / --record-warn-free-pct / --record-stop-free-mb / --record-stop-free-pct` で変更できる。空き容量の取得は差し替え可能 (テストで注入)。
+- 録画中のサイズは rosbag2 のキャッシュ (既定 100 MiB) のため遅れて増える。UI は経過時間を主に出す。
+- 一覧: `recordings/` 直下のディレクトリを `metadata.yaml` から要約 (長さ・メッセージ数・トピックごとの件数・サイズ)。確定していないものは「未完了」。`/api/files` には bag として出るので、注入の bag モードでそのまま再生できる。
+- 削除: 名前が録画ディレクトリの形式に合い、`realpath` の親が recordings ディレクトリそのものであること (symlink・`..` を拒否)。録画中のものは消せない。UI は確認ダイアログを出す。
 
 ## 5. シナリオ (G4)
 
@@ -370,7 +441,7 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 
 ## 6. フロントエンド
 
-タブ: **Graph** / **Traffic** / **Inject** / **Launcher** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
+タブ: **Graph** / **Traffic** / **Inject** / **Launcher** / **録画** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
 - Graph (**ライブ通信マップ**, §6.1)
 - Traffic: ソート可能な表 + 行内 uPlot スパークライン。停止トピック (last_seen > 3 s) を強調。
 - Inject: トピック選択 → 型自動入力 → テンプレ YAML エディタ → mode 別フォーム → 開始。実行中ジョブ一覧と停止ボタン。
@@ -461,6 +532,15 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
   - launch ファイルや 1 プロセスに複数ノードがある起動対象 (composable container など) は、対応づけ (§4.9) で分かっている全ノードを確認ダイアログに列挙してから止める。
   - 右クリック (cytoscape `cxttap`) だけを使うので、左クリックの選択とドラッグでの移動はそのまま。メニューは矢印キーで移動、Escape / Tab で閉じる。キーボードだけの操作は右ペインのボタンで行える。
 
+### 6.4 実装メモ (P4: メディア・ブラウザ入力・録画)
+- タブ: **録画** を追加 (Graph / Traffic / Inject / Launcher / 録画)。
+- **注入タブ**: 送り方に「メディアファイル (画像・動画・音声)」。型の欄は空でもよく、トピックの型の自動判定結果 (または「まだ誰も使っていない」「この型は作れない → bag を使う」) を表示する。ファイルの種類 (画像 / フォルダ / 動画 / 音声) に応じて、周期・fps、区間、リサイズ、ピクセル形式・圧縮形式、frame_id、CameraInfo (送り先を表示) とキャリブレーション、サンプルレート・チャンネル・チャンク長 (何 ms ごとかを表示)、揺らぎ・欠落、AudioInfo を出し分ける (`media/MediaFields.tsx`, 純ロジック `media/buildMediaRequest.ts`)。
+- **ブラウザ入力パネル** (注入タブの右列、`media/CapturePanel.tsx`): マイク / カメラ、デバイス選択、送信先トピック、型 (自動判定 / 対応型から選択)、カメラは解像度・fps とプレビュー、マイクはサンプルレートと入力レベルメーター (RMS → dBFS、-60 dB を 0 %、ゆっくり下がる)。送信数・間引き数と、stamp の遅れの注意書き。AudioWorklet のコードは Blob URL で読み込む (追加のビルド設定なし)。送信の詰まり (bufferedAmount > 2 MB) はフレームを飛ばす。純ロジック: `media/pcm.ts` (float→int16、ダウンミックス、チャンク化)、`media/level.ts`、`media/captureRequest.ts`。
+- **右ペイン (トピック)**: 画像の型なら画像ビューア、音声の型なら波形 (直近 2 秒、canvas に min/max) と再生 (WebAudio で隙間なく予約再生)。開いている間だけサーバーが購読する。音声の型ではエコーは自動で始めない (配列が大きいため)。純ロジック: `media/waveform.ts`。
+- **録画タブ** (`recordings/`): トピックのチェックリスト、プリセット「今の注入・ブラウザ入力のトピック」(実行中のジョブのトピック + CameraInfo / AudioInfo) と「自分のノードの出力」(役割 mine のノードの publish 先、内部トピックを除く) (`recordings/presets.ts`)、名前、録画開始 / 停止、経過時間と空き容量の警告。一覧はサイズ・長さ・メッセージ数・トピックごとの件数、再生 (bag モードのジョブを開始)、削除 (確認ダイアログ)。
+- i18n: `i18n/messagesMedia.ts` (地図の操作は `i18n/messagesMap.ts`) を `ja` に合流させる。
+- スクリーンショット: `docs/screenshots/inject-media.png`, `capture-panel.png`, `image-viewer.png`, `audio-waveform.png`, `recordings.png` (`e2e/media.spec.ts`。Chromium の `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` を使う。動画の素材はテスト中にブラウザの MediaRecorder で作り `data/e2e/` に書く)。
+
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
 - 統合 (rclpy, Docker 内): publisher → traffic に Hz が出る / injector periodic → 受信数 / scenario 実行 pass・fail 両方 / API を TestClient で叩く。
@@ -471,7 +551,7 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 2. ✅ P1.5 セキュリティ強化 (Host/Origin/Content-Type)、MessageInfo による Hz・取りこぼし、heavy 型の opt-in
 3. ✅ P2 Web UI 基盤 + ライブ通信マップ (§6.1, 診断を含む) + Traffic + Inject
 4. ✅ P3 Launcher (§0.1 の 3, §4.9) + プロジェクトファイル + ビルドボタン + 恒久ダミーノード (§4.10)
-5. P4 メディア注入 (§4.6.1) + 画像ビューア・音声の波形と再生
+5. ✅ P4 メディア注入 (§4.6.1, §4.11) + ブラウザ入力 + 録画 (§4.12) + 画像ビューア・音声の波形と再生
 6. P5 サンプルノード (`roshanavi_examples`)
 7. P6 シナリオ (runner / CLI / JUnit / 記録モード / Scenarios タブ)
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF

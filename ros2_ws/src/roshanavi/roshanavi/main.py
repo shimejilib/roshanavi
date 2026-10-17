@@ -48,6 +48,14 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='project file (default: <workspace>/roshanavi.yaml)')
     parser.add_argument('--no-autostart', action='store_true',
                         help='do not start the project targets marked autostart')
+    parser.add_argument('--record-warn-free-mb', type=float, default=1024.0,
+                        help='recording: warn below this much free space (MiB, default 1024)')
+    parser.add_argument('--record-warn-free-pct', type=float, default=5.0,
+                        help='recording: warn below this %% of the volume free (default 5)')
+    parser.add_argument('--record-stop-free-mb', type=float, default=256.0,
+                        help='recording: stop automatically below this (MiB, default 256)')
+    parser.add_argument('--record-stop-free-pct', type=float, default=1.0,
+                        help='recording: stop automatically below this %% free (default 1)')
     parser.add_argument('--log-level', default='info',
                         choices=['debug', 'info', 'warning', 'error'])
     # `ros2 run` may append --ros-args ...; ignore anything we do not know.
@@ -64,6 +72,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     import uvicorn  # imported late so --help works without heavy imports
 
     from .lab import Lab
+    from .media.diskguard import DiskThresholds
     from .server import create_app
 
     if not os.path.isdir(args.data_dir):
@@ -73,7 +82,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         return 2
     lab = Lab(data_dir=args.data_dir, show_self=args.show_self,
               monitor_heavy=args.monitor_heavy, workspace=args.workspace,
-              project_path=args.project, autostart=not args.no_autostart).start()
+              project_path=args.project, autostart=not args.no_autostart,
+              disk_thresholds=DiskThresholds(args.record_warn_free_mb, args.record_warn_free_pct,
+                                             args.record_stop_free_mb,
+                                             args.record_stop_free_pct)).start()
     atexit.register(lab.launcher.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     try:

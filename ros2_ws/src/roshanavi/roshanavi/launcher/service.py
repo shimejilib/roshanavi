@@ -28,7 +28,7 @@ from .schema import DummySpec, ProjectSpec, QosSpec, clean_dict
 LOG = logging.getLogger(__name__)
 
 AUTOSTART_DELAY_SEC = 2.0  # let DDS discovery see pre-existing nodes first (baseline)
-PERSISTABLE_MODES = ('once', 'periodic', 'stream')
+PERSISTABLE_MODES = ('once', 'periodic', 'stream', 'media')
 
 
 def _id_from_name(name: str, taken: Iterable[str]) -> str:
@@ -134,7 +134,7 @@ class Launcher:
         """Turn an inject job's settings into a running persistent dummy node."""
         if spec.mode not in PERSISTABLE_MODES:
             raise LauncherError('invalid_request', f'mode {spec.mode!r} cannot become a '
-                                'persistent node (use once / periodic / stream)')
+                                'persistent node (use once / periodic / stream / media)')
         validate.node_name(name)
         taken = [t['id'] for t in self.manager.list()]
         try:
@@ -142,7 +142,8 @@ class Launcher:
                               namespace=namespace or None, topic=spec.topic, type=spec.type,
                               mode=spec.mode, payload=spec.payload, rate_hz=spec.rate_hz,
                               count=spec.count, source=spec.source, loop=spec.loop,
-                              qos=QosSpec(**(spec.qos or {})), autostart=autostart)
+                              qos=QosSpec(**(spec.qos or {})), media=spec.media,
+                              autostart=autostart)
         except ValidationError as exc:
             raise LauncherError('invalid_request', format_errors(exc)) from exc
         self.manager.add(dummy)

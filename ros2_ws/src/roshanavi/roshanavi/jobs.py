@@ -37,6 +37,7 @@ class InjectSpec:
     qos: Dict[str, Any] = field(default_factory=dict)
     bag_rate: float = 1.0
     bag_topics: Tuple[str, ...] = ()
+    media: Optional[Dict[str, Any]] = None  # MediaOptions as a dict (mode "media")
 
 
 def validate_topic(topic: Optional[str]) -> str:

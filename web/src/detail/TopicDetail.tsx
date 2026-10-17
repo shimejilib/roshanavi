@@ -6,7 +6,10 @@ import { t } from '../i18n';
 import { formatBytes, formatHz, formatMs, formatPercent, formatRate } from '../lib/format';
 import { topicPath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
+import { AudioViewer } from './AudioViewer';
 import { EchoView } from './EchoView';
+import { ImageViewer } from './ImageViewer';
+import { useMediaTypes } from '../media/useMediaTypes';
 import { NodeLinks } from './NodeLinks';
 
 interface TopicDetailProps {
@@ -62,6 +65,9 @@ export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
   const info = graph?.topics.find((tp) => tp.name === topic);
   const edges = graph?.edges.filter((e) => e.topic === topic) ?? [];
   const diags = graph?.diagnostics.filter((d) => d.topic === topic || d.detail.subscribed === topic) ?? [];
+  const { info: media } = useMediaTypes('', true);
+  const types = info?.types ?? (entry ? [entry.type] : []);
+  const viewKind = types.length === 1 ? media?.supported.find((s) => s.type === types[0])?.kind : undefined;
   return (
     <div className="detail-body">
       <div className="eyebrow">{t('detail.topic')}</div>
@@ -89,7 +95,9 @@ export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
           {entry.monitored && <Stats entry={entry} />}
         </section>
       )}
-      <EchoView key={topic} topic={topic} autoStart={entry?.monitored ?? true} />
+      {viewKind === 'image' && <ImageViewer key={`img-${topic}`} topic={topic} />}
+      {viewKind === 'audio' && <AudioViewer key={`aud-${topic}`} topic={topic} needsRate={!types[0]?.startsWith('audio_common_msgs/')} />}
+      <EchoView key={topic} topic={topic} autoStart={(entry?.monitored ?? true) && viewKind !== 'audio'} />
     </div>
   );
 }

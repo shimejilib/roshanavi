@@ -19,11 +19,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pytest \
         python3-yaml \
         python3-psutil \
+        python3-pil \
+        python3-numpy \
+        ffmpeg \
         ros-jazzy-demo-nodes-cpp \
         ros-jazzy-demo-nodes-py \
         ros-jazzy-rosbag2 \
         ros-jazzy-rosbag2-storage-default-plugins \
         ros-jazzy-example-interfaces \
+        ros-jazzy-audio-common-msgs \
     && rm -rf /var/lib/apt/lists/*
 
 # Built UI baked into the image; the server picks it up via ROSHANAVI_STATIC_DIR

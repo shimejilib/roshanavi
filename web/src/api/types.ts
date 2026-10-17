@@ -1,5 +1,7 @@
 // Shapes of the roshanavi REST / WebSocket API (docs/DESIGN.md §4.8).
 
+import type { MediaOptions, RecordingStatus } from './mediaTypes';
+
 export type Role = 'mine' | 'dependency' | 'dummy' | 'other';
 
 export interface Qos {
@@ -113,11 +115,13 @@ export interface PublisherRate {
   basis: RateBasis;
 }
 
-export type InjectMode = 'once' | 'periodic' | 'stream' | 'bag';
+export type InjectMode = 'once' | 'periodic' | 'stream' | 'bag' | 'media';
+/** Modes that only appear in job lists (browser capture is started over /ws/capture). */
+export type JobMode = InjectMode | 'capture';
 
 export interface Job {
   id: string;
-  mode: InjectMode;
+  mode: JobMode;
   topic: string | null;
   type: string | null;
   rate_hz: number | null;
@@ -128,6 +132,14 @@ export interface Job {
   error: string | null;
   created_at: number;
   finished_at: number | null;
+  send_hz?: number | null;
+  /** media / capture jobs */
+  dropped?: number;
+  companions?: string[];
+  /** media jobs: wakes later than one chunk (real-time pacing) */
+  late_events?: number;
+  max_lateness_ms?: number;
+  late_policy?: 'shift' | 'catch_up' | 'drop';
 }
 
 export interface LiveMessage {
@@ -136,6 +148,7 @@ export interface LiveMessage {
   graph?: GraphSnapshot;
   targets?: Target[];
   build?: BuildStatus;
+  recording?: RecordingStatus | null;
 }
 
 // ---- Launcher (DESIGN §4.9) ------------------------------------------------
@@ -265,6 +278,7 @@ export interface InjectRequest {
   qos?: { reliability: 'reliable' | 'best_effort'; durability: 'volatile' | 'transient_local'; depth: number };
   bag_rate?: number;
   topics?: string[];
+  media?: MediaOptions;
 }
 
 export interface DataFile {

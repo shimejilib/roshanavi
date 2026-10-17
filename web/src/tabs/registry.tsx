@@ -5,6 +5,7 @@ import { GraphTab } from '../graph/GraphTab';
 import type { MessageKey } from '../i18n';
 import { InjectTab } from '../inject/InjectTab';
 import { LauncherTab } from '../launcher/LauncherTab';
+import { RecordingsTab } from '../recordings/RecordingsTab';
 import { TrafficTab } from '../traffic/TrafficTab';
 
 export interface TabDefinition {
@@ -20,6 +21,7 @@ export const TABS: readonly TabDefinition[] = [
   { id: 'traffic', label: 'tab.traffic', keepMounted: false, render: () => <TrafficTab /> },
   { id: 'inject', label: 'tab.inject', keepMounted: true, render: () => <InjectTab /> },
   { id: 'launcher', label: 'tab.launcher', keepMounted: true, render: () => <LauncherTab /> },
+  { id: 'recordings', label: 'tab.recordings', keepMounted: false, render: () => <RecordingsTab /> },
 ];
 
 export const DEFAULT_TAB = 'graph';

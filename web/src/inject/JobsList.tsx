@@ -37,6 +37,8 @@ export function JobsList({ jobs, targets }: { jobs: Job[]; targets: Target[] }) 
               <div className="muted small">
                 {job.id} · {t('inject.sent', { n: job.sent })}
                 {job.rate_hz ? ` · ${job.rate_hz} Hz` : ''}
+                {job.dropped ? ` · ${t('media.dropped', { n: job.dropped })}` : ''}
+                {job.late_events ? ` · ${t('media.late', { n: job.late_events, ms: Math.round(job.max_lateness_ms ?? 0) })}` : ''}
               </div>
               {job.error && <div className="error-text small">{job.error}</div>}
               {job.state === 'running' && (
@@ -44,7 +46,7 @@ export function JobsList({ jobs, targets }: { jobs: Job[]; targets: Target[] }) 
                   <button type="button" onClick={() => void stop(job.id)}>
                     {t('common.stop')}
                   </button>
-                  {job.mode !== 'bag' && (
+                  {job.mode !== 'bag' && job.mode !== 'capture' && (
                     <button type="button" onClick={() => setPersisting(persisting === job.id ? null : job.id)} data-testid="job-persist">
                       {t('dummy.persist')}
                     </button>

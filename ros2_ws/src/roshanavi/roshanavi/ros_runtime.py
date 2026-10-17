@@ -40,6 +40,7 @@ from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 import rclpy
 from rclpy.callback_groups import CallbackGroup
 from rclpy.context import Context
+from rclpy.event_handler import SubscriptionEventCallbacks
 from rclpy.executors import ExternalShutdownException, MultiThreadedExecutor
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, HistoryPolicy, QoSProfile, ReliabilityPolicy
@@ -49,6 +50,13 @@ LOG = logging.getLogger(__name__)
 
 SELF_NODE_PREFIX = 'roshanavi'
 DEFAULT_DEPTH = 10
+# Jazzy registers a default incompatible-QoS event handler per subscription. Observed with
+# it: when this node's raw traffic subscription and one of its own publishers (injected
+# media, dummy nodes) share a topic, the executor's wait() keeps returning at once with
+# nothing to take, so the executor thread busy-loops in Python (3000+ wait-set rebuilds per
+# second) and holds the GIL, delaying every other thread's wake-up by 50-250 ms (DESIGN
+# 4.11, pacing). We register no event handlers.
+NO_SUBSCRIPTION_EVENTS = SubscriptionEventCallbacks(use_default_callbacks=False)
 
 
 def is_self_node(name: str) -> bool:
@@ -188,7 +196,8 @@ class RosRuntime:
                             group: Optional[CallbackGroup] = None) -> Any:
         with self._lock:
             return self.node.create_subscription(msg_type, topic, callback, qos, raw=raw,
-                                                 callback_group=group)
+                                                 callback_group=group,
+                                                 event_callbacks=NO_SUBSCRIPTION_EVENTS)
 
     def destroy_subscription(self, subscription: Any) -> None:
         with self._lock:

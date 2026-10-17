@@ -56,3 +56,21 @@ describe('buildInjectRequest', () => {
     expect(bag).toEqual({ ok: true, value: { mode: 'bag', source: 'bags/a', loop: false, bag_rate: 2, topics: ['/a', '/b'] } });
   });
 });
+
+describe('media mode', () => {
+  it('builds a media request with an optional type and rate', () => {
+    const r = buildInjectRequest({ ...DEFAULT_FORM, mode: 'media', topic: '/cam', source: 'clip.mp4', rateHz: '', media: { ...DEFAULT_FORM.media, width: '320' } });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.value.type).toBeUndefined();
+    expect(r.value.rate_hz).toBeUndefined();
+    expect(r.value.source).toBe('clip.mp4');
+    expect(r.value.media?.width).toBe(320);
+  });
+
+  it('requires a file and valid media numbers', () => {
+    expect(buildInjectRequest({ ...DEFAULT_FORM, mode: 'media', topic: '/cam' }).ok).toBe(false);
+    const bad = buildInjectRequest({ ...DEFAULT_FORM, mode: 'media', topic: '/cam', source: 'a.wav', media: { ...DEFAULT_FORM.media, sampleRate: '5' } });
+    expect(bad.ok).toBe(false);
+  });
+});

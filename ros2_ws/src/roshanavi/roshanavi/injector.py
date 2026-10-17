@@ -1,4 +1,4 @@
-"""Injection job management (once / periodic / stream / bag).
+"""Injection job management (once / periodic / stream / bag / media).
 
 Publishing jobs own a publisher and rclpy timers on the shared node; their
 callbacks run on the executor thread. Each job has its own lock guarding its
@@ -26,11 +26,13 @@ from .bagplay import BagJob
 from .expr import ExprError, PayloadTemplate
 from .files import FileAccessError, load_stream, resolve_in_data_dir
 from .jobs import InjectError, InjectSpec, Job, validate_topic
+from .media.errors import MediaError
+from .media.factory import create_media_job
 from .ros_runtime import RosRuntime, make_qos
 
 LOG = logging.getLogger(__name__)
 
-MODES = ('once', 'periodic', 'stream', 'bag')
+MODES = ('once', 'periodic', 'stream', 'bag', 'media')
 MAX_RATE_HZ = 1000.0
 MAX_ACTIVE_JOBS = 32
 MAX_FINISHED_JOBS = 100
@@ -206,30 +208,49 @@ class PublishJob(Job):
 class Injector:
     def __init__(self, runtime: RosRuntime, data_dir: str,
                  clock: Callable[[], float] = time.monotonic,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None, extra_roots: Sequence[str] = ()):
         self._runtime = runtime
         self._data_dir = data_dir
+        self._extra_roots = tuple(extra_roots)  # e.g. the workspace (calibration files)
         self._clock = clock
         self._rng = rng or random.Random()
         self._lock = threading.Lock()
         self._jobs: Dict[str, Job] = {}
 
-    def start(self, spec: InjectSpec) -> Dict[str, Any]:
+    def _check_capacity(self) -> None:
         with self._lock:
             active = sum(1 for j in self._jobs.values() if j.active)
         if active >= MAX_ACTIVE_JOBS:
             raise InjectError('too_many_jobs', f'at most {MAX_ACTIVE_JOBS} active jobs', 429)
+
+    def start(self, spec: InjectSpec) -> Dict[str, Any]:
+        self._check_capacity()
         job = self._create(spec)
+        self.register(job)
+        LOG.info('inject job %s started: %s %s', job.id, spec.mode, spec.topic or spec.source)
+        return job.to_dict()
+
+    def register(self, job: Job, check_capacity: bool = False) -> None:
+        """Begin a job and track it (also used for browser capture jobs)."""
+        if check_capacity:
+            self._check_capacity()
         job.begin()
         with self._lock:
             self._jobs[job.id] = job
             self._prune_finished()
-        LOG.info('inject job %s started: %s %s', job.id, spec.mode, spec.topic or spec.source)
-        return job.to_dict()
+
+    def active_jobs(self) -> List[Job]:
+        with self._lock:
+            return [j for j in self._jobs.values() if j.active]
 
     def _create(self, spec: InjectSpec) -> Job:
         if spec.mode not in MODES:
             raise InjectError('invalid_request', f'mode must be one of {MODES}')
+        if spec.mode == 'media':
+            try:
+                return create_media_job(spec, self._runtime, self._data_dir, self._extra_roots)
+            except MediaError as exc:
+                raise InjectError(exc.code, str(exc), exc.status) from exc
         if spec.mode == 'bag':
             return BagJob(spec, self._resolve(spec.source))
         validate_topic(spec.topic)

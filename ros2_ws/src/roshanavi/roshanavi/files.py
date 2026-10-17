@@ -11,6 +11,8 @@ import logging
 import os
 from typing import Any, Dict, List
 
+from .media.kinds import IMAGE_DEMUXERS, media_kind
+
 LOG = logging.getLogger(__name__)
 
 MAX_STREAM_BYTES = 50 * 1024 * 1024
@@ -51,7 +53,7 @@ def _kind(path: str, is_dir: bool) -> str:
         return 'csv'
     if lower.endswith(BAG_FILE_EXTS):
         return 'bag'
-    return 'other'
+    return media_kind(path) or 'other'
 
 
 def list_files(data_dir: str) -> List[Dict[str, Any]]:
@@ -70,6 +72,9 @@ def list_files(data_dir: str) -> List[Dict[str, Any]]:
         if depth >= MAX_LIST_DEPTH:
             dirs[:] = []
         dirs.sort()
+        if current != root and any(os.path.splitext(n)[1].lower() in IMAGE_DEMUXERS
+                                   for n in files):
+            result.append({'path': rel_dir, 'size': _dir_size(current), 'kind': 'image_dir'})
         for name in sorted(files):
             full = os.path.join(current, name)
             rel = os.path.relpath(full, root)

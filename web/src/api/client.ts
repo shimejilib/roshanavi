@@ -14,6 +14,7 @@ import type {
   TargetSpec,
   WorkspaceInfo,
 } from './types';
+import type { MediaTypeInfo, RecordingsResponse, RecordingStatus } from './mediaTypes';
 
 export class ApiError extends Error {
   readonly code: string;
@@ -97,6 +98,14 @@ export const api = {
   updateDummy: (spec: DummySpec) => request<Target>('PUT', `/api/dummies/${enc(spec.id)}`, spec),
   exportDummies: (directory: string, ids: string[] = []) =>
     request<ExportResult>('POST', '/api/dummies/export', { directory, ids }),
+
+  mediaTypes: (topic?: string) =>
+    request<MediaTypeInfo>('GET', topic ? `/api/media/types?topic=${enc(topic)}` : '/api/media/types'),
+  recordings: () => request<RecordingsResponse>('GET', '/api/recordings'),
+  startRecording: (topics: string[], name: string) =>
+    request<RecordingStatus>('POST', '/api/recordings', { topics, name }),
+  stopRecording: () => request<RecordingStatus>('POST', '/api/recordings/stop'),
+  deleteRecording: (name: string) => request<{ deleted: string }>('DELETE', `/api/recordings/${enc(name)}`),
 };
 
 function enc(value: string): string {

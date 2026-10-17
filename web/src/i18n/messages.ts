@@ -2,9 +2,11 @@
 // same keys (missing keys fall back to Japanese). `{name}` = interpolation.
 
 import { mapJa } from './messagesMap';
+import { mediaJa } from './messagesMedia';
 
 export const ja = {
   ...mapJa,
+  ...mediaJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

@@ -11,6 +11,11 @@
   <exec_depend>rosidl_runtime_py</exec_depend>
   <exec_depend>ros2bag</exec_depend>
   <exec_depend>std_msgs</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>ffmpeg</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-pil</exec_depend>
+  <!-- optional: audio_common_msgs (AudioData / AudioDataStamped / AudioInfo adapters) -->
   <exec_depend>python3-fastapi</exec_depend>
   <exec_depend>python3-uvicorn</exec_depend>
   <exec_depend>python3-yaml</exec_depend>
