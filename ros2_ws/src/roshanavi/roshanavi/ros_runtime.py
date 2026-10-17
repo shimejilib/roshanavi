@@ -98,8 +98,11 @@ def duration_ms(duration: Any) -> Optional[float]:
 class RosRuntime:
     """Owns the rclpy context, the ``roshanavi`` node and the executor thread."""
 
-    def __init__(self, node_name: str = 'roshanavi', num_threads: int = 4):
-        if not is_self_node(node_name):
+    def __init__(self, node_name: str = 'roshanavi', num_threads: int = 4,
+                 require_self_name: bool = True):
+        # The server's own node must be recognisable (hidden from the graph);
+        # persistent dummy nodes (dummy_node.py) are meant to be seen.
+        if require_self_name and not is_self_node(node_name):
             raise ValueError(f'node name must start with {SELF_NODE_PREFIX!r}')
         self._node_name = node_name
         self._num_threads = num_threads

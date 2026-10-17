@@ -19,11 +19,12 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import msgutil, security
+from . import msgutil, security, server_launcher
 from .echo import EchoError
 from .files import FileAccessError, list_files
 from .jobs import InjectError, InjectSpec
 from .lab import Lab
+from .launcher.errors import LauncherError
 
 LOG = logging.getLogger(__name__)
 
@@ -87,7 +88,8 @@ def _install_error_handlers(app: FastAPI) -> None:
         (LOG.error if status >= 500 else LOG.info)('request failed: %s', exc)
         return _error(status, getattr(exc, 'code', 'error'), str(exc))
 
-    for exc_type in (InjectError, EchoError, msgutil.MsgUtilError, FileAccessError):
+    for exc_type in (InjectError, EchoError, msgutil.MsgUtilError, FileAccessError,
+                     LauncherError):
         app.add_exception_handler(exc_type, _domain_error)
 
     @app.exception_handler(StarletteHTTPException)
@@ -184,7 +186,9 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
         async def push() -> None:
             snapshot, digest = lab.graph.snapshot()
             payload: Dict[str, Any] = {'traffic': lab.traffic.snapshot(),
-                                       'jobs': lab.injector.list()}
+                                       'jobs': lab.injector.list(),
+                                       'targets': lab.launcher.targets(),
+                                       'build': lab.launcher.builder.status()}
             if digest != state['hash']:
                 payload['graph'] = {**snapshot, 'hash': digest}
                 state['hash'] = digest
@@ -221,6 +225,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     security.install(app, allowed_hosts, allowed_origins)
     _install_error_handlers(app)
     _register_rest(app, lab)
+    server_launcher.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -232,5 +237,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
         def index() -> Dict[str, Any]:
             return {'name': 'roshanavi', 'ui': None,
                     'api': ['/api/graph', '/api/traffic', '/api/types', '/api/inject',
-                            '/api/files', '/ws/live', '/ws/echo/{topic}']}
+                            '/api/files', '/api/targets', '/api/workspace', '/api/build',
+                            '/api/project', '/api/dummies', '/ws/live', '/ws/echo/{topic}',
+                            '/ws/logs/{log_id}']}
     return app

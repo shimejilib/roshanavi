@@ -8,13 +8,6 @@ from conftest import wait_for
 from roshanavi.server import create_app
 
 
-@pytest.fixture
-def client(lab):
-    with TestClient(create_app(lab, static_dir=None, live_period=0.2),
-                    base_url='http://localhost') as c:
-        yield c
-
-
 def test_index_without_static(client):
     body = client.get('/').json()
     assert body['name'] == 'roshanavi'

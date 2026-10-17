@@ -1,17 +1,20 @@
-"""Composition root: runtime + graph + traffic + injector + echo.
+"""Composition root: runtime + graph + traffic + injector + echo + launcher.
 
 A single 1 s housekeeping timer (executor thread) collects the ROS graph,
 updates the graph snapshot, syncs traffic subscriptions and ticks the hz
-history. Everything the API serves is read from those cached snapshots.
+history. It also maps graph nodes to launcher processes (roles). Everything
+the API serves is read from those cached snapshots.
 """
 
 import logging
+import os
 import time
 from typing import Any, Callable, Optional, Sequence
 
 from . import graph
 from .echo import EchoManager
 from .injector import Injector
+from .launcher.service import Launcher
 from .ros_runtime import RosRuntime
 from .traffic import DEFAULT_WINDOW_SEC, TrafficMonitor
 
@@ -25,8 +28,12 @@ class Lab:
                  node_name: str = 'roshanavi', window_sec: float = DEFAULT_WINDOW_SEC,
                  traffic_exclude: Sequence[str] = (), monitor_heavy: bool = False,
                  period_sec: float = HOUSEKEEPING_PERIOD_SEC,
-                 clock: Callable[[], float] = time.monotonic):
+                 clock: Callable[[], float] = time.monotonic,
+                 workspace: Optional[str] = None, project_path: Optional[str] = None,
+                 autostart: bool = True, stop_timeouts: Optional[Sequence[float]] = None):
         self.data_dir = data_dir
+        self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
+                                 autostart=autostart, timeouts=stop_timeouts)
         self.runtime = RosRuntime(node_name)
         self.graph = graph.GraphMonitor(show_self=show_self)
         self.traffic = TrafficMonitor(self.runtime, window_sec=window_sec,
@@ -47,7 +54,8 @@ class Lab:
         """Executor-thread callback; never raises (a crash would kill the timer)."""
         try:
             raw = graph.collect(self.runtime)
-            self.graph.update(raw, self.injector.list())
+            node_info = self.launcher.observe(graph.node_ids(raw))
+            self.graph.update(raw, self.injector.list(), node_info)
             self.traffic.sync(raw)
             self.traffic.tick()
             self.housekeeping_runs += 1
@@ -55,6 +63,7 @@ class Lab:
             LOG.exception('housekeeping failed')
 
     def stop(self) -> None:
+        self.launcher.close()  # idempotent; child processes go first
         if not self.runtime.running:
             return
         if self._timer is not None:

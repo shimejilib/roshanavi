@@ -12,12 +12,17 @@ export interface Qos {
   lease_ms?: number | null;
 }
 
+export type MappingConfidence = 'exact' | 'heuristic';
+
 export interface GraphNode {
   id: string;
   name: string;
   namespace: string;
   role: Role;
   job_id?: string;
+  /** Launcher target that owns this node (when mapped). */
+  target_id?: string;
+  confidence?: MappingConfidence;
 }
 
 export interface GraphTopic {
@@ -115,6 +120,123 @@ export interface LiveMessage {
   traffic: TrafficEntry[];
   jobs: Job[];
   graph?: GraphSnapshot;
+  targets?: Target[];
+  build?: BuildStatus;
+}
+
+// ---- Launcher (DESIGN §4.9) ------------------------------------------------
+
+export type ParamValue = string | number | boolean;
+
+export interface TargetSpec {
+  id: string;
+  kind: 'run' | 'launch';
+  package: string;
+  executable?: string;
+  launch_file?: string;
+  args?: string[];
+  params?: Record<string, ParamValue>;
+  params_file?: string;
+  remaps?: Record<string, string>;
+  namespace?: string;
+  name?: string;
+  role?: 'mine' | 'dependency';
+  autostart?: boolean;
+  auto_restart?: boolean;
+}
+
+export interface DummySpec {
+  id: string;
+  name: string;
+  namespace?: string;
+  topic: string;
+  type: string;
+  mode: 'once' | 'periodic' | 'stream';
+  payload?: Record<string, unknown>;
+  rate_hz?: number;
+  count?: number;
+  source?: string;
+  loop?: boolean;
+  qos?: { reliability: string; durability: string; depth: number };
+  autostart?: boolean;
+  auto_restart?: boolean;
+}
+
+export type TargetStatus = 'stopped' | 'starting' | 'running' | 'exited' | 'crashed' | 'invalid';
+
+export interface TargetNode {
+  node: string;
+  confidence: MappingConfidence;
+  pid: number | null;
+}
+
+export interface Target {
+  id: string;
+  kind: 'run' | 'launch' | 'dummy';
+  role: 'mine' | 'dependency' | 'dummy';
+  spec: TargetSpec | DummySpec;
+  status: TargetStatus;
+  exit_code: number | null;
+  problem: string | null;
+  pid: number | null;
+  pids: number[];
+  command: string[] | null;
+  started_at: number | null;
+  uptime_sec: number | null;
+  restart_count: number;
+  pending_restart: boolean;
+  nodes?: TargetNode[];
+}
+
+export interface WorkspacePackage {
+  name: string;
+  origin: 'workspace' | 'system';
+  prefix: string | null;
+  sourced: boolean;
+  built: boolean;
+  source_dir: string | null;
+  executables: string[];
+  launch_files: string[];
+}
+
+export interface WorkspaceInfo {
+  root: string;
+  scanned_at: number;
+  packages: WorkspacePackage[];
+}
+
+export interface BuildStatus {
+  state: 'idle' | 'running' | 'succeeded' | 'failed';
+  package?: string;
+  exit_code?: number | null;
+  started_at?: number;
+  finished_at?: number | null;
+  error_lines?: string[];
+  needs_resource?: boolean;
+  restarted?: string[];
+  log_id?: string;
+}
+
+export interface LogLine {
+  seq: number;
+  ts: number;
+  stream: 'stdout' | 'stderr' | 'system';
+  text: string;
+}
+
+export interface ProjectState {
+  path: string;
+  exists: boolean;
+  dirty: boolean;
+  error: string | null;
+  project: { version: number; targets?: TargetSpec[]; dummies?: DummySpec[]; watch_topics?: string[] };
+}
+
+export interface ExportResult {
+  directory: string;
+  launch_file: string;
+  files: string[];
+  command: string;
 }
 
 export interface InjectRequest {

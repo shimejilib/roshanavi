@@ -177,7 +177,7 @@ function MapOutline({ elements }: { elements: Element[] }) {
   return (
     <ul className="visually-hidden" aria-label="map" data-testid="graph-outline">
       {elements.map((el) => (
-        <li key={el.data.id} data-id={el.data.id}>
+        <li key={el.data.id} data-id={el.data.id} data-role={el.group === 'nodes' ? el.data.role : undefined}>
           {el.group === 'nodes' ? el.data.label : `${el.data.source} → ${el.data.target} ${el.data.label}`}
         </li>
       ))}

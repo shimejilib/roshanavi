@@ -78,8 +78,13 @@ roshanavi/
       expr.py          # AST ホワイトリスト式評価器 (eval 禁止)
       injector.py      # 注入ジョブ管理
       echo.py          # オンデマンド購読 → 最新メッセージ
+      launcher/        # §4.9-4.10: discovery / validate / command / process / target / manager /
+                       #   build / env / schema / project / dummy_config / service
+      process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース計測でも使う)
+      dummy_node.py    # エントリ: `ros2 run roshanavi dummy --config <yaml>` (恒久ダミーノード)
       scenario/        # schema.py / runner.py / junit.py / cli.py
       server.py        # FastAPI アプリ (REST + WS)
+      server_launcher.py # Launcher / プロジェクト / ビルド / ダミーの REST + /ws/logs
       main.py          # エントリ: `ros2 run roshanavi server`
       static/          # web のビルド成果物 (git 管理外、ビルドで生成)
     test/              # pytest (unit + rclpy 統合)
@@ -98,7 +103,7 @@ roshanavi/
 - `get_node_names_and_namespaces()`, `get_topic_names_and_types()`, `get_publishers_info_by_topic()`, `get_subscriptions_info_by_topic()` から構築。
 - 出力: `{nodes:[{id,name,namespace,role}], topics:[{name,types[]}], edges:[{node,topic,dir:"pub"|"sub",qos:{reliability,durability,history,depth,deadline_ms,liveliness,lease_ms}}], diagnostics:[...]}`
   - `deadline_ms` / `lease_ms` は未設定・無制限なら `null`。
-  - `role`: P2 では実ノードは常に `"other"`。実行中の注入ジョブ (topic を持つもの) は仮想ノード `dummy:<job id>` (`role:"dummy"`, `job_id`) として pub エッジ付きで含める。注入の publisher は roshanavi 自身のノード (既定で非表示) に属するため、ジョブ単位の仮想ノードにしないと注入が地図に現れない。bag ジョブは `rosbag2_player` が通常ノードとして見えるので仮想ノードにしない。
+  - `role`: 実ノードは Launcher の対応づけ (§4.9) で `mine` / `dependency` / `dummy` になり、`target_id` と `confidence` (`exact`/`heuristic`) が付く。対応づかないノードは `"other"`。同じ完全修飾名のノードが複数あっても 1 つにまとめる。実行中の注入ジョブ (topic を持つもの) は仮想ノード `dummy:<job id>` (`role:"dummy"`, `job_id`) として pub エッジ付きで含める。注入の publisher は roshanavi 自身のノード (既定で非表示) に属するため、ジョブ単位の仮想ノードにしないと注入が地図に現れない。bag ジョブは `rosbag2_player` が通常ノードとして見えるので仮想ノードにしない。
   - `diagnostics` (`diagnostics.py` / `qos_compat.py`, 純関数): `{code, severity, topic, nodes[], detail}`。重大度順 (error → warning) で決定的に並べる。
     - `qos_incompatible` (error): topic ごとに pub × sub の全組を判定。reliability (BEST_EFFORT pub → RELIABLE sub)、durability (VOLATILE pub → TRANSIENT_LOCAL sub)、deadline (pub の deadline > sub の要求、pub 無制限で sub 有限も不可)、liveliness (AUTOMATIC pub → MANUAL_BY_TOPIC sub)、lease (pub > sub)。`detail.reasons=[{policy,pub,sub}]`。
     - `no_subscriber` / `no_publisher` (warning): 片側しかいないトピック。隠しトピック (`_` で始まる区切り)、`/rosout`、`/parameter_events`、roshanavi 自身しか端点を持たないトピックは対象外。
@@ -176,6 +181,20 @@ roshanavi/
 | GET/POST | `/api/scenarios`, `/api/scenarios/run` | シナリオ一覧・実行 (結果は JSON) |
 | WS | `/ws/live` | 1 秒毎に `{traffic, graph?(変化時), jobs}` を push。traffic 各エントリに直近 1 秒の受信数 `recent_count` |
 | WS | `/ws/echo/{topic}` | エコー |
+| GET / POST | `/api/workspace`, `/api/workspace/refresh` | パッケージ・実行ファイル・launch ファイル一覧 (§4.9) |
+| GET / POST | `/api/targets` | 起動対象の一覧 (状態・pid・対応ノード) / 登録 (`TargetSpec`) |
+| GET / PUT / DELETE | `/api/targets/{id}` | 取得 / 設定の更新 (反映は再起動時) / 停止して削除 |
+| POST | `/api/targets/{id}/start\|stop\|restart` | 起動・停止・再起動 |
+| GET / DELETE | `/api/targets/{id}/logs?since=` | ログ (リングバッファ) の取得 / クリア。ビルドログは id `_build` |
+| GET / POST / DELETE | `/api/build` | ビルドの状態 / 開始 `{package, restart_running}` (202) / 中止 |
+| GET / PUT | `/api/project` | 作業中のプロジェクト + `dirty` / 全体を置き換えて保存 |
+| POST | `/api/project/save`, `/api/project/reload` | 現在の内容を保存 / ファイルから読み直す |
+| POST / PUT | `/api/dummies`, `/api/dummies/{id}` | 恒久ダミーの登録 / 更新 (`DummySpec`) |
+| POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
+| POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` |
+| WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |
+
+- `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態) も毎秒送る。
 
 - 入力は pydantic モデルで検証。既定 bind は `127.0.0.1` (Docker 内では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:8080:8080`)。
 - エラーは `{error: {code, message}}` で返す。
@@ -184,6 +203,88 @@ roshanavi/
   - Cross-site WebSocket hijacking: WS ハンドシェイクに `Origin` があれば http(s) origin かつ host が許可リスト内 (または `--allowed-origin` と完全一致) であること。違反は close 1008。Origin 無し (非ブラウザ) は許可。Vite dev (`http://localhost:5173`) は localhost で通る。
   - CSRF: POST/PUT/PATCH/DELETE でボディがある場合 `Content-Type: application/json` 必須、違反は 415 `unsupported_media_type`。ボディ無し DELETE は可。
   - Docker では compose が `127.0.0.1:8080:8080` を公開するためホストからの Host は `localhost:8080`/`127.0.0.1:8080` で許可される。別名でアクセスする場合は `--allowed-host` を足す。
+
+### 4.9 Launcher (P3)
+
+自分のノードと依存ノードを GUI で起動・停止・再起動し、ログを見て、ビルドし直す (§0.1 の 3)。`roshanavi/launcher/`。
+
+**ワークスペースの走査 (`discovery.py`)**
+- ワークスペースは `--workspace` (既定: `$ROSHANAVI_WORKSPACE` → カレントディレクトリ)。`install/` (分離・merged 両方) を先に、続いて `AMENT_PREFIX_PATH` を overlay 順に見る。
+- パッケージ = ament index (`share/ament_index/resource_index/packages`)。実行ファイル = `lib/<pkg>/` の実行可能ファイル、launch ファイル = `share/<pkg>/launch/` (2 階層まで) の `*.launch.{py,xml,yaml}` と `*_launch.{py,xml,yaml}`。
+- `origin`: `<ws>/install` 由来なら `workspace`、それ以外は `system`。`sourced`: サーバー起動時の `AMENT_PREFIX_PATH` に入っていたか。`src/` の `package.xml` を走査して `source_dir` を付ける (`COLCON_IGNORE` 等は除外)。未ビルドのパッケージも `built:false` で一覧に出す (ビルドボタン用)。
+- 結果はキャッシュし、`POST /api/workspace/refresh` とビルド成功時に再走査する。
+
+**プロセス管理 (`process.py` / `target.py` / `manager.py`)**
+- `subprocess.Popen(argv list)` のみ (シェルは使わない)。`start_new_session=True` で新しいセッション = プロセスグループにし、`ros2 launch` が起こす子孫も同じグループに入れる。
+- 停止: グループに SIGINT → 5 秒待つ → SIGTERM → 3 秒 → SIGKILL。開始時点の子孫のうちグループ外に出たものも最後に kill する。
+- 状態: `stopped` / `starting` (起動後 2 秒) / `running` / `exited` (自分で 0 終了) / `crashed` (自分で非 0 終了) / `invalid` (設定が検証を通らない。例: パッケージが消えた)。稼働時間、再起動回数、`pending_restart` (実行中に設定を変えた) を返す。世代番号で、古いプロセスの終了通知が新しいプロセスの状態を上書きしないようにする。
+- 自動再起動 (`auto_restart`、既定 off): `crashed` のとき 1, 2, 4 … 最大 30 秒のバックオフで再起動する。30 秒以上動いたら間隔を戻す。ユーザーが止めたら再起動しない。
+- ログ: stdout / stderr を行単位で読み、`stream` タグ付きでターゲットごとのリングバッファ (5000 行) に入れる。起動コマンドと終了コードは `system` 行として残す。子プロセスの環境に `PYTHONUNBUFFERED=1`, `RCUTILS_LOGGING_BUFFERED_STREAM=0`, `RCUTILS_COLORIZED_OUTPUT=0` を入れ、遅延と色コードをなくす。
+- サーバー終了時に全ターゲットを並列に停止する。uvicorn の SIGINT/SIGTERM 処理の後の `finally`、SIGHUP → SIGTERM への読み替え、`atexit` の 3 経路で呼ぶ (冪等)。サーバー自身が SIGKILL された場合だけは子が残る (制約)。
+
+**入力の検証 (`validate.py` / `command.py`)** — 値はすべて argv の 1 要素として渡すが、`ros2 run` / `ros2 launch` / rcl 自身が解釈する argv (`--prefix`, `--ros-args`, `--params-file`, `__node:=` …) を利用者の値に紛れ込ませないため、厳しく検査する。
+- package / executable / launch file は正規表現 (先頭 `-` 不可、`..` 不可) に加え、**走査結果に存在すること**。
+- パラメータ: 名前は `^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$`、値は制御文字不可・4096 文字まで。`-p name:=value` の 1 要素で渡す (bool は `true`/`false`)。
+- リマップ: 両側とも rclpy の `validate_topic_name` を通り、`__` で始まらないこと (`__node` 等の特殊リマップは専用欄のみ)。ノード名・名前空間は `validate_node_name` / `validate_namespace`。
+- `run` の追加引数: `--ros-args`, `--`, `-r`, `-p`, `--params-file`, `-e`, `--prefix`, `--ros-*`, `--log-*` などと、`__xxx:=` 形式を拒否する。`launch` の引数は `name:=value` のみ (名前は識別子)。launch には name / namespace / params / remaps を渡さない (スキーマで拒否)。
+- パラメータファイル: `realpath` がワークスペースか data_dir の内側にある既存の `.yaml` であること (`..`、絶対パス、外向き symlink を拒否)。
+- 生成される argv: `ros2 run <pkg> <exe> [args…] --ros-args -r __node:=<name> -r __ns:=<ns> -p k:=v … -r a:=b … --params-file <path>` / `ros2 launch <pkg> <file> k:=v …`。
+
+**まだ source されていないパッケージ (`env.py`)** — サーバー起動後に初めてビルドしたパッケージは `AMENT_PREFIX_PATH` 等に入っていない。colcon が各パッケージに書く `share/<pkg>/package.dsv` (`prepend-non-duplicate;PYTHONPATH;…` などの宣言的な形式) を読んで子プロセスの環境に適用し、`AMENT_PREFIX_PATH` にもプレフィックスを足す。シェルスクリプトは実行しない。これで roshanavi から起動するノードはすぐ使えるが、利用者のターミナルでは `source install/setup.bash` のやり直しが必要 (UI に「未 source」バッジと説明を出す)。
+
+**ビルドボタン (`build.py`)**
+- `colcon build --packages-select <pkg> --symlink-install --event-handlers console_direct+` をワークスペース直下で実行する。同時に 1 つだけ (409 `build_running`)。対象は `src/` にある workspace パッケージのみ (`not_buildable`)。ログは id `_build`。
+- 判定: 終了コード 0 でも「`ignoring unknown package`」「`Summary: 0 packages finished`」なら失敗とする (setup.py が壊れていると colcon はパッケージを認識できず 0 で終わるため)。失敗時は最初のエラー行 (`error:`, `CMake Error`, `…Error: `, `Traceback`, `Failed <<<` から最大 12 行) を `error_lines` に入れて UI に出す。
+- 成功時は走査をやり直し、`restart_running` (既定 on) なら、そのパッケージの実行中ターゲットを再起動する (`restarted`)。未 source だったパッケージは `needs_resource:true` として UI で案内する。
+
+**ノード ⇄ プロセスの対応づけ (`process_map.py`)** — 次フェーズの CPU / メモリ計測 (RESOURCES.md) でもそのまま使う。
+- 純関数 `map_nodes(nodes, targets, first_seen, baseline, sticky)` と、状態を持つ `NodeProcessMapper` (初出時刻・ベースライン・確定済みの推定) に分ける。プロセスツリーは psutil (`process_tree(pid)`: ルート + 子孫を深さ順)。
+- **exact**: ターゲットのプロセスツリーの argv に `__node:=<name>` (と `__ns:=`、`node:__node:=` 形式も) があれば一致。`ros2 run` のラッパーと実行ファイルの両方に付くため、最も深いプロセスを pid とする。launch_ros は `Node(name=…)` のときに付け、Launcher はノード名を入力したときに付ける。
+- **heuristic**: ターゲットの (再) 起動から 20 秒以内に初めて現れ、他のターゲットが exact で持っていないノード。候補が複数あれば、実行ファイル名とノード名が一致するターゲット、なければ最後に起動したターゲット。一度決まった推定は、そのターゲットが生きている間は保持する。
+- ベースライン: 自分のプロセスが 1 つも動いていない間に見えたノードは推定の対象外 (消えたらベースラインからも外す)。autostart はサーバー起動の 2 秒後に行い、既存ノードの発見を先に済ませる。roshanavi 自身のノードは対象外。
+- 限界 (UI に「推定」と出す): composable node はコンテナプロセス単位 (コンテナ内のどのノードかは分からない)。別コンテナ (PID 名前空間が別) や別 PC のノードは対応づけない。起動直後に無関係のノードが同時に現れると推定を誤ることがある (ノード名を付ければ exact になる)。
+
+**役割**: グラフの各ノードに `role` を付ける。`mine` (ターゲットの「開発中」フラグ)、`dependency` (それ以外のターゲット)、`dummy` (注入ジョブの仮想ノードと恒久ダミーノード)、`other`。対応づいたノードには `target_id` と `confidence` (`exact`/`heuristic`) も付ける。
+
+### 4.10 プロジェクトファイルと恒久ダミーノード (P3)
+
+**`roshanavi.yaml`** (既定: ワークスペース直下、`--project PATH` で変更。Docker の lab は `/data/roshanavi.yaml`)
+```yaml
+version: 1
+targets:
+- id: talker               # [a-z0-9][a-z0-9_-]{0,63}、targets と dummies で一意
+  kind: run                # run | launch
+  package: demo_nodes_cpp
+  executable: talker       # kind: launch なら launch_file
+  name: my_talker          # 以下は任意 (run のみ: name / namespace / params / params_file / remaps)
+  params: {rate: 2, use_sim_time: false}
+  remaps: {chatter: /chat}
+  args: []                 # run: 実行ファイルへの追加引数 / launch: ["name:=value", ...]
+  role: mine               # mine | dependency
+  autostart: true
+  auto_restart: false
+dummies:
+- id: cam
+  name: dummy_camera       # ROS ノード名
+  topic: /camera/info
+  type: std_msgs/msg/String
+  mode: periodic           # once | periodic | stream (bag は不可)
+  payload: {data: "frame ${i}"}
+  rate_hz: 5
+  qos: {reliability: reliable, durability: volatile, depth: 10}
+  autostart: true
+watch_topics: [/chat]
+```
+- pydantic のスキーマで検証する。未知のキーは拒否し、エラーはパス付き (`targets.0.colour: extra fields not permitted`、YAML の構文エラーは行・列付き)。
+- 保存は同じディレクトリの一時ファイル → fsync → `os.replace` (原子的)。キーはスキーマ順、空の値は省いて書く (差分が安定し、git で読みやすい)。
+- サーバーは起動時に読み込み、作業中の内容 (起動対象とダミーの登録・変更) との差を `dirty` として返す。UI の「プロジェクトに保存」で明示的に保存する。パッケージが見つからないなど検証を通らないターゲットも、`invalid` 状態で一覧に残す (古いプロジェクトでも開ける)。
+- `autostart: true` のターゲットとダミーはサーバー起動時に起動する (`--no-autostart` で無効)。
+
+**恒久ダミーノード (`dummy_node.py`)**
+- `ros2 run roshanavi dummy --config <yaml> --ros-args -r __node:=<name>`: 1 つの注入 (once / periodic / stream、`${}` 式、JSONL / CSV) を **独立した ROS ノード** として実行する。injector をそのまま使い、SIGINT / SIGTERM まで動き続ける (once や count 付きでも、送り終えた後もノードは残る)。設定エラーは終了コード 2、注入エラーは 1。
+- Launcher が `kind: dummy` のターゲットとして管理する (役割 `dummy`、ノード名を `__node:=` で渡すので対応づけは exact)。設定 YAML (`{dummy: <DummySpec>, data_dir}`) はサーバーの一時ディレクトリに書く。
+- 注入タブの実行中ジョブから「常駐ノードにする」で、同じペイロード・モード・レート・QoS の恒久ダミーを作って起動し、元のジョブは止める (`POST /api/inject/{id}/persist`)。
+- **書き出し**: ワークスペース内の指定ディレクトリ (realpath で包含を検査、なければ作る) に `<id>.yaml` と `roshanavi_dummies.launch.py` を書く。`ros2 launch <dir>/roshanavi_dummies.launch.py` で、roshanavi のサーバー / UI なしで動く。ただし roshanavi パッケージのインストールは必要 (各ノードが `roshanavi dummy` を実行するため。生成ファイルの先頭に明記)。ノード名・ID は検証済みの値だけを `repr()` で埋め込む。
 
 ## 5. シナリオ (G4)
 
@@ -265,11 +366,12 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 
 ## 6. フロントエンド
 
-タブ: **Graph** / **Traffic** / **Inject** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
+タブ: **Graph** / **Traffic** / **Inject** / **Launcher** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
 - Graph (**ライブ通信マップ**, §6.1)
 - Traffic: ソート可能な表 + 行内 uPlot スパークライン。停止トピック (last_seen > 3 s) を強調。
 - Inject: トピック選択 → 型自動入力 → テンプレ YAML エディタ → mode 別フォーム → 開始。実行中ジョブ一覧と停止ボタン。
 - Scenarios: examples ディレクトリのシナリオ一覧 / 実行 / ステップ別結果表示。
+- Launcher (§6.3): パッケージ選択 → 起動設定 → 起動対象の一覧・ログ・ビルド。
 
 ### 6.1 ライブ通信マップ (Graph タブ)
 ノードとトピックがどうつながり、いまどこに通信が流れているかを、リアルタイムに一目で分かるようにする。
@@ -340,6 +442,17 @@ docker compose --profile test run --rm test  # バックエンド pytest
 docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中に)。スクリーンショットは docs/screenshots/
 ```
 
+### 6.3 実装メモ (P3: Launcher)
+- **Launcher タブ** (`src/launcher/`): 左にパッケージ一覧 (検索、ワークスペースのパッケージを先頭、「ワークスペース」「システム」「未ビルド」「未 source」バッジ、ビルドボタン)、中央に起動設定フォーム・ビルド結果・起動対象のカード、右にログビューア。上部のプロジェクトバーに保存先、未保存バッジ、保存・読み直しボタン。
+  - 起動設定: ノード名、名前空間、パラメータ (名前・値の行。`true`/`false` と数値はその型)、リマップ、パラメータファイル、追加引数 / launch 引数、「開発中 (自分のノード)」、自動起動、自動再起動。クライアント側でもサーバーと同じ規則で先に検査し、平易な文で示す (`launcher/form.ts`)。
+  - カード: 状態チップ、起動コマンド、稼働時間・再起動回数、対応づいたノードと「確実 / 推定」バッジ (説明はツールチップ)、起動・停止・再起動・ログ・編集・削除。
+  - ログビューア (`/ws/logs/{id}`): 最新に追従、stderr と `[ERROR]`/`error:` 行を強調、検索、エラー・警告だけ表示、クリア。表示は最大 5000 行 (`launcher/logs.ts`)。
+  - ビルド結果: 成功 / 失敗、最初のエラー行、再起動したノード、未 source の案内。
+- **注入タブ**: 実行中ジョブに「常駐ノードにする」(ノード名を入力、既定 `dummy_<トピック末尾>`)、常駐ダミーノードの一覧 (起動・停止・自動起動・ログ・削除) と launch ファイルへの書き出し。
+- **右ペイン (ノード)**: 起動対象、プロセスの状態と pid、対応づけ (確実 / 推定と理由)、稼働時間、再起動ボタン、「ログを開く」(Launcher タブへ)。
+- 地図の役割色は P2 の凡例どおり (自分 = 緑、依存 = シアン、ダミー = マゼンタ、その他 = グレー)。注入ジョブの仮想ノードはジョブ ID 付きのラベル、恒久ダミーはノード名で表示する。
+- スクリーンショット: `docs/screenshots/launcher.png`, `graph-roles.png`, `graph-node-launcher.png` (`e2e/launcher.spec.ts`)。
+
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
 - 統合 (rclpy, Docker 内): publisher → traffic に Hz が出る / injector periodic → 受信数 / scenario 実行 pass・fail 両方 / API を TestClient で叩く。
@@ -349,7 +462,7 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 1. ✅ P1 バックエンド核 + Docker (graph / traffic / msgutil / expr / injector / echo / server + テスト)
 2. ✅ P1.5 セキュリティ強化 (Host/Origin/Content-Type)、MessageInfo による Hz・取りこぼし、heavy 型の opt-in
 3. ✅ P2 Web UI 基盤 + ライブ通信マップ (§6.1, 診断を含む) + Traffic + Inject
-4. P3 Launcher (§0.1 の 3) + プロジェクトファイル + ビルドボタン + 恒久ダミーノード
+4. ✅ P3 Launcher (§0.1 の 3, §4.9) + プロジェクトファイル + ビルドボタン + 恒久ダミーノード (§4.10)
 5. P4 メディア注入 (§4.6.1) + 画像ビューア・音声の波形と再生
 6. P5 サンプルノード (`roshanavi_examples`)
 7. P6 シナリオ (runner / CLI / JUnit / 記録モード / Scenarios タブ)

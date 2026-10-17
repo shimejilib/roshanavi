@@ -46,3 +46,12 @@ export function edgeLabel(hz: number, bytesPerSec: number): string {
   if (!(hz > 0)) return '';
   return `${formatHz(hz)} · ${formatRate(bytesPerSec)}`;
 }
+
+/** 75 -> "1:15", 3725 -> "1:02:05". */
+export function formatDuration(seconds: number): string {
+  const total = Math.max(0, Math.floor(seconds));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = String(total % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
+}

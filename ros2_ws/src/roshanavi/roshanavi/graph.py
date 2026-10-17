@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Tuple
+from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from .diagnostics import diagnose
 from .ros_runtime import RosRuntime, is_self_node, qos_to_dict
@@ -94,14 +94,28 @@ def dummy_nodes(jobs: Iterable[Mapping[str, Any]]) -> Tuple[List[Dict[str, Any]]
     return nodes, edges
 
 
+def node_ids(raw: RawGraph) -> List[str]:
+    """Fully qualified ids of real nodes, excluding roshanavi's own node."""
+    return sorted({fq_name(name, namespace) for name, namespace in raw.nodes
+                   if not is_self_node(fq_name(name, namespace))})
+
+
 def build_snapshot(raw: RawGraph, show_self: bool = False,
-                   jobs: Iterable[Mapping[str, Any]] = ()) -> Dict[str, Any]:
-    nodes = []
+                   jobs: Iterable[Mapping[str, Any]] = (),
+                   node_info: Optional[Mapping[str, Mapping[str, Any]]] = None) -> Dict[str, Any]:
+    """``node_info``: per node id ``{role, target_id, confidence}`` from the launcher."""
+    nodes, seen = [], set()
     for name, namespace in sorted(raw.nodes, key=lambda n: fq_name(n[0], n[1])):
         node_id = fq_name(name, namespace)
-        if show_self or not is_self_node(node_id):
-            nodes.append({'id': node_id, 'name': name, 'namespace': namespace,
-                          'role': ROLE_OTHER})
+        if node_id in seen or not (show_self or not is_self_node(node_id)):
+            continue
+        seen.add(node_id)
+        info = (node_info or {}).get(node_id)
+        node = {'id': node_id, 'name': name, 'namespace': namespace, 'role': ROLE_OTHER}
+        if info:
+            node.update(role=info['role'], target_id=info['target_id'],
+                        confidence=info['confidence'])
+        nodes.append(node)
     topics, edges = [], []
     for topic in sorted(raw.topics):
         if not show_self and not topic_is_live(raw, topic):
@@ -136,9 +150,10 @@ class GraphMonitor:
         self._snapshot = build_snapshot(self._raw, show_self)
         self._hash = snapshot_hash(self._snapshot)
 
-    def update(self, raw: RawGraph, jobs: Iterable[Mapping[str, Any]] = ()) -> bool:
-        """Store a new raw graph (+ running inject jobs). True when the snapshot changed."""
-        snapshot = build_snapshot(raw, self._show_self, jobs)
+    def update(self, raw: RawGraph, jobs: Iterable[Mapping[str, Any]] = (),
+               node_info: Optional[Mapping[str, Mapping[str, Any]]] = None) -> bool:
+        """Store a new raw graph (+ running inject jobs, node roles). True when changed."""
+        snapshot = build_snapshot(raw, self._show_self, jobs, node_info)
         digest = snapshot_hash(snapshot)
         with self._lock:
             changed = digest != self._hash

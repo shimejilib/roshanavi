@@ -34,6 +34,7 @@ setup(
     entry_points={
         'console_scripts': [
             'server = roshanavi.main:main',
+            'dummy = roshanavi.dummy_node:main',
         ],
     },
 )

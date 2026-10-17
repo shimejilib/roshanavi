@@ -89,9 +89,23 @@ def data_dir(tmp_path):
     return d
 
 
+WS_ROOT = os.environ.get('ROSHANAVI_TEST_WS', '/ws')
+
+
 @pytest.fixture
-def lab(data_dir):
+def lab(data_dir, tmp_path):
     from roshanavi.lab import Lab
-    instance = Lab(data_dir=str(data_dir), period_sec=0.2).start()
+    instance = Lab(data_dir=str(data_dir), period_sec=0.2, workspace=WS_ROOT,
+                   project_path=str(tmp_path / 'project' / 'roshanavi.yaml'),
+                   stop_timeouts=(3.0, 2.0)).start()
     yield instance
     instance.stop()
+
+
+@pytest.fixture
+def client(lab):
+    from fastapi.testclient import TestClient
+    from roshanavi.server import create_app
+    with TestClient(create_app(lab, static_dir=None, live_period=0.2),
+                    base_url='http://localhost') as c:
+        yield c

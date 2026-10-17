@@ -1,6 +1,7 @@
 import type { GraphSnapshot } from '../api/types';
 import { diagnosticText } from '../graph/diagnosticsText';
 import { t, type MessageKey } from '../i18n';
+import { NodeLauncher } from './NodeLauncher';
 import { NodeLinks } from './NodeLinks';
 
 export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnapshot | null }) {
@@ -22,6 +23,7 @@ export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnap
           ))}
         </ul>
       )}
+      <NodeLauncher node={node} />
       <NodeLinks title={t('detail.publishesTo')} edges={edges.filter((e) => e.dir === 'pub')} showTopic />
       <NodeLinks title={t('detail.subscribesTo')} edges={edges.filter((e) => e.dir === 'sub')} showTopic />
     </div>

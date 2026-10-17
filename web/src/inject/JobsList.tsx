@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { api, describeError } from '../api/client';
-import type { Job } from '../api/types';
+import type { Job, Target } from '../api/types';
 import { t, type MessageKey } from '../i18n';
+import { DummiesList } from './DummiesList';
+import { PersistForm } from './PersistForm';
 
-export function JobsList({ jobs }: { jobs: Job[] }) {
+export function JobsList({ jobs, targets }: { jobs: Job[]; targets: Target[] }) {
   const [error, setError] = useState<string | null>(null);
+  const [persisting, setPersisting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const stop = async (id: string) => {
     setError(null);
     try {
@@ -18,6 +22,7 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
     <section className="jobs" aria-labelledby="jobs-title">
       <h3 id="jobs-title">{t('inject.jobs')}</h3>
       {error && <p className="error-box" role="alert">{error}</p>}
+      {notice && <p className="ok-box small" role="status">{notice}</p>}
       {sorted.length === 0 ? (
         <p className="muted">{t('inject.noJobs')}</p>
       ) : (
@@ -35,14 +40,31 @@ export function JobsList({ jobs }: { jobs: Job[] }) {
               </div>
               {job.error && <div className="error-text small">{job.error}</div>}
               {job.state === 'running' && (
-                <button type="button" onClick={() => void stop(job.id)}>
-                  {t('common.stop')}
-                </button>
+                <div className="row">
+                  <button type="button" onClick={() => void stop(job.id)}>
+                    {t('common.stop')}
+                  </button>
+                  {job.mode !== 'bag' && (
+                    <button type="button" onClick={() => setPersisting(persisting === job.id ? null : job.id)} data-testid="job-persist">
+                      {t('dummy.persist')}
+                    </button>
+                  )}
+                </div>
+              )}
+              {persisting === job.id && job.state === 'running' && (
+                <PersistForm
+                  job={job}
+                  onDone={(message) => {
+                    setPersisting(null);
+                    setNotice(message);
+                  }}
+                />
               )}
             </li>
           ))}
         </ul>
       )}
+      <DummiesList targets={targets} />
     </section>
   );
 }

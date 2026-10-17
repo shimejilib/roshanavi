@@ -159,7 +159,7 @@ export function InjectTab() {
           </p>
         )}
       </form>
-      <JobsList jobs={live.jobs} />
+      <JobsList jobs={live.jobs} targets={live.targets} />
     </div>
   );
 }

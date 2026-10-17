@@ -18,6 +18,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-websockets \
         python3-pytest \
         python3-yaml \
+        python3-psutil \
+        ros-jazzy-demo-nodes-cpp \
         ros-jazzy-demo-nodes-py \
         ros-jazzy-rosbag2 \
         ros-jazzy-rosbag2-storage-default-plugins \

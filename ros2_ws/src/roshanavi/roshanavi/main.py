@@ -1,8 +1,16 @@
-"""Entry point: ``ros2 run roshanavi server [--host H] [--port P] ...``."""
+"""Entry point: ``ros2 run roshanavi server [--host H] [--port P] ...``.
+
+Child processes started by the Launcher are stopped on every exit path:
+uvicorn's SIGINT/SIGTERM handling returns from ``uvicorn.run`` (``finally``),
+SIGHUP is turned into SIGTERM, and ``atexit`` covers ``sys.exit`` elsewhere.
+Only SIGKILL of the server itself can leave children behind.
+"""
 
 import argparse
+import atexit
 import logging
 import os
+import signal
 import sys
 from typing import List, Optional
 
@@ -33,6 +41,13 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser.add_argument('--allowed-origin', action='append', default=[], metavar='ORIGIN',
                         help='extra WebSocket Origin to accept, e.g. https://lab.example:8443 '
                              '(repeatable)')
+    parser.add_argument('--workspace',
+                        default=os.environ.get('ROSHANAVI_WORKSPACE') or os.getcwd(),
+                        help='colcon workspace root (default: $ROSHANAVI_WORKSPACE or cwd)')
+    parser.add_argument('--project', default=None,
+                        help='project file (default: <workspace>/roshanavi.yaml)')
+    parser.add_argument('--no-autostart', action='store_true',
+                        help='do not start the project targets marked autostart')
     parser.add_argument('--log-level', default='info',
                         choices=['debug', 'info', 'warning', 'error'])
     # `ros2 run` may append --ros-args ...; ignore anything we do not know.
@@ -53,8 +68,14 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     if not os.path.isdir(args.data_dir):
         LOG.warning('data dir %s does not exist; stream/bag injection will fail', args.data_dir)
+    if not os.path.isdir(args.workspace):
+        LOG.error('workspace %s does not exist', args.workspace)
+        return 2
     lab = Lab(data_dir=args.data_dir, show_self=args.show_self,
-              monitor_heavy=args.monitor_heavy).start()
+              monitor_heavy=args.monitor_heavy, workspace=args.workspace,
+              project_path=args.project, autostart=not args.no_autostart).start()
+    atexit.register(lab.launcher.close)
+    signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
     try:
         app = create_app(lab, static_dir=args.static_dir, allowed_hosts=args.allowed_host,
                          allowed_origins=args.allowed_origin)

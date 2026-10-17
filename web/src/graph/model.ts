@@ -149,7 +149,8 @@ export function buildElements(snap: GraphSnapshot, traffic: Map<string, TrafficE
     group: 'nodes',
     data: {
       id: nodeElementId(n.id),
-      label: n.role === 'dummy' ? `${n.name}\n${n.job_id ?? ''}` : n.id,
+      // Virtual inject-job sources show the job id; real (persistent) dummies their name.
+      label: n.job_id ? `${n.name}\n${n.job_id}` : n.id,
       kind: 'node',
       role: n.role,
       ref: n.id,

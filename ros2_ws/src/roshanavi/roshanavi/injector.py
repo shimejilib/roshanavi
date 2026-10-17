@@ -276,6 +276,14 @@ class Injector:
             raise InjectError('not_found', f'no such job: {job_id}', 404)
         return job.to_dict()
 
+    def spec(self, job_id: str) -> InjectSpec:
+        """The full request of a job (including payload), e.g. to persist it."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+        if job is None:
+            raise InjectError('not_found', f'no such job: {job_id}', 404)
+        return job.spec
+
     def list(self) -> List[Dict[str, Any]]:
         with self._lock:
             jobs = list(self._jobs.values())

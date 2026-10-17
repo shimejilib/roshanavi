@@ -83,3 +83,20 @@ describe('buildElements', () => {
     expect(new Set(edges.map((e) => e.id)).size).toBe(edges.length);
   });
 });
+
+describe('launcher roles', () => {
+  it('keeps the role from the snapshot and labels real vs virtual dummies', () => {
+    const snap = chatterGraph();
+    snap.nodes = [
+      { id: '/talker', name: 'talker', namespace: '/', role: 'mine', target_id: 'tk', confidence: 'exact' },
+      { id: '/dummy_cam', name: 'dummy_cam', namespace: '/', role: 'dummy', target_id: 'cam', confidence: 'exact' },
+      { id: 'dummy:abc', name: 'inject periodic', namespace: '', role: 'dummy', job_id: 'abc' },
+    ];
+    const nodes = buildElements(snap, new Map(), NOW_MS).flatMap((e) => (e.group === 'nodes' && e.data.kind === 'node' ? [e.data] : []));
+    expect(nodes.map((n) => [n.label, n.role])).toEqual([
+      ['/talker', 'mine'],
+      ['/dummy_cam', 'dummy'],
+      ['inject periodic\nabc', 'dummy'],
+    ]);
+  });
+});

@@ -10,6 +10,9 @@ interface AppStateValue {
   /** Topic the Inject tab should prefill (set by "inject to this topic"). */
   injectTopic: string | null;
   openInject: (topic: string) => void;
+  /** Log shown in the Launcher tab (target id or `_build`). */
+  logTarget: string | null;
+  openLogs: (targetId: string, switchTab?: boolean) => void;
 }
 
 const AppStateContext = createContext<AppStateValue | null>(null);
@@ -18,6 +21,7 @@ export function AppStateProvider({ children, initialTab }: { children: ReactNode
   const [tab, setTab] = useState(initialTab);
   const [selection, select] = useState<Selection>(null);
   const [injectTopic, setInjectTopic] = useState<string | null>(null);
+  const [logTarget, setLogTarget] = useState<string | null>(null);
   const value = useMemo<AppStateValue>(
     () => ({
       tab,
@@ -29,8 +33,13 @@ export function AppStateProvider({ children, initialTab }: { children: ReactNode
         setInjectTopic(topic);
         setTab('inject');
       },
+      logTarget,
+      openLogs: (targetId: string, switchTab = true) => {
+        setLogTarget(targetId);
+        if (switchTab) setTab('launcher');
+      },
     }),
-    [tab, selection, injectTopic],
+    [tab, selection, injectTopic, logTarget],
   );
   return <AppStateContext.Provider value={value}>{children}</AppStateContext.Provider>;
 }
