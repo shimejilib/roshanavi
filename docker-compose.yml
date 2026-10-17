@@ -1,0 +1,44 @@
+# roshanavi services
+#   lab  : API/web server on 127.0.0.1:8080
+#   demo : demo_nodes_py talker + listener (same ROS_DOMAIN_ID / network)
+#   test : build + full pytest suite (exit code = result)
+
+x-ros: &ros
+  build:
+    context: .
+    dockerfile: docker/Dockerfile
+  image: roshanavi:dev
+  init: true
+  environment: &ros-env
+    ROS_DOMAIN_ID: ${ROS_DOMAIN_ID:-42}
+    PYTHONUNBUFFERED: "1"
+
+services:
+  lab:
+    <<: *ros
+    environment:
+      <<: *ros-env
+      ROSHANAVI_BUILD: "1"
+    volumes:
+      - ./ros2_ws/src:/ws/src:ro
+      - ./data:/data
+    ports:
+      - "127.0.0.1:8080:8080"
+    command: ["ros2", "run", "roshanavi", "server", "--host", "0.0.0.0", "--port", "8080",
+              "--data-dir", "/data"]
+
+  demo:
+    <<: *ros
+    command: ["bash", "-c",
+              "ros2 run demo_nodes_py talker & ros2 run demo_nodes_py listener & wait"]
+
+  test:
+    <<: *ros
+    profiles: ["test"]
+    environment:
+      <<: *ros-env
+      ROSHANAVI_BUILD: "1"
+      ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
+    volumes:
+      - ./ros2_ws/src:/ws/src:ro
+    command: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/ws/src/roshanavi/test"]
