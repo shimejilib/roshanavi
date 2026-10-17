@@ -17,6 +17,7 @@ import { Legend } from './Legend';
 import { MapMenu } from './MapMenu';
 import { buildElements, filterSnapshot, nodeElementId, topicElementId } from './model';
 import { usePalette } from './usePalette';
+import { useProjectKey } from './useProjectKey';
 
 export function selectionToElementId(sel: Selection): string | null {
   if (!sel) return null;
@@ -47,6 +48,7 @@ export function GraphTab({ active }: { active: boolean }) {
   const { selection, select, openDialog, isolation } = useAppState();
   const palette = usePalette();
   const workspace = useWorkspace();
+  const projectKey = useProjectKey();
   const [query, setQuery] = useState('');
   const [hideHidden, setHideHidden] = useState(true);
   const [fitSignal, setFitSignal] = useState(0);
@@ -114,6 +116,7 @@ export function GraphTab({ active }: { active: boolean }) {
             onSelect={(id) => select(elementIdToSelection(id))}
             fitSignal={fitSignal}
             layoutSignal={layoutSignal}
+            projectKey={projectKey}
             renderMenu={(anchor, close) => (
               <MapMenu key={`${anchor.x}:${anchor.y}`} anchor={anchor} buildable={buildable} commands={commands} onClose={close} />
             )}

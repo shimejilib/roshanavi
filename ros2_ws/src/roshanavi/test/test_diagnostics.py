@@ -38,6 +38,7 @@ def test_names_similar(a, b, similar):
 
 def test_hidden_topics():
     assert is_hidden_topic('/rosout') and is_hidden_topic('/parameter_events')
+    assert is_hidden_topic('/events/write_split')  # rosbag2's own topic while recording
     assert is_hidden_topic('/nav/_action/status')
     assert not is_hidden_topic('/chatter')
 

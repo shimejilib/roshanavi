@@ -43,7 +43,7 @@ git clone https://github.com/shimejilib/roshanavi.git
 cd roshanavi && docker compose up -d --build lab demo
 ```
 
-ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) も開けます。
+ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) と、rclpy の MultiThreadedExecutor が CPU を空回りする様子を確かめるデモ (busy_demo) も開けます。
 
 自分のワークスペースで使う手順は [docs/project/distribution.md](docs/project/distribution.md) を参照してください (ソースからのインストール。将来は apt で配布予定)。
 

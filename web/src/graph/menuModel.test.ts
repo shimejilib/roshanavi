@@ -44,6 +44,14 @@ describe('map menu by node role', () => {
     expect(items.every((i) => i.enabled)).toBe(true);
   });
 
+  it('shows only the toggle that fits once the dummy pause state is known', () => {
+    const base = { node: node('/d', { role: 'dummy', target_id: 'in' }), targets: [target('in', 'dummy')] };
+    const running = menuItems({ kind: 'node', nodeId: '/d' }, ctx({ ...base, dummyPaused: false }));
+    expect(actions(running)).toEqual(['stop', 'restart', 'pause', 'editDummy', 'exportLaunch', 'logs', 'params', 'isolate']);
+    const paused = menuItems({ kind: 'node', nodeId: '/d' }, ctx({ ...base, dummyPaused: true }));
+    expect(actions(paused)).toEqual(['stop', 'restart', 'resume', 'editDummy', 'exportLaunch', 'logs', 'params', 'isolate']);
+  });
+
   it('gives transform nodes edit / export but no pause and no build', () => {
     const tf: Target = {
       ...target('tf', 'run'), kind: 'transform', role: 'transform',

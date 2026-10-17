@@ -10,6 +10,8 @@ interface Props {
   samples: Record<string, Record<string, unknown>>;
   aliases: readonly string[];
   preview: PreviewState;
+  /** The values the output was computed from still have cut-short arrays / strings (message over the size cap). */
+  truncated?: boolean;
 }
 
 function json(value: unknown): string {
@@ -43,7 +45,7 @@ function OutputPane({ preview }: { preview: PreviewState }) {
   );
 }
 
-export function TransformPreview({ samples, aliases, preview }: Props) {
+export function TransformPreview({ samples, aliases, preview, truncated = false }: Props) {
   return (
     <section className="transform-preview" aria-label={t('transform.preview')}>
       <div>
@@ -62,6 +64,7 @@ export function TransformPreview({ samples, aliases, preview }: Props) {
       <div>
         <h4>{t('transform.previewOutput')}</h4>
         <OutputPane preview={preview} />
+        {truncated && <p className="warn-text small" data-testid="transform-preview-truncated">{t('transform.previewTruncated')}</p>}
       </div>
     </section>
   );

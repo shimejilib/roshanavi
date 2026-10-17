@@ -1,5 +1,7 @@
 """Browser capture WebSocket: fake PCM / JPEG frames -> published messages."""
 
+import threading
+
 import numpy as np
 import pytest
 from sensor_msgs.msg import CameraInfo, CompressedImage, Image
@@ -8,7 +10,7 @@ from std_msgs.msg import Int16MultiArray
 
 from conftest import wait_for
 from media_fixtures import jpeg_bytes
-from roshanavi.media.capture import ByteBudget, MinInterval, Rechunker
+from roshanavi.media.capture import ByteBudget, CaptureJob, MinInterval, Rechunker
 
 
 class Clock:
@@ -113,3 +115,56 @@ def test_capture_rejects_foreign_origin(client):
                                       headers={'origin': 'http://evil.example'}):
             pass
     assert err.value.code == 1008
+
+
+class OrderedPublisher:
+    """Records whether it was drained (acked) before it was destroyed."""
+
+    def __init__(self, events, name):
+        self._events, self._name = events, name
+
+    def wait_for_all_acked(self, _timeout):
+        self._events.append(('acked', self._name))
+        return True
+
+
+def test_teardown_waits_for_acks_before_destroying_the_publishers():
+    """#6: frames still in flight to reliable readers must not die with the publisher."""
+    events = []
+
+    class Runtime:
+        def destroy_publisher(self, pub):
+            events.append(('destroyed', pub._name))
+
+    job = object.__new__(CaptureJob)
+    job.id = 'unit'
+    job.lock = threading.Lock()
+    job._runtime = Runtime()
+    job._publisher = OrderedPublisher(events, 'main')
+    job._companions = [(None, OrderedPublisher(events, 'info'))]
+    job._teardown()
+    assert events == [('acked', 'main'), ('acked', 'info'),
+                      ('destroyed', 'main'), ('destroyed', 'info')]
+
+
+@pytest.mark.parametrize('how', ['close', 'stop'])
+def test_frames_sent_right_before_the_socket_closes_are_all_published(client, lab, helper, how):
+    """#6: the browser closes right after its last frame; none of them may be lost."""
+    topic = f'/tl_cap_last_{how}'
+    received = helper.collector(Int16MultiArray, topic, 100)
+    wait_for(lambda: lab.runtime.subscriptions_info(topic), timeout=10)
+    frames = 8  # fewer than the publisher history (10): a burst deeper than that is a QoS limit
+    with client.websocket_connect('ws://localhost/ws/capture') as ws:
+        ws.send_json({'kind': 'audio', 'topic': topic, 'sample_rate': 16000,
+                      'chunk_samples': 320, 'reliability': 'reliable'})
+        assert ws.receive_json()['event'] == 'ready'
+        for _ in range(frames):
+            ws.send_bytes(pcm(320))
+        if how == 'stop':
+            ws.send_json({'cmd': 'stop'})
+            # the acknowledgement comes after every earlier frame was handled and drained
+            assert ws.receive_json()['event'] == 'stopped'
+        # leaving the block closes the socket immediately
+    wait_for(lambda: len(received) == frames, timeout=5)
+    jobs = client.get('/api/inject').json()['jobs']
+    assert [j['sent'] for j in jobs if j['topic'] == topic] == [frames]

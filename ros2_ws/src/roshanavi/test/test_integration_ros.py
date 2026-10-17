@@ -126,3 +126,25 @@ def test_echo_latest_message(lab, helper):
     finally:
         lab.echo.release('/tl_echo')
     assert lab.echo.latest('/tl_echo') == (0, None)
+
+
+def test_echo_sample_is_not_truncated_up_to_the_size_cap(lab, helper):
+    """#10: the transform preview must see whole arrays, not the 32-item display copy."""
+    from std_msgs.msg import Int32MultiArray
+    helper.periodic_publisher(Int32MultiArray, '/tl_echo_sample', 10.0,
+                              lambda i: Int32MultiArray(data=list(range(100))))
+    wait_for(lambda: '/tl_echo_sample' in dict(lab.runtime.topic_names_and_types()), timeout=15.0)
+    assert lab.echo.latest_sample('/tl_echo_sample') == (0, None, False, 0)  # not echoed yet
+    lab.echo.acquire('/tl_echo_sample')
+    try:
+        _, display = wait_for(lambda: (lambda r: r if r[1] else None)(
+            lab.echo.latest('/tl_echo_sample')), timeout=5.0)
+        assert display['data']['_truncated'] is True and len(display['data']['head']) == 32
+        seq, msg, capped, size = lab.echo.latest_sample('/tl_echo_sample')
+        assert seq >= 1 and capped is False and size > 400
+        assert msg['data'] == list(range(100))
+        # a message over the cap falls back to the display copy and says so
+        seq, msg, capped, size = lab.echo.latest_sample('/tl_echo_sample', max_bytes=64)
+        assert capped is True and size > 64 and msg['data']['_truncated'] is True
+    finally:
+        lab.echo.release('/tl_echo_sample')

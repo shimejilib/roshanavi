@@ -58,6 +58,8 @@ class MediaJob(Job):
                                     name=f'media-reader-{self.id}')
         self._drop_ratio = drop_ratio
         self._stop = threading.Event()
+        self._go = threading.Event()  # set while not paused; a stop sets it too (wakes the wait)
+        self._go.set()
         self._publisher: Any = None
         self._companions: List[Tuple[Companion, Any]] = []
         self._companion_topics: List[str] = []  # kept after teardown for the job list
@@ -121,13 +123,36 @@ class MediaJob(Job):
         run_paced(self._pacer, self._take, self._send, self._stop.wait, END,
                   limit=self.spec.count)
 
+    def set_paused(self, paused: bool) -> None:
+        super().set_paused(paused)
+        if paused:
+            self._go.clear()
+        else:
+            self._go.set()
+
+    def _wait_resume(self) -> bool:
+        """Block while paused; False when the job was stopped meanwhile.
+
+        Pausing holds the source: nothing is read, dropped or counted, and the schedule
+        restarts at resume (no burst of frames that were due while paused).
+        """
+        if self._go.is_set():
+            return not self._stop.is_set()
+        self._go.wait()
+        if self._stop.is_set():
+            return False
+        self._pacer.reset()
+        return True
+
     def _take(self) -> Any:
-        return END if self._stop.is_set() else self._prefetch.get()
+        if not self._wait_resume():
+            return END
+        return self._prefetch.get()
 
     def _send(self, item: Any) -> bool:
         """Pacer-thread step after the deadline: maybe drop, else stamp + publish."""
-        if self.paused:  # paused frames are read and skipped so timing stays on schedule
-            return True
+        if not self._wait_resume():  # paused after the item was taken: keep it, send on resume
+            return False
         if self._drop_ratio and self._rng.random() < self._drop_ratio:
             self.dropped += 1
             return True
@@ -158,6 +183,7 @@ class MediaJob(Job):
 
     def _teardown(self) -> None:
         self._stop.set()
+        self._go.set()
         self._source.close()
         self._prefetch.close()
         thread = self._thread

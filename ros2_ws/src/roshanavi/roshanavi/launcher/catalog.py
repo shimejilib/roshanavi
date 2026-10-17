@@ -10,20 +10,26 @@ Two sources:
 
 Clients pick an entry by its ``id`` from the listing (never by a free path),
 so only these files can ever be opened.
+
+The id of the last opened entry is remembered in ``<data_dir>/last_project.json`` and,
+after validation against the listing, used as the project at the next start (#9).
 """
 
 import glob
+import json
 import logging
 import os
 import re
 from typing import Any, Dict, List, Optional
 
+from .dummy_config import write_atomic
 from .errors import LauncherError
 from .project import DEFAULT_FILE_NAME, bootstrap_project
 
 LOG = logging.getLogger(__name__)
 
 PROJECTS_SUBDIR = 'projects'
+LAST_PROJECT_FILE = 'last_project.json'
 MAX_ENTRIES = 100
 _NAME_RE = re.compile(r'^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$')
 
@@ -94,3 +100,36 @@ class ProjectCatalog:
                 LOG.info('example %s copied to %s', entry['name'], target)
             return target
         raise LauncherError('not_found', f'no such project: {entry_id}', 404)
+
+    # ---- the project to start with (#9) ------------------------------------------
+    def _last_path(self) -> str:
+        return os.path.join(self.data_dir, LAST_PROJECT_FILE)
+
+    def remember(self, entry_id: str) -> None:
+        """Remember the entry that was opened (a failure is logged, never raised)."""
+        try:
+            write_atomic(self._last_path(), json.dumps({'id': entry_id}) + '\n')
+        except OSError as exc:
+            LOG.warning('cannot remember the opened project: %s', exc)
+
+    def remembered_path(self) -> Optional[str]:
+        """The file of the remembered entry, or None when nothing valid is remembered.
+
+        The stored id is only trusted if it is still in the listing, so a deleted project or a
+        hand-edited file falls back to the ``--project`` option.
+        """
+        try:
+            with open(self._last_path(), encoding='utf-8') as fh:
+                entry_id = json.load(fh).get('id')
+        except FileNotFoundError:
+            return None
+        except (OSError, ValueError, AttributeError) as exc:
+            LOG.warning('ignoring %s: %s', self._last_path(), exc)
+            return None
+        if not isinstance(entry_id, str):
+            return None
+        try:
+            return self.resolve(entry_id)
+        except LauncherError:
+            LOG.warning('the remembered project %r is not available any more', entry_id)
+            return None

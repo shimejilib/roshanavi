@@ -1,6 +1,7 @@
 // Topic-name helpers shared by graph, traffic and diagnostics.
 
-const INFRA_TOPICS = new Set(['/rosout', '/parameter_events']);
+// `/events/write_split` is published by `ros2 bag record` itself while roshanavi records.
+const INFRA_TOPICS = new Set(['/rosout', '/parameter_events', '/events/write_split']);
 
 /** Same rule as the backend (diagnostics.is_hidden_topic). */
 export function isHiddenTopic(topic: string): boolean {

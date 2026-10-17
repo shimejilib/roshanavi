@@ -3,11 +3,11 @@
 // items show why in a tooltip and a visible hint.
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { describeError } from '../api/client';
+import { api, describeError } from '../api/client';
 import { t } from '../i18n';
 import { useLive } from '../state/LiveProvider';
 import { NodeControlFeedback } from './NodeControlButtons';
-import { menuItems, menuTitle, type MenuAction, type MenuItem, type MenuTarget } from './menuModel';
+import { menuItems, menuRole, menuTitle, type MenuAction, type MenuItem, type MenuTarget } from './menuModel';
 import { useMenuActions, type MapCommands } from './useMenuActions';
 import { useNodeControl } from './useNodeControl';
 
@@ -57,12 +57,31 @@ function MenuButton({ entry, onRun }: { entry: MenuItem; onRun: (action: MenuAct
   );
 }
 
+/** Current `paused` parameter of a persistent dummy (undefined while unknown or not a dummy). */
+function useDummyPaused(nodeId: string | undefined): boolean | undefined {
+  const [state, setState] = useState<{ nodeId: string; paused: boolean } | null>(null);
+  useEffect(() => {
+    if (!nodeId) return undefined;
+    let cancelled = false;
+    api.parameters(nodeId)
+      .then((res) => {
+        const value = res.parameters.find((p) => p.name === 'paused')?.value;
+        if (!cancelled && typeof value === 'boolean') setState({ nodeId, paused: value });
+      })
+      .catch(() => undefined); // unknown: the menu falls back to offering both items
+    return () => { cancelled = true; };
+  }, [nodeId]);
+  return state && state.nodeId === nodeId ? state.paused : undefined;
+}
+
 export function MapMenu({ anchor, buildable, commands, onClose }: MapMenuProps) {
   const ref = useRef<HTMLDivElement | null>(null);
   const { live } = useLive();
   const { target } = anchor;
   const node = target.kind === 'node' ? live.graph?.nodes.find((n) => n.id === target.nodeId) : undefined;
   const control = useNodeControl(node, onClose);
+  const isDummy = menuRole(node, live.targets) === 'dummy';
+  const dummyPaused = useDummyPaused(isDummy ? node?.id : undefined);
   const run = useMenuActions(target, commands);
   const [error, setError] = useState<string | null>(null);
   const topic = target.kind === 'topic' ? target.topic : '';
@@ -74,8 +93,9 @@ export function MapMenu({ anchor, buildable, commands, onClose }: MapMenuProps) 
       buildable,
       traffic: topic ? live.traffic.get(topic) : undefined,
       topicTypes: topic ? live.graph?.topics.find((tp) => tp.name === topic)?.types : undefined,
+      dummyPaused,
     }),
-    [target, node, live.targets, live.jobs, buildable, live.traffic, live.graph, topic],
+    [target, node, live.targets, live.jobs, buildable, live.traffic, live.graph, topic, dummyPaused],
   );
 
   useEffect(() => {

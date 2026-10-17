@@ -9,7 +9,7 @@
 - **書き出し**: ワークスペース内の指定ディレクトリ (realpath で包含を検査、なければ作る) に `<id>.yaml` と `roshanavi_dummies.launch.py` を書く。`ros2 launch <dir>/roshanavi_dummies.launch.py` で、roshanavi のサーバー / UI なしで動く。ただし roshanavi パッケージのインストールは必要 (各ノードが `roshanavi dummy` を実行するため。生成ファイルの先頭に明記)。ノード名・ID は検証済みの値だけを `repr()` で埋め込む。
 
 ## 恒久ダミーの一時停止
-- dummy ノードは bool パラメータ `paused` を宣言する。true にすると注入ジョブを一時停止する (ノードは動き続ける)。地図の「一時停止・再開」はこのパラメータを [launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a) の API で変える (`ros2 param set` でも同じ)。
+- dummy ノードは bool パラメータ `paused` を宣言する。true にすると注入ジョブを一時停止する (ノードは動き続ける)。地図の「一時停止・再開」(メニューを開くとき現在値を取得し、合う方だけを出す) はこのパラメータを [launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a) の API で変える (`ros2 param set` でも同じ)。
 
 ## 変換ノード (P5)
 入力ノード (ダミー) は「一方的に送る」だけだった。変換ノードは **トピックを受信し、変換して別のトピックに送る** ノードを、コードを書かずに GUI で作る。ROS 1 の `topic_tools transform` (Python 式で変換) に相当する機能を、安全な式評価 ([input-and-media.md#expr](input-and-media.md#expr-安全な式評価)) と GUI で提供する位置づけ。
@@ -43,7 +43,7 @@
 
 **管理**: プロジェクトファイルの `transforms:` (ダミーの `kind` を増やすのではなく別の一覧にした。`DummySpec` は注入の設定で、入力・出力・式の形がまったく違うため)。Launcher の起動リストで ID を共有し (targets / dummies / transforms で一意)、`kind: transform`、役割 `transform` (地図はダミーと同系統の紫、凡例「変換ノード」、ノード一覧の役割「変換」)。起動・停止・再起動・ログ・自動起動・自動再起動・`launch` への書き出しはダミーと同じ (`POST /api/dummies/export` は変換ノードも書き出し、launch ファイルの Node は `executable='transform'`)。API: `POST /api/transforms` (`?start=true`)、`PUT /api/transforms/{id}`。削除・起動・停止・ログは `/api/targets/{id}`。
 
-**試算 (プレビュー)** (`transform/preview.py`、`POST /api/transforms/preview {spec, samples}`): ノードと同じ `Computer` と `msgutil.build` で、送らずに計算だけする。`samples` は入力の別名ごとの素の dict (UI が `/ws/echo` で受けた最新のメッセージ。届いていなければ省略し、サーバーが入力の型の既定値で代わりに計算して `templated` に別名を返す)。常に 200 で `{ok, passed, output, errors[{path, code, message, params}], templated, relay}` を返す (仕様の検査エラーも `spec_invalid` として同じ形)。`passed: false` かつエラーなしは「条件に合わないので送らない」。出力の型に合わない値は `build_invalid_value` などを、メッセージの先頭のフィールドの場所に付ける。サンプルは最大 8 個、深さ 32 まで。エコーは長い配列を先頭 32 個に切り詰めた形 (`{_truncated, length, head}`) で送るため、32 個を超える配列のフィールドを使う式はプレビューと実際の結果が違うことがある (既知の制限)。
+**試算 (プレビュー)** (`transform/preview.py`、`POST /api/transforms/preview {spec, samples}`): ノードと同じ `Computer` と `msgutil.build` で、送らずに計算だけする。`samples` は入力の別名ごとの素の dict (UI が `/ws/echo` で受けた最新のメッセージ。届いていなければ省略し、サーバーが入力の型の既定値で代わりに計算して `templated` に別名を返す)。常に 200 で `{ok, passed, output, errors[{path, code, message, params}], templated, relay}` を返す (仕様の検査エラーも `spec_invalid` として同じ形)。`passed: false` かつエラーなしは「条件に合わないので送らない」。出力の型に合わない値は `build_invalid_value` などを、メッセージの先頭のフィールドの場所に付ける。サンプルは最大 8 個、深さ 32 まで。エコーは長い配列を先頭 32 個に切り詰めた形 (`{_truncated, length, head}`、長い文字列は `…(+N chars)`) で送るので、**プレビューの計算にはエコーの値ではなく、切り詰めないメッセージを使う** (#10)。`GET /api/echo/{topic}/sample` が、エコー中のトピックの最新メッセージを `{topic, seq, msg, capped, size_bytes, max_bytes}` で返す (`EchoManager.latest_sample`)。シリアライズ後のサイズが上限 (`echo.MAX_SAMPLE_BYTES` = 256 KiB) までなら `msg` は切り詰めない dict (`msgutil.to_plain`)、超えると `capped: true` で従来の切り詰めた表示用の値に戻る (巨大な画像などで応答とプレビューのリクエストが膨らまないため)。エコーしていないトピック・まだ届いていないときは `msg: null`。UI は、エコーの値に切り詰めがあるトピックだけ 1 秒ごとにこの API を引き、上限内ならそれで計算する。上限を超えたとき (または取得できないとき) は切り詰めた値で計算し、プレビューに「入力のメッセージが大きいため、配列や文字列を途中で切った値で計算しています」と明示する。
 
 **詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) での見え方**: 変換ノードは rclpy なので、トレースで測れるのは **受信数だけ** (処理数・処理時間は「未対応」、理由 `rclpy`)。送信は C++ 計測ノード ([measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) で送信ノードごとに実測される。編集画面にもこの注意を書く。
 - 制約: 式は 1 メッセージあたり Python で評価するので、数百 Hz を超える入力や大きい配列のフィールド計算には向かない (大きい型は relay のみ)。
@@ -51,7 +51,7 @@
 ## 同梱サンプルノード (`roshanavi_examples`, P5)
 チュートリアル、デモ、自動テストの対象を兼ねる。初めて ROS を触る人が読む前提で、各ファイルの先頭に「何を受けて何を出すか・パラメータ・実行例・なぜその言語か」を書き、処理の中身にもコメントを付ける。各ノードに `launch/<name>.launch.py` (引数でトピックとパラメータを変える) がある。
 
-**言語の分け方**: 画像の 2 つは C++ (rclcpp)、ほかの 2 つは Python (rclpy)。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) で、C++ のノードは受信・処理・処理時間まで、Python のノードは受信数だけが測れる。その違いを同じデモの中で見比べられるようにわざと混ぜた。画像処理は C++ の方が自然 (1 画素ずつのループ) で、状態遷移や音量の計算は Python の方が短く読みやすい。
+**言語の分け方**: 画像の 2 つは C++ (rclcpp)、ほかは Python (rclpy)。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) で、C++ のノードは受信・処理・処理時間まで、Python のノードは受信数だけが測れる。その違いを同じデモの中で見比べられるようにわざと混ぜた。画像処理は C++ の方が自然 (1 画素ずつのループ) で、状態遷移や音量の計算は Python の方が短く読みやすい。
 
 | ノード | 言語 | 受信 → 送信 | パラメータ | 詳細計測モードで測れるもの |
 |---|---|---|---|---|
@@ -59,12 +59,36 @@
 | `blob_detector` | C++ | `image` → `detections` (`vision_msgs/Detection2DArray`。bbox の中心・大きさ、`class_id: blob`、`score` = 平均の明るさ / 255、header は入力のまま。見つからなくても空の配列を毎回送る) | `threshold` (0〜255, 200)、`min_area` (30)、`max_detections` (20) | 受信・処理・処理時間 |
 | `audio_level` | Python | `audio` (`input_type: stamped` → `audio_common_msgs/AudioDataStamped` の S16LE、`int16` → `std_msgs/Int16MultiArray`) → `level_db` (Float32、RMS の dBFS、無音は -120)、`silence` (Bool) | `input_type`、`silence_below_db` (-45)、`sound_above_db` (-35): 2 つのしきい値の間では状態を変えない (ヒステリシス) | 受信数だけ |
 | `state_machine` | Python | `cmd` (String: start / stop / fault / reset、大文字小文字は無視) → `state` (String: IDLE / RUNNING / ERROR) | `initial_state` (IDLE)、`publish_period_sec` (1.0, 0 で変化時だけ) | 受信数だけ |
+| `executor_busy_demo` | Python | `/busy_demo/in` (String) → `/busy_demo/stats` (String、JSON を毎秒) | `executor` (single / multi, multi)、`qos_events` (default / off, default)、`work_ms` (5)、`num_threads` (4)、`input_topic`、`stats_topic` | 受信数だけ |
 
 - 画像処理は OpenCV を使わず `include/roshanavi_examples/image_ops.hpp` の純粋な関数 (グレースケール: 整数の BT.601 の重み、エッジ: 3x3 Sobel の |gx|+|gy| を 255 で頭打ち・端は 0、塊: 4 近傍の塗りつぶし (再帰しない)、面積の大きい順) にまとめ、gtest (`test_image_ops`) で ROS なしにテストする。ノードは ROS のメッセージとの変換だけ。パラメータは毎回読むので、実行中の変更 (地図のパラメータ・`ros2 param set`) がすぐ効く。壊れた画像 (大きさが足りない・未対応の encoding) は 5 秒に 1 回の警告で捨てる。
 - QoS: 購読は best effort (SensorDataQoS。どの送信者からも受けられる)、送信は reliable (どの購読者でも受けられる)。`state_machine` の `state` は transient local (後から購読したノードにもいまの状態が届く)。
 - Python のノードは計算の部分 (`level_db`・`SilenceDetector`・`StateMachine`) を ROS なしのクラス・関数にし、pytest で直接テストする。ROS の import は `main()` の中。
 - `audio_common_msgs` は `input_type: stamped` のときだけ必要 (package.xml は exec_depend)。`vision_msgs` は新しい依存 (`ros-jazzy-vision-msgs`)。
-- 起動設定の例: `examples/demo_project` (autostart なし)、`examples/perception_demo` ([launcher.md#デモ構成](launcher.md#デモ構成-p45a))。
+- 起動設定の例: `examples/demo_project` (autostart なし)、`examples/perception_demo` ([launcher.md#デモ構成](launcher.md#デモ構成-p45a))、`examples/busy_demo` (executor_busy_demo の 3 構成、autostart なし)。
+
+### executor_busy_demo — MultiThreadedExecutor の空回りを体験する (#40)
+**何が起きるか**: rclpy のノードを `MultiThreadedExecutor` + Fast DDS (`rmw_fastrtps_cpp`、Jazzy 既定) で動かすと、仕事をほとんどしていないのに CPU を 1 コア近く使うことがある。rclpy は購読ごとに「QoS が合わない」などを知らせる QoS イベントの待ち受けを自動で付ける。rmw_fastrtps ではそれが購読本体と同じ「データ到着」の目印を共有していて、MultiThreadedExecutor は購読のコールバックを実行中その購読を待ち受けから外すため、その間に届いたメッセージを待ち受けが「あるのに受け取れない」と見て `wait()` がすぐ戻り続ける (ros2/rmw_fastrtps#929、関連 ros2/rclpy#1223)。executor のスレッドが毎秒数千回空回りして GIL を握り、コールバック自体も遅れる。roshanavi 自身の購読に QoS イベントを付けない理由もこれ ([#19](https://github.com/shimejilib/roshanavi/issues/19)、CLAUDE.md)。
+
+**構成**: `busy_demo_driver` が `/busy_demo/in` に 100 Hz (`rate_hz`) で送り、`executor_busy_demo` が受けて `work_ms` (既定 5 ms) だけ sleep する (軽い処理の代わり。sleep は CPU を使わないので、見える CPU は executor 自身の空回り)。`executor_busy_demo` は 1 秒ごとに `stats_topic` へ次の JSON (std_msgs/String) を送り、同じ内容を 1 行でログに出す: `executor`、`qos_events`、`num_threads`、`work_ms`、`wait_passes_per_sec` (executor の待ちの回数)、`empty_passes_per_sec`、`empty_ratio` (空振りの割合)、`callbacks_per_sec`、`passes_per_callback`、`process_cpu_percent` (プロセス全体の CPU 時間 ÷ 経過時間。100 = 1 コア)。
+
+**数え方** (`PassCounter`、monkeypatch なし): rclpy の `Executor` の公開メソッド 2 つを上書きするだけ。executor の待ちのループは 1 周ごとに `get_nodes()` を 1 回呼び、準備できたコールバックを `wait_for_ready_callbacks()` が 1 つずつ返す。したがって 周 = `get_nodes()` の呼び出し、空振りの周 = その周で `wait_for_ready_callbacks()` が何も返さなかった周。`rclpy.executors` の `WaitSet.wait()` を直接数えた値と照合して合った (65,414 周 vs 65,433 回、差は実行中の 1 周分など)。前提は「1 周で `get_nodes()` を 1 回呼ぶ」(rclpy 7.x = Jazzy で確認)。崩れたら単体・統合テストが気づく。
+
+**3 つの構成** (`examples/busy_demo/roshanavi.yaml`、autostart なし。⚙ のプロジェクト切り替えから開き、`busy_demo_driver` を起動してから 1 つずつ起動して比べる。同時に動かすと CPU が混ざる):
+
+| 構成 | 意味 | 結果 |
+|---|---|---|
+| `multi_default` | `executor: multi` + 既定の QoS イベント | 空回りする (問題) |
+| `multi_off` | `executor: multi` + `qos_events: 'off'` (`SubscriptionEventCallbacks(use_default_callbacks=False)`) | 空回りしない (回避策) |
+| `single_default` | `executor: single` + 既定の QoS イベント | 空回りしない (コールバックが待ちと同じスレッドで動くので、購読は常に待ち受けに入っている) |
+
+実測値 (Docker、24 コアの PC、`rmw_fastrtps_cpp` 8.4.4、`work_ms` 5、送信 100 Hz、4 スレッド、6 秒間の中央値): [troubleshooting の節](measurement.md#cpu-が高い-multithreadedexecutor-の空回り) の表。
+
+**トレードオフ**: QoS イベントの通知を外すと、購読と送信側の QoS が合わないときに出る「incompatible QoS」の警告ログも出なくなる (データが来ないことで初めて気づく)。CPU が問題になる購読 (高いレート + MultiThreadedExecutor) だけ外すか、通知を残したまま `SingleThreadedExecutor` にする。roshanavi の地図の QoS 診断は roshanavi 自身が見ているので、ノード側で外しても地図には出る。
+
+**落とし穴**: YAML 1.1 では素の `off` は `false` になる (`ros2 param`・launch・プロジェクトファイル)。プロジェクトファイルでは `'off'` と引用符で書く。ノード側は `false` も `off` として受け付け、launch ファイルは `ParameterValue(..., value_type=str)` で文字列のまま渡す。`work_ms` / `rate_hz` は `-p work_ms:=5` が整数で来ても受け付ける (`dynamic_typing`)。
+
+起動: `ros2 launch roshanavi_examples busy_demo.launch.py [executor:=multi] [qos_events:=off] [work_ms:=5.0] [num_threads:=4] [rate_hz:=100.0]`、または `ros2 run roshanavi_examples busy_demo_driver` と `ros2 run roshanavi_examples executor_busy_demo --ros-args -p qos_events:=off`。
 
 ## データの種類 (ROS のメッセージ型を意識させない、P5.5)
 **課題**: 入力ノード・変換ノードなどの型選択が、ROS のメッセージ型の名前順の一覧だった。ROS を知らない人はメッセージ型を意識しないし、選べない。

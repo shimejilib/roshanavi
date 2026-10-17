@@ -185,6 +185,7 @@ th.num .th-button { width: 100%; text-align: right; }
 .inject-form label.check, .inject-form label.radio { flex-direction: row; font-weight: 400; }
 .inject-form .row { display: flex; gap: 8px; }
 .inject-form .row input { flex: 1; }
+.inject-form button.small { align-self: flex-start; }
 .yaml { font: 13px/1.45 var(--mono); resize: vertical; }
 .hint { display: block; white-space: normal; background: var(--surface-2); padding: 6px 8px; border-radius: var(--radius); font-weight: 400; }
 .mode-select { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; }

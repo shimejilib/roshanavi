@@ -18,7 +18,7 @@ from .heavy_types import HEAVY_TYPES  # noqa: F401 - re-exported for existing im
 
 LOG = logging.getLogger(__name__)
 
-DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$')
+DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$', r'^/events/write_split$')
 
 
 class TopicSelector:

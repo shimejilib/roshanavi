@@ -127,3 +127,23 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 - Python のノードは受信数だけ (処理数・処理時間は「未対応」)。intra-process は受信数が測れない。
 - RMW は Fast DDS (Jazzy 既定) で確認した。`rmw_take` / `rmw_publish` は rmw の実装ごとのトレースポイントなので、他の RMW では受信・送信が出ない可能性がある ([testing.md の L-18](../project/testing.md#l-詳細計測モード-トレース-p47))。
 - ノードの起動直後 1〜2 秒は、init の区切りがまだ読まれておらず、そのノードの記録を捨てることがある。
+
+## CPU が高い (MultiThreadedExecutor の空回り)
+**症状**: Python (rclpy) のノードが、メッセージをあまり処理していないのに CPU を 1 コア近く使う。`py-spy` やトレースでは `wait` を数千回呼んでいる。コールバックが遅れる・間引かれる。
+
+**原因**: `MultiThreadedExecutor` + Fast DDS (`rmw_fastrtps_cpp`、Jazzy 既定) + rclpy 既定の QoS イベント通知の組み合わせ。購読のコールバックを実行中、その購読は executor の待ち受けから外れるが、QoS イベントの待ち受けは残っていて同じ「データ到着」の目印を見ているため、`wait()` が「何かあった」とすぐ戻り続ける (ros2/rmw_fastrtps#929、関連 ros2/rclpy#1223)。詳細と数え方は [nodes.md の executor_busy_demo](nodes.md#executor_busy_demo--multithreadedexecutor-の空回りを体験する-40)。
+
+**確かめる**: サンプル `examples/busy_demo` (⚙ のプロジェクト切り替え) で 3 つの構成を 1 つずつ起動して `/busy_demo/*/stats` (1 秒ごとの JSON、ログにも 1 行) を比べる。自分のノードで試すなら `executor_busy_demo.py` の `PassCounter` が使える。
+
+実測 (Docker の PC、24 コア、`rmw_fastrtps_cpp` 8.4.4、`work_ms` 5、送信 100 Hz、MultiThreaded は 4 スレッド、6 秒間の中央値。同じ測定を別の実行で 3 回やって、空回りの構成は 7,900〜8,300 回/秒・CPU 85〜89% で変わらなかった):
+
+| 構成 | 待ちの回数/秒 | うち空振り | 処理できた/秒 (送信は 100) | 1 コールバックあたりの待ち | CPU |
+|---|---|---|---|---|---|
+| multi + default (問題) | 8,279 | 99.5% | 38 | 219 | 89% |
+| multi + off (回避) | 303 | 66.7% | 100 | 3.0 | 8% |
+| single + default | 201 | 49.8% | 100 | 2.0 | 4% |
+
+正常でも空振りの割合が約 50〜67% なのは、executor 自身の「処理が終わった」合図で 1 コールバックあたり 1〜2 回起きる分。見るのは回数 (数千/秒) と CPU、そして処理できた数が送信より減っていること。
+
+**直す**: (1) 購読に `event_callbacks=SubscriptionEventCallbacks(use_default_callbacks=False)` を渡して QoS イベントを外す (upstream の回避策、roshanavi も同じ)。(2) 並列で動かす必要がなければ `SingleThreadedExecutor` にする。
+**トレードオフ**: (1) は購読と送信側の QoS が合わないときの「incompatible QoS」の警告ログも消えるので、データが来ない原因に気づきにくくなる。CPU が問題になる購読だけ外す。

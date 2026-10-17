@@ -14,7 +14,7 @@
   - `role`: 実ノードは Launcher の対応づけ ([launcher.md#Launcher](launcher.md#launcher-p3)) で `mine` / `dependency` / `dummy` になり、`target_id` と `confidence` (`exact`/`heuristic`) が付く。対応づかないノードは `"other"`。同じ完全修飾名のノードが複数あっても 1 つにまとめる。実行中の注入ジョブ (topic を持つもの) は仮想ノード `dummy:<job id>` (`role:"dummy"`, `job_id`) として pub エッジ付きで含める。注入の publisher は roshanavi 自身のノード (既定で非表示) に属するため、ジョブ単位の仮想ノードにしないと注入が地図に現れない。bag ジョブは `rosbag2_player` が通常ノードとして見えるので仮想ノードにしない。
   - `diagnostics` (`diagnostics.py` / `qos_compat.py`, 純関数): `{code, severity, topic, nodes[], detail}`。重大度順 (error → warning) で決定的に並べる。
     - `qos_incompatible` (error): topic ごとに pub × sub の全組を判定。reliability (BEST_EFFORT pub → RELIABLE sub)、durability (VOLATILE pub → TRANSIENT_LOCAL sub)、deadline (pub の deadline > sub の要求、pub 無制限で sub 有限も不可)、liveliness (AUTOMATIC pub → MANUAL_BY_TOPIC sub)、lease (pub > sub)。`detail.reasons=[{policy,pub,sub}]`。
-    - `no_subscriber` / `no_publisher` (warning): 片側しかいないトピック。隠しトピック (`_` で始まる区切り)、`/rosout`、`/parameter_events`、roshanavi 自身しか端点を持たないトピックは対象外。
+    - `no_subscriber` / `no_publisher` (warning): 片側しかいないトピック。隠しトピック (`_` で始まる区切り)、`/rosout`、`/parameter_events`、`/events/write_split` (録画中に `ros2 bag record` 自身が出す内部トピック)、roshanavi 自身しか端点を持たないトピックは対象外。
     - `similar_names` (warning): pub のみのトピックと sub のみのトピックの組で、`_`/`-`/大小文字を除くと同一、または同じ名前空間で最後の区切りの Levenshtein 距離 ≤ 2 (4 文字以下の名前は ≤ 1)。
     - `type_mismatch` (error): 同名トピックに複数の型。
   - 文言は UI 側の i18n 辞書で組み立てる (API は英語のコードと構造化データのみ)。
@@ -33,7 +33,7 @@
   - `dropped`/`drop_ratio`: ウィンドウ内の publication_sequence_number の欠番 (publisher ごと)。連番が 0 / 非単調 (publisher 再起動、gid 無しでの複数 publisher の混在、RMW が未設定) の場合は `null`。
   - `latency_ms`: mean(received_timestamp - source_timestamp)。publisher と subscriber が同一ホスト (同一クロック) の場合のみ意味を持つ。
 - 重い型 (`sensor_msgs/msg/Image`, `CompressedImage`, `PointCloud2`, `PointCloud`。LaserScan は含まない) は既定で購読せず `status:"not_monitored"`, `monitored:false` で一覧に残す (グラフ情報は表示)。`--monitor-heavy` で全て監視、`PUT /api/traffic/{topic}/monitor` `{"enabled": bool}` でトピック単位に実行時切替 (既定より優先、任意のトピックを無効化も可)。購読の張り替えは次回の housekeeping (<=1 s) で反映され、`monitored` は即時に更新される。
-- 除外: 正規表現リスト (既定で `/rosout`, `/parameter_events` は統計対象だが UI で畳む)。型解決できないトピックは `unsupported` として記録し購読しない。
+- 除外: 正規表現リスト (既定で `/rosout`, `/parameter_events`, `/events/write_split` は統計対象だが UI で畳む)。型解決できないトピックは `unsupported` として記録し購読しない。
 - 消えたトピックは購読解除。
 - **送信元ごとの値 (`rates.py`, 純関数)**: `/api/traffic` と `/ws/live` の各エントリに `source_count` と `publishers:[{node, hz, bps, basis}]` を付ける。
   - **計測ノードの経路** (`measurement: "probe"` で、全 publisher の gid がグラフと対応づいたとき): 各送信ノードの値は計測ノードが数えた値 (`"measured"`、同じノードの publisher が複数あれば合計)。注入ジョブ (`dummy:<id>`) は送った件数から求めた値 (`"exact"`) のまま。送った件数がまだ無いジョブが 1 つだけなら、roshanavi 自身のノードの実測値をそのジョブに当てる。グラフにいるのに何も届いていない送信者は `0 Hz` の `"measured"` (計測ノードは QoS を全送信者に合わせて購読するので、届かない = 送っていない)。

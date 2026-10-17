@@ -15,12 +15,14 @@ import type {
 } from './scenarioTypes';
 import type { PreviewResult, ProjectList, TransformSpec } from './transformTypes';
 import { t, tDynamic } from '../i18n';
+import { topicPath } from '../lib/topics';
 import type { KindCatalog, TypeGroup } from '../datakind/kinds';
 import type { FunctionSpec, ModuleEntry, ModuleInfo } from './functionTypes';
 import type {
   BuildStatus,
   DataFile,
   DummySpec,
+  EchoSample,
   ExportResult,
   InjectRequest,
   Job,
@@ -99,6 +101,8 @@ export const api = {
   dataKinds: () => request<KindCatalog>('GET', '/api/data-kinds'),
   template: (path: string) => request<{ type: string; template: Record<string, unknown> }>('GET', path),
   files: () => request<{ data_dir: string; files: DataFile[] }>('GET', '/api/files'),
+  /** Latest message of an echoed topic, untruncated up to the server's size cap (transform preview). */
+  echoSample: (topic: string) => request<EchoSample>('GET', `${topicPath('/api/echo', topic)}/sample`),
   startInject: (req: InjectRequest) => request<Job>('POST', '/api/inject', req),
   stopInject: (id: string) => request<Job>('DELETE', `/api/inject/${encodeURIComponent(id)}`),
   pauseInject: (id: string, paused: boolean) => request<Job>('POST', `/api/inject/${enc(id)}/${paused ? 'pause' : 'resume'}`),

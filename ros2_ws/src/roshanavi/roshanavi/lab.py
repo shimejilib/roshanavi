@@ -18,6 +18,7 @@ from .echo import EchoManager
 from .fd_guard import FdGuard
 from .injector import Injector
 from .launch_import.importer import LaunchImporter
+from .launcher.catalog import ProjectCatalog
 from .launcher.service import Launcher
 from .media.diskguard import DiskGuard, DiskThresholds
 from .media.recorder import Recorder
@@ -58,7 +59,12 @@ class Lab:
         self.data_dir = data_dir
         self.examples_dir = examples_dir
         self._generate_samples = generate_samples
-        self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
+        self.catalog = ProjectCatalog(data_dir, examples_dir)
+        remembered = self.catalog.remembered_path()  # the last project the user switched to
+        if remembered:
+            LOG.info('starting on the remembered project %s', remembered)
+        self.launcher = Launcher(workspace or os.getcwd(), data_dir,
+                                 project_path=remembered or project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
         self.importer = LaunchImporter(self.launcher, data_dir)
         self.runtime = RosRuntime(node_name)

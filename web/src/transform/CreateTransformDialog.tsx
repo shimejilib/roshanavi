@@ -17,6 +17,8 @@ import { TransformInputsFields } from './TransformInputsFields';
 import { TransformPreview } from './TransformPreview';
 import { TransformTimingFields } from './TransformTimingFields';
 import { buildTransformSpec, defaultTransformForm, formFromTransform, isHeavy, mappingFromTemplate, type TransformForm } from './transformForm';
+import { hasTruncation, preferFull } from './sampleTruncation';
+import { useFullSamples } from './useFullSamples';
 import { useLatestMessages } from './useLatestMessages';
 import { useTransformPreview } from './useTransformPreview';
 
@@ -68,12 +70,20 @@ export function CreateTransformDialog({ topic, type, transformId }: Props) {
   }, [heavy]);
 
   const latest = useLatestMessages(form.inputs.map((row) => normalizeTopic(row.topic)));
-  const samples = useMemo(() => Object.fromEntries(form.inputs
-    .filter((row) => latest[normalizeTopic(row.topic)])
-    .map((row) => [row.alias, latest[normalizeTopic(row.topic)] as Record<string, unknown>])), [latest, form.inputs]);
+  // What the left pane shows (the echo view's copy) and what the preview computes on (the whole message when it fits).
+  const full = useFullSamples(latest);
+  const samplesFrom = (source: Record<string, Record<string, unknown>>): Record<string, Record<string, unknown>> => Object.fromEntries(
+    form.inputs.flatMap((row) => {
+      const msg = source[normalizeTopic(row.topic)];
+      return msg ? [[row.alias, msg]] : [];
+    }),
+  );
+  const samples = useMemo(() => samplesFrom(latest), [latest, form.inputs]);
+  const computeSamples = useMemo(() => samplesFrom(preferFull(latest, full)), [latest, full, form.inputs]);
+  const truncated = Object.values(computeSamples).some(hasTruncation);
   const takenIds = live.targets.map((tg) => tg.id);
   const previewSpec = useMemo(() => buildTransformSpec(form, takenIds, editing?.id, true), [form, editing?.id]);
-  const preview = useTransformPreview(previewSpec, samples);
+  const preview = useTransformPreview(previewSpec, computeSamples);
 
   const submit = async () => {
     const built = buildTransformSpec(form, takenIds, editing?.id);
@@ -146,7 +156,7 @@ export function CreateTransformDialog({ topic, type, transformId }: Props) {
             </label>
           </>
         )}
-        <TransformPreview samples={samples} aliases={form.inputs.map((row) => row.alias)} preview={preview} />
+        <TransformPreview samples={samples} aliases={form.inputs.map((row) => row.alias)} preview={preview} truncated={truncated} />
         <TransformTimingFields form={form} onChange={update} />
         <label className="check">
           <input type="checkbox" checked={form.autostart} onChange={(e) => update({ autostart: e.target.checked })} />

@@ -14,6 +14,7 @@ import { diffElements, indexElements } from './diff';
 import { focusSet } from './focus';
 import { topicElementId, type EdgeData, type Element } from './model';
 import { LOW_RATE_HZ } from './particles';
+import { loadPins, NO_PINS, savePins, withPin, type Pins } from './pins';
 import { stylesheet, type Palette } from './style';
 import { useParticles } from './useParticles';
 
@@ -35,6 +36,8 @@ export interface GraphViewProps {
   fitSignal: number;
   /** Increment to re-run the layout from scratch ("整列し直す"). */
   layoutSignal: number;
+  /** Open project (null while unknown): pinned positions are saved under it. */
+  projectKey: string | null;
   /** Right-click menu (nodes, topics, edges, blank area). */
   renderMenu?: (anchor: MenuAnchor, close: () => void) => ReactNode;
 }
@@ -52,7 +55,8 @@ function capZoom(cy: Core): void {
   }
 }
 
-function runLayout(cy: Core, animate: boolean): void {
+/** Automatic layout; dragged ("pinned") vertices keep their position. */
+function runLayout(cy: Core, animate: boolean, pins: Pins): void {
   const layout = cy.layout({
     name: 'dagre',
     rankDir: 'LR',
@@ -63,6 +67,7 @@ function runLayout(cy: Core, animate: boolean): void {
     animationDuration: LAYOUT_MS,
     fit: !animate,
     padding: 30,
+    transform: (node: NodeSingular, pos: cytoscape.Position) => pins[node.id()] ?? pos,
   } as cytoscape.LayoutOptions);
   if (!animate) layout.one('layoutstop', () => capZoom(cy));
   layout.run();
@@ -72,7 +77,7 @@ function byIds(cy: Core, ids: readonly string[]): CollectionReturnValue {
   return ids.reduce((acc, id) => acc.union(cy.getElementById(id)), cy.collection());
 }
 
-function applyPatch(cy: Core, prev: Map<string, Element>, next: Element[]): boolean {
+function applyPatch(cy: Core, prev: Map<string, Element>, next: Element[], pins: Pins): boolean {
   const patch = diffElements(prev, next);
   cy.batch(() => {
     if (patch.removed.length) cy.remove(byIds(cy, patch.removed));
@@ -81,6 +86,11 @@ function applyPatch(cy: Core, prev: Map<string, Element>, next: Element[]): bool
       // Start new vertices next to an existing neighbour so the layout animation reads as "grow".
       const added = cy.add(patch.added.map((el) => ({ group: el.group, data: { ...el.data } })));
       added.nodes().forEach((n) => {
+        const pin = pins[n.id()];
+        if (pin) {
+          n.position({ ...pin });
+          return;
+        }
         const neighbour = n.neighborhood('node').filter((m) => !added.contains(m)).first() as NodeSingular;
         if (neighbour.nonempty()) n.position({ ...neighbour.position() });
       });
@@ -98,6 +108,15 @@ export function GraphView(props: GraphViewProps) {
   onSelectRef.current = props.onSelect;
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
+  const pinsRef = useRef<Pins>(NO_PINS);
+  const pinsOwnerRef = useRef<string | null>(null); // project the pins in memory belong to (null: not known yet)
+  const projectRef = useRef<string | null>(props.projectKey);
+  projectRef.current = props.projectKey;
+
+  const setPins = (next: Pins) => {
+    pinsRef.current = next;
+    if (projectRef.current !== null) savePins(projectRef.current, next);
+  };
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -113,6 +132,11 @@ export function GraphView(props: GraphViewProps) {
       if (evt.target === cy) onSelectRef.current(null);
       else if (evt.target.isNode()) onSelectRef.current(evt.target.id());
       else onSelectRef.current(topicElementId((evt.target.data() as EdgeData).topic)); // edge -> its topic
+    });
+    // A vertex the user moved stays where it was put until "整列し直す".
+    cy.on('dragfree', 'node', (evt: EventObject) => {
+      const node = evt.target as NodeSingular;
+      setPins(withPin(pinsRef.current, node.id(), node.position()));
     });
     cy.on('mouseover', 'edge', (evt: EventObject) => {
       const data = evt.target.data() as EdgeData;
@@ -139,13 +163,31 @@ export function GraphView(props: GraphViewProps) {
     cyRef.current?.style(stylesheet(props.palette));
   }, [props.palette]);
 
+  // The project is known only after a fetch (and changes on a switch): load its pins, move what is on the map.
+  useEffect(() => {
+    if (props.projectKey === null) return;
+    const loaded = loadPins(props.projectKey);
+    // Pins dragged before the project was known belong to it; after a switch the old project's pins do not.
+    pinsRef.current = pinsOwnerRef.current === null ? { ...loaded, ...pinsRef.current } : loaded;
+    pinsOwnerRef.current = props.projectKey;
+    savePins(props.projectKey, pinsRef.current);
+    const cy = cyRef.current;
+    if (!cy) return;
+    cy.batch(() => {
+      for (const [id, pos] of Object.entries(pinsRef.current)) {
+        const node = cy.getElementById(id);
+        if (node.nonempty()) node.position({ ...pos });
+      }
+    });
+  }, [props.projectKey]);
+
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) return;
     const first = indexRef.current.size === 0;
-    const changed = applyPatch(cy, indexRef.current, props.elements);
+    const changed = applyPatch(cy, indexRef.current, props.elements, pinsRef.current);
     indexRef.current = indexElements(props.elements);
-    if (changed && cy.nodes().length > 0) runLayout(cy, !first);
+    if (changed && cy.nodes().length > 0) runLayout(cy, !first, pinsRef.current);
   }, [props.elements]);
 
   useEffect(() => {
@@ -157,7 +199,9 @@ export function GraphView(props: GraphViewProps) {
 
   useEffect(() => {
     const cy = cyRef.current;
-    if (cy && props.layoutSignal > 0 && cy.nodes().length > 0) runLayout(cy, true);
+    if (!cy || props.layoutSignal === 0) return;
+    setPins(NO_PINS); // 整列し直す: unpin everything, then lay out from scratch
+    if (cy.nodes().length > 0) runLayout(cy, true, NO_PINS);
   }, [props.layoutSignal]);
 
   useEffect(() => {

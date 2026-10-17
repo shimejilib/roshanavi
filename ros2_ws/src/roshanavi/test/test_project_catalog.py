@@ -61,7 +61,7 @@ def test_only_listed_entries_open(tmp_path, bad):
 
 
 @needs_examples
-@pytest.mark.parametrize('name', ['demo_project', 'perception_demo'])
+@pytest.mark.parametrize('name', ['demo_project', 'perception_demo', 'busy_demo'])
 def test_bundled_examples_are_valid_projects(name):
     with open(os.path.join(EXAMPLES, name, 'roshanavi.yaml'), encoding='utf-8') as fh:
         project = parse_project(fh.read(), name)
@@ -69,6 +69,16 @@ def test_bundled_examples_are_valid_projects(name):
     if name == 'demo_project':
         assert {'image_filter', 'blob_detector', 'audio_level', 'state_machine'} <= ids
         assert all(not t.autostart for t in project.targets if t.package == 'roshanavi_examples')
+    elif name == 'busy_demo':
+        assert ids == {'busy_demo_driver', 'multi_default', 'multi_off', 'single_default'}
+        assert all(not t.autostart for t in project.targets)       # the user starts them one by one
+        by_id = {t.id: t for t in project.targets}
+        assert [(by_id[i].params['executor'], by_id[i].params['qos_events'])
+                for i in ('multi_default', 'multi_off', 'single_default')] == [
+            ('multi', 'default'), ('multi', 'off'), ('single', 'default')]
+        assert len({t.name for t in project.targets}) == 4          # distinct node names
+        stats = {t.params['stats_topic'] for t in project.targets if 'stats_topic' in t.params}
+        assert len(stats) == 3                                      # one stats topic per config
     else:
         assert {'image_filter', 'blob_detector', 'audio_level'} <= ids
         assert {d.source for d in project.dummies} == {'samples/blobs.mp4', 'samples/tone.wav'}
@@ -139,3 +149,87 @@ def test_open_project_autostarts_the_new_targets(tmp_path, data_dir):
         assert [t['id'] for t in launcher.manager.list()] == ['rn_second']
     finally:
         launcher.close()
+
+
+# ---- the last opened project is remembered across restarts (#9) ----------------------------
+
+def test_catalog_remembers_the_last_opened_project(tmp_path):
+    data = tmp_path / 'data'
+    (data / 'projects').mkdir(parents=True)
+    (data / 'projects' / 'mine.yaml').write_text('version: 1\n')
+    catalog = ProjectCatalog(str(data), str(make_examples(tmp_path / 'examples')))
+    assert catalog.remembered_path() is None  # nothing opened yet
+    catalog.remember('data:projects/mine.yaml')
+    assert catalog.remembered_path() == str(data / 'projects' / 'mine.yaml')
+    catalog.remember('example:perception_demo')
+    assert catalog.remembered_path() == str(data / 'projects' / 'perception_demo.yaml')
+    assert (data / 'projects' / 'perception_demo.yaml').is_file()  # copied like a normal open
+
+
+@pytest.mark.parametrize('content', [
+    'not json', '[]', '{}', '{"id": 3}', '{"id": "data:../../etc/passwd"}',
+    '{"id": "data:projects/gone.yaml"}', '{"id": "example:vanished"}', '{"id": "/etc/passwd"}',
+])
+def test_an_invalid_remembered_project_is_ignored(tmp_path, content):
+    data = tmp_path / 'data'
+    data.mkdir()
+    (data / 'last_project.json').write_text(content)
+    catalog = ProjectCatalog(str(data), str(make_examples(tmp_path / 'examples')))
+    assert catalog.remembered_path() is None
+
+
+def test_a_remembered_project_that_was_deleted_is_ignored(tmp_path):
+    data = tmp_path / 'data'
+    (data / 'projects').mkdir(parents=True)
+    mine = data / 'projects' / 'mine.yaml'
+    mine.write_text('version: 1\n')
+    catalog = ProjectCatalog(str(data))
+    catalog.remember('data:projects/mine.yaml')
+    mine.unlink()
+    assert catalog.remembered_path() is None
+
+
+def test_remembering_never_raises_when_the_data_dir_is_not_writable(tmp_path):
+    catalog = ProjectCatalog(str(tmp_path / 'missing' / 'dir'))
+    catalog.remember('data:roshanavi.yaml')  # logged, not raised
+    assert catalog.remembered_path() is None
+
+
+def make_lab(data_dir, tmp_path):
+    from conftest import WS_ROOT
+    from roshanavi.lab import Lab
+    return Lab(data_dir=str(data_dir), period_sec=0.2, workspace=WS_ROOT,
+               project_path=str(tmp_path / 'project' / 'roshanavi.yaml'), autostart=False,
+               stop_timeouts=(3.0, 2.0)).start()
+
+
+def test_lab_starts_on_the_remembered_project_and_falls_back_to_the_option(data_dir, tmp_path):
+    mine = data_dir / 'projects' / 'mine.yaml'
+    mine.parent.mkdir(parents=True)
+    mine.write_text('version: 1\n')
+    first = make_lab(data_dir, tmp_path)
+    try:
+        assert first.launcher.project.path == str(tmp_path / 'project' / 'roshanavi.yaml')  # --project
+        first.catalog.remember('data:projects/mine.yaml')
+    finally:
+        first.stop()
+    second = make_lab(data_dir, tmp_path)  # a "restart"
+    try:
+        assert second.launcher.project.path == str(mine)
+        mine.unlink()  # the remembered file is gone: back to --project
+    finally:
+        second.stop()
+    third = make_lab(data_dir, tmp_path)
+    try:
+        assert third.launcher.project.path == str(tmp_path / 'project' / 'roshanavi.yaml')
+    finally:
+        third.stop()
+
+
+@needs_examples
+def test_switching_through_the_api_is_remembered(client, lab, data_dir):
+    assert client.post('/api/projects/open', json={'id': 'example:perception_demo'}).status_code == 200
+    assert lab.catalog.remembered_path() == lab.launcher.project.path
+    assert (data_dir / 'last_project.json').is_file()
+    assert client.post('/api/projects/open', json={'id': 'nope'}).status_code == 404
+    assert lab.catalog.remembered_path() == lab.launcher.project.path  # a failed switch changes nothing

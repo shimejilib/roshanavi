@@ -342,7 +342,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | M-14 | 変換ノードの実行ファイルと書き出し | `ros2 run roshanavi transform --config` が自分の名前で送る (SIGINT で 0)、式のエラーは終了コード 2。書き出した launch (`executable='transform'`) を `ros2 launch` で動かせる | ✅ (`test_transform_ros.py`) |
 | M-15 | 変換ノードの API | `POST /api/transforms?start=true` → kind / role `transform`、自動保存、地図に役割 transform、出力が届く。PUT で変更、入力と同じ出力トピックは 400、削除でプロジェクトから消える | ✅ (`test_transform_ros.py`) |
 | M-16 | 試算 (プレビュー) | 出力、届いていない入力は型の既定値 (`templated`)、フィールドのエラー (no_field と fields の一覧)、条件で送らない、型に合わない値は build_ のエラー、仕様のエラー・知らない別名、relay は入力のまま、API は常に 200 (サンプル 9 個・余計な項目は 422) | ✅ (`test_transform_compute.py`) |
-| M-17 | プロジェクトの切り替え | サンプルと保存済みを一覧、サンプルは初回だけ data/projects にコピー (編集は上書きされない)、一覧に無い ID (パス) は開けない、API で perception_demo を開くと起動リストが入れ替わり、元のプロジェクトファイルには書かない。同梱の 2 つのプロジェクトが検証を通る (サンプルノードは demo_project では autostart なし)。切り替え後は新しいプロジェクトの autostart が必ず動く (古い起動リストを止めている最中の housekeeping と競合しない) | ✅ (`test_project_catalog.py`, `test_project.py`) |
+| M-17 | プロジェクトの切り替え | サンプルと保存済みを一覧、サンプルは初回だけ data/projects にコピー (編集は上書きされない)、一覧に無い ID (パス) は開けない、API で perception_demo を開くと起動リストが入れ替わり、元のプロジェクトファイルには書かない。同梱の 3 つのプロジェクト (demo_project / perception_demo / busy_demo) が検証を通る (サンプルノードは demo_project では autostart なし)。切り替え後は新しいプロジェクトの autostart が必ず動く (古い起動リストを止めている最中の housekeeping と競合しない) | ✅ (`test_project_catalog.py`, `test_project.py`) |
 | M-18 | サンプルの動画・音声の生成 | blobs.mp4 と tone.wav (16 kHz・mono・16 bit・12 秒) を作る、2 回目は作らない (mtime が変わらない)、途中のファイルが残らない | ✅ (`test_project_catalog.py`) |
 | M-19 | 編集画面のロジック (vitest) | 既定値 (ノード名・出力トピック・大きい型は relay)、テンプレートから「そのまま写す」対応づけ、仕様の組み立て (条件・遅延・間引き・取りこぼし %)、relay は式を落とす、各エラーの平易な文、プレビュー用の緩い検査、複数入力の別名の振り直しと trigger、編集時の復元 | ✅ (`transform/transformForm.test.ts`) |
 | M-20 | 式のエラーの日本語 (vitest) | code と params から文 (フィールドの一覧・関数名・かっこの閉じ忘れ)、知らない code はサーバーの文を添える、条件・フィールド・全体への振り分け | ✅ (`transform/previewText.test.ts`) |
@@ -351,6 +351,9 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | M-23 | E2E: パーセプションデモ | ⚙ からサンプルの perception_demo を開く → image_filter / blob_detector / audio_level / dummy_camera / blob_count (transform) が地図に出る、/camera/gray の画像ビューアが 320 px 幅、/camera/blob_count のエコー。最後に元のプロジェクトに戻す | ✅ (`e2e/perception.spec.ts`) |
 | M-24 | 詳細計測モードでのサンプルノード | image_filter / blob_detector は受信・処理・処理時間、`process_delay_ms` を上げると「処理が追いついていません」。audio_level / state_machine / 変換ノードは受信数だけ (rclpy) | 🟡 (仕組みは L-08 / L-09 と同じ。サンプルノードでの確認は未整備) |
 | M-25 | 変換ノードの高い入力レート | 数百 Hz の入力で CPU と遅れ (Python の式評価の限界) | ⬜ |
+| M-26 | executor_busy_demo の統計 (unit) | 数えた回数 → 毎秒の回数・空振りの割合・CPU% (複数スレッドで 100 超)・窓の切り替え・経過 0 は全部 0。`off` (YAML では false) の受け付け、不正な値は拒否。`PassCounter` (偽の executor) が「コールバックを返した周」と「空の周」を分け、実行中の周は数えない。実物の Single / MultiThreadedExecutor で数が増える | ✅ (`test_executor_busy_demo.py`) |
+| M-27 | 空回りの再現 (実ノード、タイミング・環境依存) | `busy_demo_driver` 100 Hz で multi+off と single+default は 1 コールバックあたり 20 回未満の待ち・毎秒 1,500 回未満・処理 ≥ 70/秒。multi+default は空振り > 90%、待ちの回数・空振りの回数・1 コールバックあたりの待ちが multi+off の 10 倍以上 (実測は約 27 倍)、CPU が 2 倍超。再現しない環境 (別の RMW・upstream の修正) では理由を付けて skip し、許容幅は緩めない | ✅ (`test_executor_busy_demo.py`、測定は 3 構成 × 約 10 秒) |
+| M-28 | `examples/busy_demo` が検証を通る | 4 つのターゲット (driver + 3 構成)、autostart なし、構成ごとに別のノード名と stats トピック、executor / qos_events の組み合わせ | ✅ (`test_project_catalog.py`) |
 
 ### N. データの種類・関数ノード (P5.5)
 
@@ -398,3 +401,17 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | O-12 | E2E: ダークモード | 吹き出しの背景と文字が本体のダークの色 (`--surface` / `--text`) | ✅ |
 | O-13 | 準備に失敗したときの表示 (`demo_nodes_cpp` が無い環境など) | 「準備に失敗しました: …」と出てツアーは始まらず、途中まで作ったものは片づく | ⬜ (実装済み・自動テストなし) |
 | O-14 | Chromium 以外 (Firefox / Safari) での見え方・キーボード操作 | 吹き出しの位置・フォーカス・Esc | 👀 (未確認: E2E は Chromium のみ) |
+
+### P. 既知不具合の修正 (#2〜#10)
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| P-02 | 常駐ダミーのメニューは現在の `paused` に合う方だけ (#2) | `paused=false` なら「一時停止」だけ、`true` なら「再開」だけ。状態が取れない間は従来どおり両方 (vitest) / E2E は入力ノードのメニューに「再開」が出ない | ✅ (`graph/menuModel.test.ts`、`e2e/ux.spec.ts`) |
+| P-03 | お試し送信のファイル一覧の再取得 (#3) | ウィンドウのフォーカス復帰・タブが見える状態に戻ったとき・「ファイル一覧を更新」ボタンで `/api/files` を取り直す (モード切替時の再取得は従来どおり) | ✅ (vitest `lib/refocus.test.ts`、E2E `e2e/media.spec.ts`) |
+| P-04 | rosbag2 の `/events/write_split` は内部トピック (#4) | 録画するトピックの選択肢・シナリオ記録の候補・地図 (隠すトグル)・診断から外れ、トラフィックの既定の畳み対象 | ✅ (vitest `lib/topics.test.ts`、pytest `test_diagnostics.py::test_hidden_topics`) |
+| P-05 | メディア注入の一時停止はソースを保持する (#5) | 一時停止中は `sent` が増えず、`count` も消費されない。再開すると残りが `late_events` 無しで送られ `count` ちょうどで終わる。一時停止中でも停止できる | ✅ (`test_media_job.py::test_pausing_a_media_job_holds_the_source_instead_of_dropping_frames` / `test_a_paused_media_job_can_still_be_stopped`) |
+| P-06 | ブラウザ入力: 閉じる直前のフレームを失わない (#6) | 破棄の前に ack を待つ (順序をフェイクで検証)、閉じる / 停止コマンドの直後でも送ったフレームが全部届く、停止コマンドには処理と drain の後に `stopped` が返る | ✅ (`test_media_capture.py::test_teardown_waits_for_acks_before_destroying_the_publishers` / `test_frames_sent_right_before_the_socket_closes_are_all_published`) |
+| P-07 | 「起動中」は地図に対応づくまで (#7) | `starting` のターゲットでもノードが対応づいていれば一覧の状態は `running`。対応づいていなければ `starting` のまま、`stopped` は変わらない | ✅ (`test_launcher_process.py::test_service_reports_running_once_the_node_is_mapped_even_within_the_starting_window`) |
+| P-08 | 手で動かしたノードの位置はトポロジーが変わっても固定 (#8) | ドラッグした位置を記録しレイアウトで戻す。プロジェクトごとに localStorage へ保存 (壊れた JSON・形の崩れ・保存先なし・例外でも動く、件数に上限)。「整列し直す」で全部外れる。E2E: talker をドラッグ → 入力ノードを足してもそのまま → 再読み込みしてもそのまま → 整列し直すで動く | ✅ (vitest `graph/pins.test.ts`、E2E `e2e/ux.spec.ts`) |
+| P-09 | 最後に開いたプロジェクトを再起動後も覚える (#9) | `<data_dir>/last_project.json` に `id` を保存・起動時に一覧と照合 (サンプルは通常の「開く」と同じくコピー)。壊れた JSON・型違い・一覧に無い id・消えたファイル・書き込めない data_dir は無視して `--project` に戻る。Lab を作り直す (= 再起動) と記憶したプロジェクトで始まり、ファイルを消すと `--project` に戻る。API で切り替えると保存され、失敗した切り替えでは変わらない | ✅ (`test_project_catalog.py`) |
+| P-10 | 変換ノードのプレビューは切り詰めない値で計算 (#10) | `EchoManager.latest_sample` は 32 個を超える配列も全部返し、サイズの上限を超えると `capped` で表示用の値に戻る。`GET /api/echo/{topic}/sample` (エコー前は `msg: null`)。UI は切り詰めの検出 (配列・文字列・深い所) と全体への差し替え、切り詰めが残るときだけ注意書き。E2E: 40 要素の配列で `len(msg.data)` が 40、注意書きなし | ✅ (pytest `test_integration_ros.py::test_echo_sample_is_not_truncated_up_to_the_size_cap` / `test_server.py::test_echo_sample_endpoint`、vitest `transform/sampleTruncation.test.ts`、E2E `e2e/transform.spec.ts`) |

@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, describeError } from '../api/client';
 import type { DataFile } from '../api/types';
 import { t } from '../i18n';
+import { onRefocus } from '../lib/refocus';
 import { templatePath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
@@ -16,21 +17,29 @@ import type { PortKind } from '../datakind/kinds';
 
 type Notice = { kind: 'ok' | 'error'; text: string } | null;
 
-function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean, reloadKey = ''): { items: T[]; error: string | null } {
+function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean, reloadKey = ''): { items: T[]; error: string | null; reload: () => void } {
   const [items, setItems] = useState<T[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const reload = useCallback(() => setNonce((n) => n + 1), []);
   useEffect(() => {
     if (!enabled) return undefined;
     let cancelled = false;
     load()
-      .then((list) => !cancelled && setItems(list))
+      .then((list) => {
+        if (cancelled) return;
+        setItems(list);
+        setError(null);
+      })
       .catch((err: unknown) => !cancelled && setError(describeError(err)));
     return () => {
       cancelled = true;
     };
-    // `load` is a stable module-level function; `reloadKey` refetches (e.g. on mode change).
-  }, [enabled, reloadKey]);
-  return { items, error };
+    // `load` is a stable module-level function; `reloadKey` refetches (e.g. on mode change), `nonce` on demand.
+  }, [enabled, reloadKey, nonce]);
+  // Files appear outside the page (a recording, a copied clip): refetch when the user comes back.
+  useEffect(() => (enabled ? onRefocus(window, document, reload) : undefined), [enabled, reload]);
+  return { items, error, reload };
 }
 
 export function InjectTab() {
@@ -162,6 +171,11 @@ export function InjectTab() {
           </>
         ) : (
           <ModeFields form={form} files={files.items} onChange={update} />
+        )}
+        {needsFiles && (
+          <button type="button" className="small" onClick={files.reload} data-testid="inject-files-reload">
+            {t('inject.filesReload')}
+          </button>
         )}
         {files.error && <p className="error-text small">{files.error}</p>}
         {form.mode !== 'bag' && <QosFields form={form} onChange={update} />}

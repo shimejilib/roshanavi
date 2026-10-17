@@ -378,6 +378,17 @@ export interface DataFile {
   kind: string;
 }
 
+/** GET /api/echo/<topic>/sample: `msg` is null until the topic is echoed and a message arrived. */
+export interface EchoSample {
+  topic: string;
+  seq: number;
+  msg: unknown;
+  /** True when the message is over `max_bytes`: `msg` is then the truncated display copy. */
+  capped: boolean;
+  size_bytes: number;
+  max_bytes: number;
+}
+
 export interface EchoMessage {
   topic: string;
   type: string;

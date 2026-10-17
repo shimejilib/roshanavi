@@ -180,9 +180,15 @@ class Launcher:
         return result
 
     def targets(self) -> List[Dict[str, Any]]:
+        """Targets with their mapped nodes. A target whose node is already on the map is
+        ``running``: the fixed ``starting`` window only covers the time before that."""
         nodes = self.node_info()
-        return [{**t, 'nodes': sorted(nodes.get(t['id'], []), key=lambda n: n['node'])}
-                for t in self.manager.list()]
+        result = []
+        for target in self.manager.list():
+            mapped = sorted(nodes.get(target['id'], []), key=lambda n: n['node'])
+            status = 'running' if mapped and target['status'] == 'starting' else target['status']
+            result.append({**target, 'status': status, 'nodes': mapped})
+        return result
 
     # ---- dummies -----------------------------------------------------------
     def persist_job(self, spec: InjectSpec, name: str, namespace: Optional[str] = None,

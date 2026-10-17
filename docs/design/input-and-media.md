@@ -29,7 +29,7 @@
   - `stream`: JSONL (1 行 1 メッセージ dict) または CSV (ヘッダ = フィールドパス, `a.b.c` 形式) を `rate_hz` で順送り、`loop` 可。
   - `bag`: `ros2 bag play <path> [--rate r] [--loop] [--topics ...]` をサブプロセス起動、停止で SIGINT。
   - `media`: 画像・動画・音声ファイルを型に合わせて変換して送る ([input-and-media.md#メディアファイル注入](input-and-media.md#メディアファイル注入)、[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4))。
-- **一時停止 (P4.5a)**: `POST /api/inject/{id}/pause|resume`。periodic / stream / media のジョブは送信だけを飛ばし、タイマー・ペーサーは動かし続ける (再開してもまとめ送りしない。media は読んだフレームを捨てる)。once・bag・capture は `not_pausable`、終了済みは 409 `not_running`。ジョブに `paused`, `pausable` を出す。
+- **一時停止 (P4.5a)**: `POST /api/inject/{id}/pause|resume`。periodic / stream のジョブは送信だけを飛ばし、タイマーは動かし続ける (再開してもまとめ送りしない)。media はペーサーごと止めて**ソースを保持する** (一時停止中はフレームを読み進めず、捨てず、`count` にも数えない。読み込みはバッファが満杯になった時点で止まる。再開すると保持していたフレームから送り直し、予定時刻は再開の瞬間から数え直す)。once・bag・capture は `not_pausable`、終了済みは 409 `not_running`。ジョブに `paused`, `pausable` を出す。
   - (`capture`: ブラウザのマイク・カメラ。`/ws/capture` で始まり、ジョブ一覧と地図には同じ形で出る。[input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4))
 - ファイルパス (stream / bag) は設定された `data_dir` (既定 `/data`) 配下のみ許可 (realpath で検査、パストラバーサル防止)。
 - publisher はジョブごとに作成、終了時に破棄。
@@ -90,7 +90,7 @@
 - 最初のテキストメッセージ: `{kind: "audio"|"camera", topic, type?, frame_id, sample_rate, channels, chunk_samples, audio_info, fps, encoding, camera_info, reliability}` (pydantic、未知のキーは拒否)。型は省略すると [input-and-media.md#メディアファイル注入](input-and-media.md#メディアファイル注入) と同じ規則で判定。応答 `{event: "ready", job_id, type, companions[]}`、以後 1 秒ごとに `{event: "stats", sent, dropped}`。エラーは `{error: {code, message}}` を送ってから close 4400。
 - 以降のバイナリフレーム: マイクは PCM int16 (ブラウザの AudioContext を目的のサンプルレートで作り、AudioWorklet で 20 ms ごとに送る)、サーバーが `chunk_samples` に詰め直して送る。カメラは JPEG (getUserMedia → canvas → `toBlob('image/jpeg')`、選んだ fps・解像度)。`CompressedImage` ならそのまま、`Image` なら Pillow でデコードして送る。
 - 上限: 音声 1 フレーム 256 KB・実時間の 1.5 倍 (+1 秒) を超える量は捨てる。カメラ 1 フレーム 4 MB・30 fps (超えた分は間引いて `dropped`)。**1 トピックに 1 つ** (`capture_busy`, 409)。ジョブ数の上限は注入と共通。
-- ブラウザ入力は注入ジョブ (`mode: capture`) として登録するので、ジョブ一覧・地図の仮想ダミーノード・停止ボタン・録画のプリセットにそのまま出る。WS が切れたら (タブを閉じた等) ジョブを止め、publisher を破棄する。
+- ブラウザ入力は注入ジョブ (`mode: capture`) として登録するので、ジョブ一覧・地図の仮想ダミーノード・停止ボタン・録画のプリセットにそのまま出る。WS が切れたら (タブを閉じた等) ジョブを止め、publisher を破棄する。**破棄の前に、最後に送ったフレームが reliable の受け手に届く (ack される) のを最大 1 秒待つ** (ブラウザは最後のフレームを送った直後にソケットを閉じることが多く、すぐ破棄すると届く前に失われる)。待つ間もイベントループは止めない (スレッドプールで `finish`)。停止コマンド (`{"cmd":"stop"}`) は、それ以前のフレームをすべて処理して待った後に `{"event":"stopped"}` で答える。なお publisher の履歴 (depth 10) を超える連続送り (10 フレーム以上を一度に) は QoS の限界で取りこぼしうる。
 - 既存のセキュリティ middleware (Host / Origin) を通る。ブラウザのメディア取得はセキュアコンテキストが必要で、`localhost` はそれに当たる。
 - **遅れ (UI に明記)**: stamp はサーバーの受信時刻。ブラウザの取得・JPEG 変換・WebSocket の分、実機より数十 ms 遅れる。カメラの解像度・fps はブラウザと Web カメラ次第 (目安 640×480・30 fps)。
 

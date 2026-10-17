@@ -14,6 +14,7 @@ import time
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, confloat, conint, constr
+from rclpy.duration import Duration
 
 from .. import msgutil
 from ..jobs import InjectSpec, Job
@@ -32,6 +33,7 @@ AUDIO_RATE_SLACK = 1.5      # accept bursts up to 1.5x real time (+1 s) before d
 INFO_REPEAT_SEC = 1.0
 WARMUP_MAX_SEC = 1.0
 WARMUP_POLL_SEC = 0.05
+LINGER_SEC = 1.0            # at stop, wait this long for readers to ack the last frames
 
 
 class CaptureStart(BaseModel):
@@ -219,6 +221,11 @@ class CaptureJob(Job):
         with self.lock:
             pubs = [self._publisher, *(p for _, p in self._companions)]
             self._publisher, self._companions = None, []
+        # The browser often closes right after its last frame: destroying the publisher at once
+        # would drop frames that are still in flight to reliable readers.
+        for pub in pubs:
+            if pub is not None and not pub.wait_for_all_acked(Duration(seconds=LINGER_SEC)):
+                LOG.warning('capture %s: not all frames acknowledged before teardown', self.id)
         for pub in pubs:
             if pub is not None:
                 self._runtime.destroy_publisher(pub)

@@ -16,7 +16,6 @@ from fastapi import FastAPI
 from pydantic import BaseModel, Field, constr, validator
 
 from .lab import Lab
-from .launcher.catalog import ProjectCatalog
 from .launcher.schema import TransformSpec
 from .transform.preview import preview
 
@@ -45,7 +44,7 @@ class OpenProjectRequest(_Strict):
 
 def register(app: FastAPI, lab: Lab) -> None:
     launcher = lab.launcher
-    catalog = ProjectCatalog(lab.data_dir, lab.examples_dir)
+    catalog = lab.catalog
 
     @app.post('/api/transforms', status_code=201)
     def add_transform(spec: TransformSpec, start: bool = False) -> Dict[str, Any]:
@@ -65,4 +64,7 @@ def register(app: FastAPI, lab: Lab) -> None:
 
     @app.post('/api/projects/open')
     def open_project(req: OpenProjectRequest) -> Dict[str, Any]:
-        return launcher.open_project(catalog.resolve(req.id))
+        state = launcher.open_project(catalog.resolve(req.id))
+        if state['error'] is None:  # a project that failed to load is not what to start with next time
+            catalog.remember(req.id)
+        return state

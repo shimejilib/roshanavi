@@ -154,6 +154,7 @@ export const ja = {
   'inject.rate': '周期 (Hz)',
   'inject.count': '回数 (空なら止めるまで)',
   'inject.source': 'ファイル',
+  'inject.filesReload': 'ファイル一覧を更新',
   'inject.sourceNone': 'data ディレクトリにファイルがありません',
   'inject.loop': '最後まで送ったら繰り返す',
   'inject.bagRate': '再生速度 (倍)',

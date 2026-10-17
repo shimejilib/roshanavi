@@ -1,0 +1,42 @@
+# roshanavi busy demo: MultiThreadedExecutor が CPU を空回りする様子 (rmw_fastrtps#929) を確かめる
+# 使い方: ⚙ 設定 →「プロジェクトを切り替える」で開き、まず busy_demo_driver を起動し、続けて
+# 下の 3 つの executor_busy_demo を「1 つずつ」起動して /busy_demo/*/stats を見比べます
+# (同時に動かすと CPU の測定が混ざります)。詳細: docs/design/nodes.md「executor_busy_demo」
+version: 1
+targets:
+# 入力: /busy_demo/in に 100 Hz。受け手がまだ前のメッセージを処理中のうちに次が届く状況を作る。
+- id: busy_demo_driver
+  kind: run
+  package: roshanavi_examples
+  executable: busy_demo_driver
+  name: busy_demo_driver
+  params: {rate_hz: 100.0}
+  role: dependency
+# 1) multi + default: MultiThreadedExecutor + rclpy 既定の QoS イベント通知 -> 空回りする (問題)
+- id: multi_default
+  kind: run
+  package: roshanavi_examples
+  executable: executor_busy_demo
+  name: busy_multi_default
+  params: {executor: multi, qos_events: default, work_ms: 5.0, num_threads: 4,
+           stats_topic: /busy_demo/multi_default/stats}
+  role: mine
+# 2) multi + off: QoS イベント通知を外す -> 空回りしない (回避策。incompatible QoS の警告も出なくなる)
+#    'off' は引用符が必要です (YAML では off が false になります。ノード側は false も受け付けます)。
+- id: multi_off
+  kind: run
+  package: roshanavi_examples
+  executable: executor_busy_demo
+  name: busy_multi_off
+  params: {executor: multi, qos_events: 'off', work_ms: 5.0, num_threads: 4,
+           stats_topic: /busy_demo/multi_off/stats}
+  role: mine
+# 3) single + default: SingleThreadedExecutor なら通知が既定のままでも空回りしない
+- id: single_default
+  kind: run
+  package: roshanavi_examples
+  executable: executor_busy_demo
+  name: busy_single_default
+  params: {executor: single, qos_events: default, work_ms: 5.0,
+           stats_topic: /busy_demo/single_default/stats}
+  role: mine

@@ -37,6 +37,8 @@ export interface MenuContext {
   buildable: ReadonlySet<string>;
   traffic?: TrafficEntry;
   topicTypes?: readonly string[];
+  /** Current `paused` parameter of a persistent dummy; undefined while unknown (both items are then offered). */
+  dummyPaused?: boolean;
 }
 
 /** owned = launcher target (mine / dependency), dummy = persistent dummy, transform = 変換ノード, job = inject job. */
@@ -71,6 +73,11 @@ function buildItem(target: Target | undefined, buildable: ReadonlySet<string>): 
   return item('buildRestart', pkg !== null && buildable.has(pkg), t('menu.reason.notWorkspace'));
 }
 
+function dummyPauseItems(paused: boolean | undefined): MenuItem[] {
+  if (paused === undefined) return [item('pause'), item('resume')];
+  return [paused ? item('resume') : item('pause')];
+}
+
 function nodeItems(ctx: MenuContext): MenuItem[] {
   const items = baseNodeItems(ctx);
   return ctx.node?.lifecycle ? [...items, item('lifecycle')] : items;
@@ -85,7 +92,7 @@ function baseNodeItems(ctx: MenuContext): MenuItem[] {
     return [...controls, item('logs'), item('editTarget'), buildItem(target, ctx.buildable), item('params'), item('isolate')];
   }
   if (role === 'dummy') {
-    return [...controls, item('pause'), item('resume'), item('editDummy'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
+    return [...controls, ...dummyPauseItems(ctx.dummyPaused), item('editDummy'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
   }
   if (role === 'transform') {
     return [...controls, item('editTransform'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];

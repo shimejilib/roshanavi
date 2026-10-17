@@ -101,6 +101,22 @@ test('video file -> sensor_msgs/Image, shown in the image viewer', async ({ page
   await expect(running).toHaveCount(0, { timeout: 5_000 });
 });
 
+test('inject file list refreshes on focus and with the reload button (#3)', async ({ page }) => {
+  await page.goto('/');
+  mkdirSync(DATA, { recursive: true });
+  await page.getByTestId('tab-inject').click();
+  await page.getByLabel('ファイルから順に (JSONL / CSV)').check();
+  const stamp = Date.now();
+  // A file that appears after the list was first loaded shows up when the user comes back to the page...
+  writeFileSync(`${DATA}late-a-${stamp}.jsonl`, '{"data":"a"}\n');
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(page.locator('option', { hasText: `e2e/late-a-${stamp}.jsonl` })).toHaveCount(1, { timeout: 10_000 });
+  // ...or when they press the reload button.
+  writeFileSync(`${DATA}late-b-${stamp}.jsonl`, '{"data":"b"}\n');
+  await page.getByTestId('inject-files-reload').click();
+  await expect(page.locator('option', { hasText: `e2e/late-b-${stamp}.jsonl` })).toHaveCount(1, { timeout: 10_000 });
+});
+
 test('record /chatter, see it in the list, delete it', async ({ page }) => {
   await page.goto('/');
   await page.getByTestId('tab-recordings').click();

@@ -234,3 +234,41 @@ def test_media_job_becomes_persistent_dummy(client, helper, data_dir):
     wait_for(lambda: len(received) >= count + 3, timeout=30)
     assert received[-1].encoding == 'mono8' and received[-1].width == 32
     client.delete(f"/api/targets/{target['id']}")
+
+
+def test_pausing_a_media_job_holds_the_source_instead_of_dropping_frames(lab, helper, data_dir):
+    """#5: frames are not read (and not counted against `count`) while paused."""
+    fx.sine(data_dir / 'pause_tone.wav', seconds=2.0, rate=16000)  # 31 chunks of 64 ms
+    received = helper.collector(AudioDataStamped, '/tl_pause_mic', 50)
+    subscribe_visible(lab, '/tl_pause_mic')
+    job = lab.injector.start(InjectSpec(mode='media', topic='/tl_pause_mic',
+                                        source='pause_tone.wav', count=10,
+                                        media={'sample_rate': 16000, 'chunk_samples': 1024}))
+    wait_for(lambda: lab.injector.get(job['id'])['sent'] >= 3, timeout=15)
+    assert lab.injector.set_paused(job['id'], True)['paused'] is True
+    time.sleep(0.2)  # let an in-flight chunk finish
+    held = lab.injector.get(job['id'])['sent']
+    time.sleep(0.7)  # ~11 chunk periods: the old code read and discarded them
+    assert lab.injector.get(job['id'])['sent'] == held
+    lab.injector.set_paused(job['id'], False)
+    wait_for(lambda: lab.injector.get(job['id'])['state'] == 'done', timeout=15)
+    status = lab.injector.get(job['id'])
+    assert status['sent'] == 10 and status['late_events'] == 0, status
+    wait_for(lambda: len(received) == 10, timeout=5)
+
+
+def test_a_paused_media_job_can_still_be_stopped(lab, helper, data_dir):
+    fx.sine(data_dir / 'pause_stop.wav', seconds=2.0, rate=16000)
+    topic = '/tl_pause_stop'
+    helper.collector(AudioDataStamped, topic, 50)
+    subscribe_visible(lab, topic)
+    job = lab.injector.start(InjectSpec(mode='media', topic=topic,
+                                        source='pause_stop.wav',
+                                        media={'sample_rate': 16000, 'chunk_samples': 1024}))
+    wait_for(lambda: lab.injector.get(job['id'])['sent'] >= 2, timeout=15)
+    lab.injector.set_paused(job['id'], True)
+    time.sleep(0.2)
+    began = time.monotonic()
+    lab.injector.stop(job['id'])
+    assert time.monotonic() - began < 2.0
+    assert lab.injector.get(job['id'])['state'] == 'stopped'

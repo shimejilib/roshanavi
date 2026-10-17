@@ -6,6 +6,7 @@ import { rightClickNode } from './helpers';
 // P5 transform nodes: topic menu -> editor with live preview -> node on the map -> echo.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const NAME = 'chatter_upper';
+const ARRAY_INPUT = 'e2e_long_array';
 
 async function openMap(page: Page) {
   await page.goto('/');
@@ -17,6 +18,7 @@ async function openMap(page: Page) {
 test.beforeAll(() => mkdirSync(SHOTS, { recursive: true }));
 test.afterEach(async ({ page }) => {
   await page.request.delete(`/api/targets/${NAME}`);
+  await page.request.delete(`/api/targets/${ARRAY_INPUT}`);
 });
 
 test('topic menu -> transform /chatter to upper case -> it runs and echoes upper case', async ({ page }) => {
@@ -57,4 +59,28 @@ test('topic menu -> transform /chatter to upper case -> it runs and echoes upper
   await rightClickNode(page, `n:/${NAME}`);
   await expect(page.getByTestId('menu-editTransform')).toBeEnabled();
   await page.keyboard.press('Escape');
+});
+
+test('the preview computes on the whole array, not the 32-item echo copy (#10)', async ({ page }) => {
+  const created = await page.request.post('/api/dummies?start=true', {
+    data: {
+      id: ARRAY_INPUT, name: ARRAY_INPUT, topic: '/e2e_long_array', type: 'std_msgs/msg/Int32MultiArray',
+      mode: 'periodic', payload: { data: Array.from({ length: 40 }, (_, i) => i) }, rate_hz: 2,
+    },
+  });
+  expect(created.ok()).toBeTruthy();
+  await page.goto('/');
+  await expect(page.getByTestId('ws-status')).toHaveAttribute('data-status', 'open');
+  // The echo of an input that does not exist yet is refused for good: wait for the topic first.
+  await expect(page.getByTestId('graph-outline').locator('[data-id="t:/e2e_long_array"]')).toHaveCount(1, { timeout: 30_000 });
+  await page.getByTestId('create-transform').click();
+  const dialog = page.getByTestId('create-transform-dialog');
+  await dialog.getByTestId('transform-input-topic-0').fill('/e2e_long_array');
+  await dialog.getByTestId('transform-output-topic').fill('/e2e_long_array_len');
+  await dialog.getByTestId('transform-output-type-kind').selectOption('int');
+  await dialog.getByTestId('transform-mapping').fill('data: ${len(msg.data)}');
+  // The left pane is the echo view's copy (cut to 32 items); the output is computed on all 40.
+  await expect(dialog.getByTestId('transform-preview-input-msg')).toContainText('_truncated', { timeout: 20_000 });
+  await expect(dialog.getByTestId('transform-preview-output')).toContainText('40', { timeout: 20_000 });
+  await expect(dialog.getByTestId('transform-preview-truncated')).toHaveCount(0);
 });

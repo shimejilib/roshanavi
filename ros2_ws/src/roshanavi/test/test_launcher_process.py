@@ -155,3 +155,25 @@ def test_restart_counts_and_replaces_process():
     info = target.to_dict()
     assert info['restart_count'] == 1 and info['pid'] != first
     target.stop()
+
+
+def test_service_reports_running_once_the_node_is_mapped_even_within_the_starting_window():
+    """#7: 「起動中」 lasts until the node shows up on the map, not a fixed 2 s."""
+    from roshanavi.launcher.service import Launcher
+    from roshanavi.process_map import NodeMapping
+
+    class Manager:
+        def list(self):
+            return [{'id': 'a', 'status': 'starting'}, {'id': 'b', 'status': 'starting'},
+                    {'id': 'c', 'status': 'stopped'}]
+
+    class Mapper:
+        def mapping(self):
+            return {'/a_node': NodeMapping('/a_node', 'a', 10, 'exact')}
+
+    service = object.__new__(Launcher)
+    service.manager, service.mapper = Manager(), Mapper()
+    by_id = {t['id']: t for t in service.targets()}
+    assert by_id['a']['status'] == 'running' and by_id['a']['nodes'][0]['node'] == '/a_node'
+    assert by_id['b']['status'] == 'starting'  # nothing mapped yet
+    assert by_id['c']['status'] == 'stopped'

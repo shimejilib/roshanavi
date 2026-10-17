@@ -103,6 +103,16 @@ async def _receive_start(ws: WebSocket) -> CaptureStart:
         raise MediaError('invalid_request', '; '.join(parts)) from exc
 
 
+async def _acknowledge_stop(ws: WebSocket, job: CaptureJob) -> None:
+    """Every frame sent before the stop command was handled in order; finish (drain), then confirm."""
+    if await run_in_threadpool(job.finish, 'stopped'):
+        LOG.info('capture %s stopped (%d sent)', job.id, job.sent)
+    try:
+        await ws.send_json({'event': 'stopped'})
+    except (WebSocketDisconnect, RuntimeError):
+        LOG.debug('capture %s: client left before the stop acknowledgement', job.id)
+
+
 async def _capture_loop(ws: WebSocket, job: CaptureJob) -> None:
     last_stats = time.monotonic()
     while job.active:
@@ -113,6 +123,7 @@ async def _capture_loop(ws: WebSocket, job: CaptureJob) -> None:
         if data is not None:
             await run_in_threadpool(job.feed, data)
         elif message.get('text') and '"stop"' in message['text']:
+            await _acknowledge_stop(ws, job)
             return
         if time.monotonic() - last_stats >= STATS_PERIOD_SEC:
             last_stats = time.monotonic()
@@ -144,7 +155,8 @@ def _register_capture(app: FastAPI, lab: Lab) -> None:
             LOG.exception('capture failed')
             await _fail(ws, MediaError('capture_failed', f'{type(exc).__name__}: {exc}'))
         finally:
-            if job is not None and job.finish('stopped'):
+            # finish() waits (bounded) for the last frames to be acknowledged: keep the loop free
+            if job is not None and await run_in_threadpool(job.finish, 'stopped'):
                 LOG.info('capture %s stopped (%d sent)', job.id, job.sent)
 
 

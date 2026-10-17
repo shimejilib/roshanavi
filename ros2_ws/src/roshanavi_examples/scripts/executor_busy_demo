@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Entry point installed as `ros2 run roshanavi_examples executor_busy_demo` (code: roshanavi_examples/executor_busy_demo.py)."""
+import sys
+
+from roshanavi_examples.executor_busy_demo import main
+
+if __name__ == '__main__':
+    sys.exit(main())

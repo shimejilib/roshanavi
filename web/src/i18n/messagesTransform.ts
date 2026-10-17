@@ -43,6 +43,7 @@ export const transformJa = {
   'transform.previewOutput': '変換結果',
   'transform.previewWaiting': 'まだ届いていません。型の既定値で計算しています。',
   'transform.previewFiltered': '条件に合わないため、このメッセージは送られません。',
+  'transform.previewTruncated': '入力のメッセージが大きいため、配列や文字列を途中で切った値で計算しています。実際のノードは全体を使うので、結果が違うことがあります。',
   'transform.previewRelay': 'そのまま中継します (入力と同じ内容が出力されます)。',
   'transform.previewBusy': '計算中…',
   'transform.previewCannot': '入力欄を直すとプレビューが出ます: {message}',

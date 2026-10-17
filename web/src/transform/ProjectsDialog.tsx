@@ -5,6 +5,7 @@ import { api, describeError } from '../api/client';
 import type { ProjectEntry } from '../api/transformTypes';
 import { t } from '../i18n';
 import { Modal } from '../lib/Modal';
+import { notifyProjectChanged } from '../graph/useProjectKey';
 import { useAppState } from '../state/AppState';
 
 export function ProjectsDialog() {
@@ -25,6 +26,7 @@ export function ProjectsDialog() {
     setError(null);
     try {
       const state = await api.openProject(entry.id);
+      notifyProjectChanged();
       setNotice(t('project.opened', { path: state.path }));
       if (state.error) setError(t('launcher.projectError', { message: state.error }));
       await load();

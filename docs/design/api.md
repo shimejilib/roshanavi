@@ -18,6 +18,7 @@
 | POST | `/api/launch-import/commit` | 案から取り込む `{preview_id, mode: nodes\|whole, indices, role}` (自動保存) |
 | GET | `/api/interfaces/{pkg}/{msg\|srv\|action}/{Name}` | 型の定義 `{type, text, expanded, truncated}` ([launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)) |
 | GET | `/api/files` | data_dir 内のファイル一覧 (stream/bag 選択用) |
+| GET | `/api/echo/{topic}/sample` | エコー中のトピックの最新メッセージを切り詰めずに返す (上限 256 KiB。超えると `capped: true` で表示用の値)。変換ノードのプレビュー用 ([nodes.md](nodes.md)) |
 | GET / POST | `/api/scenarios` | シナリオの一覧 (プロジェクト + サンプル、各 `last_result`、`project_dir`) / 保存 `{spec\|yaml, file?, overwrite?}` (201、同名は 409) ([scenarios.md#サーバー](scenarios.md#サーバー-scenarios-タブ-servicepy--storepy)) |
 | GET / PUT / DELETE | `/api/scenarios/{id}` | id は一覧の `project:<file>` / `example:<file>` だけ。取得 `{yaml, spec, errors}` / 更新 `{spec\|yaml}` / 削除 (サンプルは 403 `read_only`)。誤りは 422 `invalid_scenario` + `errors[{path, line, message}]` |
 | POST | `/api/scenarios/validate` | 保存せずに検査 `{spec\|yaml}` → `{ok, errors, spec, yaml}` (常に 200) |
@@ -42,7 +43,7 @@
 | POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` (P5: 変換ノードも) |
 | POST / PUT | `/api/transforms[?start=true]`, `/api/transforms/{id}` | 変換ノードの登録 / 更新 (`TransformSpec`, [nodes.md#変換ノード](nodes.md#変換ノード-p5)) |
 | POST | `/api/transforms/preview` | 変換の試算 `{spec, samples}` → `{ok, passed, output, errors[]}` (常に 200) |
-| GET / POST | `/api/projects`, `/api/projects/open` | 切り替えられるプロジェクトの一覧 / 一覧の `id` を開く ([launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)) |
+| GET / POST | `/api/projects`, `/api/projects/open` | 切り替えられるプロジェクトの一覧 / 一覧の `id` を開く (開いた `id` は再起動後も記憶する。[launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)) |
 | WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |
 | GET | `/api/media/types?topic=` | 対応型 `[{type, kind}]`。topic を付けると端点の型 (`endpoints`) と自動判定 (`detected`, `detected_supported`) |
 | WS | `/ws/capture` | ブラウザ入力。最初にテキストで開始メッセージ、続けてバイナリフレーム ([input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4)) |

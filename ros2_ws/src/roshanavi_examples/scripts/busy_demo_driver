@@ -1,0 +1,8 @@
+#!/usr/bin/env python3
+"""Entry point installed as `ros2 run roshanavi_examples busy_demo_driver` (code: roshanavi_examples/busy_demo_driver.py)."""
+import sys
+
+from roshanavi_examples.busy_demo_driver import main
+
+if __name__ == '__main__':
+    sys.exit(main())

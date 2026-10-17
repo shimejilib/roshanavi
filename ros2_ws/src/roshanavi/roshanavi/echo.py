@@ -10,12 +10,17 @@ import logging
 import threading
 from typing import Any, Dict, Optional, Tuple
 
+from rclpy.serialization import serialize_message
+
 from . import msgutil
 from .ros_runtime import RosRuntime
 
 LOG = logging.getLogger(__name__)
 
 MAX_ECHO_TOPICS = 32
+# The transform preview computes on the whole latest message (not the 32-item display copy), but
+# only up to this many serialized bytes; a bigger message falls back to the display copy.
+MAX_SAMPLE_BYTES = 256 * 1024
 
 
 class EchoError(ValueError):
@@ -105,6 +110,26 @@ class EchoManager:
         with channel.lock:
             seq, msg = channel.seq, channel.msg
         return seq, (msgutil.to_display(msg) if msg is not None else None)
+
+    def latest_sample(self, topic: str, max_bytes: int = MAX_SAMPLE_BYTES
+                      ) -> Tuple[int, Optional[Dict[str, Any]], bool, int]:
+        """(seq, untruncated message dict or None, capped, serialized size) for the transform preview.
+
+        ``capped`` is True when the message is larger than ``max_bytes``; ``msg`` is then the
+        usual display copy (long arrays / strings truncated), so the caller can say so.
+        """
+        with self._lock:
+            channel = self._channels.get(topic)
+        if channel is None:
+            return 0, None, False, 0
+        with channel.lock:
+            seq, msg = channel.seq, channel.msg
+        if msg is None:
+            return seq, None, False, 0
+        size = len(serialize_message(msg))
+        if size > max_bytes:
+            return seq, msgutil.to_display(msg), True, size
+        return seq, msgutil.to_plain(msg), False, size
 
     def close(self) -> None:
         with self._lock:

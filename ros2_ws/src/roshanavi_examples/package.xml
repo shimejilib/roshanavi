@@ -3,7 +3,7 @@
 <package format="3">
   <name>roshanavi_examples</name>
   <version>0.1.0</version>
-  <description>Sample nodes for roshanavi tutorials, demos and tests: image_filter and blob_detector (C++), audio_level and state_machine (Python)</description>
+  <description>Sample nodes for roshanavi tutorials, demos and tests: image_filter and blob_detector (C++), audio_level, state_machine and executor_busy_demo (Python)</description>
   <maintainer email="yuya.aoki.0928@gmail.com">aoki</maintainer>
   <license>MIT</license>
 

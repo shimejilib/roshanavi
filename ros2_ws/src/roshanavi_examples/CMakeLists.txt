@@ -3,7 +3,8 @@ project(roshanavi_examples)
 
 # Sample nodes bundled with roshanavi (tutorial, demo and test targets).
 #   C++ (rclcpp): image_filter, blob_detector   -> tracing shows receive + processing
-#   Python (rclpy): audio_level, state_machine  -> tracing shows the receive count only
+#   Python (rclpy): audio_level, state_machine, executor_busy_demo (+ busy_demo_driver)
+#                                               -> tracing shows the receive count only
 
 if(NOT CMAKE_CXX_STANDARD)
   set(CMAKE_CXX_STANDARD 17)
@@ -40,7 +41,8 @@ install(TARGETS image_filter blob_detector DESTINATION lib/${PROJECT_NAME})
 
 # Python nodes: the module (importable for tests) + `ros2 run` entry scripts.
 ament_python_install_package(${PROJECT_NAME})
-install(PROGRAMS scripts/audio_level scripts/state_machine DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/audio_level scripts/state_machine scripts/executor_busy_demo
+  scripts/busy_demo_driver DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 

@@ -17,6 +17,7 @@ roshanavi/
                                # (C++ の計測ノードのビルドに要る ament_cmake / rosidl / rclcpp / gtest は ros-base に含まれる)
   docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
   examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, docs/design/launcher.md)
+  examples/busy_demo/          # MultiThreadedExecutor の空回りの再現 (executor_busy_demo × 3 構成, docs/design/nodes.md)
   examples/perception_demo/    # 認識パイプラインのデモ (動画 → image_filter → blob_detector、音声 → audio_level, docs/design/launcher.md)
   docs/                        # 設計・計画・プロジェクト文書 (docs/README.md が索引)
   ros2_ws/src/roshanavi_msgs/  # ament_cmake: 計測ノードとの内部 msg (ProbeConfig / ProbeStats ほか, docs/design/measurement.md)

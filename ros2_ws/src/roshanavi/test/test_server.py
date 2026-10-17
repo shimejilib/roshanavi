@@ -142,3 +142,19 @@ def test_ws_echo(client, lab, helper):
 def test_ws_echo_unknown_topic(client):
     with client.websocket_connect('ws://localhost/ws/echo/tl_does_not_exist') as ws:
         assert ws.receive_json()['error']['code'] == 'not_found'
+
+
+def test_echo_sample_endpoint(client, lab, helper):
+    from std_msgs.msg import Int32MultiArray
+    helper.periodic_publisher(Int32MultiArray, '/tl_sample_api', 10.0,
+                              lambda i: Int32MultiArray(data=list(range(50))))
+    wait_for(lambda: '/tl_sample_api' in dict(lab.runtime.topic_names_and_types()), timeout=15.0)
+    idle = client.get('/api/echo/tl_sample_api/sample').json()
+    assert idle['msg'] is None and idle['seq'] == 0  # nobody echoes it yet
+    with client.websocket_connect('ws://localhost/ws/echo/tl_sample_api') as ws:
+        assert ws.receive_json()['msg']['data']['_truncated'] is True  # what the echo view gets
+        body = wait_for(lambda: (lambda b: b if b['msg'] else None)(
+            client.get('/api/echo/tl_sample_api/sample').json()), timeout=5.0)
+    assert body['topic'] == '/tl_sample_api' and body['capped'] is False
+    assert body['msg']['data'] == list(range(50))
+    assert body['max_bytes'] >= 64 * 1024

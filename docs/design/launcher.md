@@ -15,7 +15,7 @@
 **プロセス管理 (`process.py` / `target.py` / `manager.py`)**
 - `subprocess.Popen(argv list)` のみ (シェルは使わない)。`start_new_session=True` で新しいセッション = プロセスグループにし、`ros2 launch` が起こす子孫も同じグループに入れる。
 - 停止: グループに SIGINT → 5 秒待つ → SIGTERM → 3 秒 → SIGKILL。開始時点の子孫のうちグループ外に出たものも最後に kill する。
-- 状態: `stopped` / `starting` (起動後 2 秒) / `running` / `exited` (自分で 0 終了) / `crashed` (自分で非 0 終了) / `invalid` (設定が検証を通らない。例: パッケージが消えた)。稼働時間、再起動回数、`pending_restart` (実行中に設定を変えた) を返す。世代番号で、古いプロセスの終了通知が新しいプロセスの状態を上書きしないようにする。
+- 状態: `stopped` / `starting` (起動後 2 秒。ただしノードが地図に対応づいた時点で、2 秒未満でも `running` にする。一覧 API `launcher.targets()` で合わせる) / `running` / `exited` (自分で 0 終了) / `crashed` (自分で非 0 終了) / `invalid` (設定が検証を通らない。例: パッケージが消えた)。稼働時間、再起動回数、`pending_restart` (実行中に設定を変えた) を返す。世代番号で、古いプロセスの終了通知が新しいプロセスの状態を上書きしないようにする。
 - 自動再起動 (`auto_restart`、既定 off): `crashed` のとき 1, 2, 4 … 最大 30 秒のバックオフで再起動する。30 秒以上動いたら間隔を戻す。ユーザーが止めたら再起動しない。
 - ログ: stdout / stderr を行単位で読み、`stream` タグ付きでターゲットごとのリングバッファ (5000 行) に入れる。起動コマンドと終了コードは `system` 行として残す。子プロセスの環境に `PYTHONUNBUFFERED=1`, `RCUTILS_LOGGING_BUFFERED_STREAM=0`, `RCUTILS_COLORIZED_OUTPUT=0` を入れ、遅延と色コードをなくす。
 - サーバー終了時に全ターゲットを並列に停止する。uvicorn の SIGINT/SIGTERM 処理の後の `finally`、SIGHUP → SIGTERM への読み替え、`atexit` の 3 経路で呼ぶ (冪等)。サーバー自身が SIGKILL された場合だけは子が残る (制約)。
@@ -96,7 +96,7 @@ watch_topics: [/chat]
 - **テンプレート (P4.5a)**: `--project-template PATH` (または `$ROSHANAVI_PROJECT_TEMPLATE`) を付けると、プロジェクトファイルが **無いときだけ** それをコピーしてから読み込む (`bootstrap_project`。`O_EXCL` で作成し既存は上書きしない。壊れたテンプレートはコピーせずログに出す)。パッケージが見つからないなど検証を通らないターゲットも、`invalid` 状態で一覧に残す (古いプロジェクトでも開ける)。
 - `autostart: true` のターゲットとダミーはサーバー起動時に起動する (`--no-autostart` で無効)。
 
-- **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。サーバーを再起動すると `--project` のファイルに戻る。
+- **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。切り替えに成功すると (読み込みエラーが無いとき) 開いた一覧の `id` を `<data_dir>/last_project.json` (`{"id": ...}`) に書き、**サーバーを再起動するとそのプロジェクトで始まる** (#9)。起動時は保存された `id` を現在の一覧と照らして検証し (一覧に無い・ファイルが消えた・JSON が壊れている・型が違うときは無視して警告だけ出す)、通らなければ `--project` のファイルで始める。保存に失敗しても切り替え自体は成功する (ログに警告)。
 
 ## ノードのパラメータと型の定義 (P4.5a)
 **パラメータ (`params.py`)** — rclpy / rclcpp のノードが必ず持つ `<node>/list_parameters`・`describe_parameters`・`get_parameters`・`set_parameters` (rcl_interfaces) を、サーバー自身のノードから呼ぶ。
@@ -109,6 +109,7 @@ watch_topics: [/chat]
 ## デモ構成 (P4.5a)
 - `examples/demo_project/roshanavi.yaml`: `talker` (demo_nodes_cpp, role mine, autostart, ノード名 talker) と `listener` (demo_nodes_cpp, role dependency, autostart)。compose の `lab` は `--project-template` でこれを指定し、`/data/roshanavi.yaml` が無いときだけコピーする。デモ開始時点で talker / listener を地図から停止・再起動でき、ログも見られる。(P5) サンプルノード 4 つの起動設定を autostart なしで足した (既存の `./data/roshanavi.yaml` は上書きしないので、すでにあるラボには入らない。プロジェクトの切り替えでサンプルを開くと入る)。
 - (P5) `examples/perception_demo/roshanavi.yaml`: 入力ノード `dummy_camera` (`samples/blobs.mp4` → `/camera/image`、media / loop) → `image_filter` (`/camera/gray`, `/camera/edges`) → `blob_detector` (`/camera/detections`) → 変換ノード `blob_count` (`/camera/blob_count`, `std_msgs/Int32` = `len(msg.detections)`)、入力ノード `dummy_microphone` (`samples/tone.wav` → `/audio`, AudioDataStamped) → `audio_level` (`/audio/level_db`, `/audio/silence`)。すべて autostart。サンプルのファイルはリポジトリに入れず、サーバーの起動時に ffmpeg で `<data_dir>/samples/` に作る (`sample_media.py`、無いものだけ。`--no-sample-media` で無効): `blobs.mp4` (10 秒・320x240・15 fps。ffmpeg の `testsrc` を 25% に暗くし、その上を明るい円が 2 つ動く。`geq` で描く) と `tone.wav` (12 秒・16 kHz mono。440 Hz 2 秒 / 無音 2 秒の繰り返し)。一時ファイルに書いてから rename。
+- (#40) `examples/busy_demo/roshanavi.yaml`: `busy_demo_driver` (`/busy_demo/in` に 100 Hz) と `executor_busy_demo` の 3 構成 (`multi_default` / `multi_off` / `single_default`、stats は `/busy_demo/<構成>/stats`)。すべて autostart なし (1 つずつ起動して比べる)。説明と実測は [nodes.md](nodes.md#executor_busy_demo--multithreadedexecutor-の空回りを体験する-40)。
 - `demo` コンテナは「roshanavi が起動していないノード」の例: `external_talker` が `/external/chatter` に送り、`external_listener` が受ける。`/chatter` とは混ざらず、地図に「操作できるノード」と「見るだけのノード (停止は無効)」が並ぶ。
 - (P4.5b) `demo` コンテナは外部の lifecycle ノード `lc_talker` (unconfigured で起動) も動かす ([launcher.md#lifecycle ノード](launcher.md#lifecycle-ノード-p45b))。launch の取り込みのデモ用に `roshanavi/demo_system.launch.py` を同梱する ([launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b))。
 

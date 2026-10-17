@@ -24,7 +24,7 @@ from . import (data_kinds, msgutil, security, server_functions, server_launch_im
                server_launcher, server_media, server_nodes, server_scenarios, server_tracing,
                server_transforms)
 from .api_errors import ApiError, parse_window
-from .echo import EchoError
+from .echo import MAX_SAMPLE_BYTES, EchoError
 from .files import FileAccessError, list_files
 from .jobs import InjectError, InjectSpec
 from .lab import Lab
@@ -193,6 +193,18 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
     def get_files() -> Dict[str, Any]:
         return {'data_dir': lab.data_dir, 'files': list_files(lab.data_dir)}
 
+    @app.get('/api/echo/{topic:path}/sample')
+    def echo_sample(topic: str) -> Dict[str, Any]:
+        """Latest message of a topic that is being echoed, untruncated up to a size cap (#10).
+
+        For the transform preview, whose expressions must see whole arrays, not the 32-item
+        display copy. ``msg`` is null when the topic is not echoed (yet) or nothing arrived.
+        """
+        topic = '/' + topic.strip('/')
+        seq, msg, capped, size = lab.echo.latest_sample(topic)
+        return {'topic': topic, 'seq': seq, 'msg': msg, 'capped': capped, 'size_bytes': size,
+                'max_bytes': MAX_SAMPLE_BYTES}
+
 
 async def _drain(ws: WebSocket) -> None:
     """Consume client frames until the client disconnects (detects closed sockets)."""
@@ -297,7 +309,8 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
                     'api': ['/api/health', '/api/graph', '/api/traffic', '/api/types',
                             '/api/data-kinds', '/api/inject',
                             '/api/files', '/api/tracing', '/api/targets', '/api/workspace', '/api/build',
-                            '/api/project', '/api/dummies', '/api/functions', '/api/media/types',
+                            '/api/project', '/api/echo/{topic}/sample', '/api/dummies',
+                            '/api/functions', '/api/media/types',
                             '/api/scenarios', '/api/scenario-runs', '/api/scenario-record',
                             '/api/recordings', '/api/nodes/{node}/parameters',
                             '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',

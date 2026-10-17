@@ -49,6 +49,8 @@ test('blank-area menu -> create an input node on a new topic -> it appears on th
   await page.waitForTimeout(1500);
   await rightClickNode(page, `n:/${INPUT_ID}`);
   await expect(page.getByTestId('menu-pause')).toBeEnabled();
+  // The current `paused` parameter decides: a running input offers 一時停止 only, not 再開 too.
+  await expect(page.getByTestId('menu-resume')).toHaveCount(0);
   await expect(page.getByTestId('menu-editDummy')).toBeEnabled();
   await page.screenshot({ path: `${SHOTS}menu-input-node.png` });
   await page.keyboard.press('Escape');
@@ -105,4 +107,50 @@ test('first-run guide appears with an empty launch list and starts talker', asyn
   await guide.getByTestId('guide-try-talker').click();
   await expect(page.getByTestId('target-status-talker')).toHaveAttribute('data-status', /starting|running/, { timeout: 10_000 });
   await expect(guide).toHaveCount(0);
+});
+
+type CyHost = { _cyreg: { cy: { getElementById: (i: string) => { position: () => { x: number; y: number } } } } };
+const modelPosition = (page: Page, id: string) =>
+  page.getByTestId('graph-canvas').evaluate((el, i) => {
+    const p = (el as unknown as CyHost)._cyreg.cy.getElementById(i).position();
+    return { x: Math.round(p.x), y: Math.round(p.y) };
+  }, id);
+
+test('a dragged node keeps its place when the topology changes; 整列し直す lays everything out again (#8)', async ({ page }) => {
+  await openMap(page);
+  const canvas = page.getByTestId('graph-canvas');
+  const rendered = await canvas.evaluate((el) => {
+    const p = (el as unknown as { _cyreg: { cy: { getElementById: (i: string) => { renderedPosition: () => { x: number; y: number } } } } })._cyreg.cy.getElementById('n:/talker').renderedPosition();
+    return { x: p.x, y: p.y };
+  });
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('graph canvas not visible');
+  const automatic = await modelPosition(page, 'n:/talker');
+  await page.mouse.move(box.x + rendered.x, box.y + rendered.y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + rendered.x + 40, box.y + rendered.y + 140, { steps: 8 });
+  await page.mouse.up();
+  const dragged = await modelPosition(page, 'n:/talker');
+  expect(Math.abs(dragged.y - automatic.y)).toBeGreaterThan(40);
+
+  // A new node changes the topology: the layout runs again, but the dragged node stays.
+  await page.request.post('/api/dummies?start=true', {
+    data: { id: INPUT_ID, name: INPUT_ID, topic: '/e2e_pin_topic', type: 'std_msgs/msg/String', mode: 'periodic', payload: { data: 'x' }, rate_hz: 1 },
+  });
+  await expect(page.getByTestId('graph-outline').locator(`[data-id="n:/${INPUT_ID}"]`)).toHaveCount(1, { timeout: 20_000 });
+  await page.waitForTimeout(1200); // layout animation
+  expect(await modelPosition(page, 'n:/talker')).toEqual(dragged);
+
+  // The pin survives a reload (saved per project in localStorage).
+  await page.reload();
+  await expect(page.getByTestId('graph-outline').locator(`[data-id="n:/${INPUT_ID}"]`)).toHaveCount(1, { timeout: 20_000 });
+  await page.waitForTimeout(1500);
+  expect(await modelPosition(page, 'n:/talker')).toEqual(dragged);
+
+  // 整列し直す unpins everything.
+  await rightClickBlank(page);
+  await page.getByTestId('menu-relayout').click();
+  await page.waitForTimeout(1200);
+  const relaid = await modelPosition(page, 'n:/talker');
+  expect(Math.abs(relaid.y - dragged.y)).toBeGreaterThan(20);
 });

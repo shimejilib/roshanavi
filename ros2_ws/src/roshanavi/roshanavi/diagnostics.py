@@ -9,15 +9,16 @@ Each diagnostic is a plain dict with an English ``code`` and machine-readable
   only slightly (likely typo / missing remap).
 - ``type_mismatch``: one topic name advertised with several types.
 
-Hidden topics (a segment starting with ``_``), ``/rosout`` and
-``/parameter_events`` never produce one-sided warnings.
+Hidden topics (a segment starting with ``_``), ``/rosout``, ``/parameter_events`` and
+rosbag2's own ``/events/write_split`` never produce one-sided warnings.
 """
 
 from typing import Any, Dict, Iterable, List, Mapping, Set, Tuple
 
 from .qos_compat import incompatible_pairs
 
-INFRA_TOPICS = frozenset({'/rosout', '/parameter_events'})
+# ``/events/write_split`` is published by ``ros2 bag record`` itself while roshanavi records.
+INFRA_TOPICS = frozenset({'/rosout', '/parameter_events', '/events/write_split'})
 SEVERITY_ORDER = {'error': 0, 'warning': 1, 'info': 2}
 SHORT_NAME_LEN = 4  # names this short only tolerate one edit
 
