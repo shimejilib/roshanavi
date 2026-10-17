@@ -6,8 +6,9 @@
 
 import cytoscape, { type CollectionReturnValue, type Core, type EventObject, type NodeSingular } from 'cytoscape';
 import dagre from 'cytoscape-dagre';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TrafficEntry } from '../api/types';
+import type { MenuAnchor } from './NodeMenu';
 import { diffElements, indexElements } from './diff';
 import { focusSet } from './focus';
 import { topicElementId, type EdgeData, type Element } from './model';
@@ -31,6 +32,8 @@ export interface GraphViewProps {
   selectedId: string | null;
   onSelect: (elementId: string | null) => void;
   fitSignal: number;
+  /** Right-click menu for a node element (`ref` = ROS node id). */
+  renderMenu?: (anchor: MenuAnchor, close: () => void) => ReactNode;
 }
 
 interface Tooltip {
@@ -91,6 +94,7 @@ export function GraphView(props: GraphViewProps) {
   const onSelectRef = useRef(props.onSelect);
   onSelectRef.current = props.onSelect;
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
+  const [menu, setMenu] = useState<MenuAnchor | null>(null);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -109,10 +113,16 @@ export function GraphView(props: GraphViewProps) {
     });
     cy.on('mouseover', 'edge', (evt: EventObject) => {
       const data = evt.target.data() as EdgeData;
-      const text = data.qosBad ? data.qosReason : `${data.topic}${data.label ? `\n${data.label}` : ''}`;
+      const text = data.qosBad ? data.qosReason : `${data.topic}${data.label ? `\n${data.label}` : ''}${data.rateNote ? `\n${data.rateNote}` : ''}`;
       setTooltip({ x: evt.renderedPosition.x, y: evt.renderedPosition.y, text });
     });
     cy.on('mouseout', 'edge', () => setTooltip(null));
+    // Right click (cxttap) only: left-click selection and drag-panning stay untouched.
+    cy.on('cxttap', 'node[kind = "node"]', (evt: EventObject) => {
+      const pos = evt.renderedPosition;
+      setMenu({ x: pos.x, y: pos.y, nodeId: String(evt.target.data('ref')) });
+    });
+    cy.on('tap viewport', () => setMenu(null));
     cyRef.current = cy;
     return () => {
       cy.destroy();
@@ -160,9 +170,10 @@ export function GraphView(props: GraphViewProps) {
 
   return (
     <div className="graph-canvas-wrap">
-      <div ref={containerRef} className="graph-canvas" data-testid="graph-canvas" />
+      <div ref={containerRef} className="graph-canvas" data-testid="graph-canvas" onContextMenu={(e) => e.preventDefault()} />
       <canvas ref={canvasRef} className="graph-particles" aria-hidden="true" />
       <MapOutline elements={props.elements} />
+      {menu && props.renderMenu?.(menu, () => setMenu(null))}
       {tooltip && (
         <div className="graph-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>
           {tooltip.text}

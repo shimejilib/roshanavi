@@ -4,13 +4,17 @@ import logging
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Deque, Dict, Optional, Tuple
 
 from rclpy.exceptions import InvalidTopicNameException
 from rclpy.validate_full_topic_name import validate_full_topic_name
 
 LOG = logging.getLogger(__name__)
+
+SEND_RATE_WINDOW_SEC = 5.0
+MAX_SEND_SAMPLES = 20000
 
 
 class InjectError(ValueError):
@@ -57,15 +61,35 @@ class Job:
         self.error: Optional[str] = None
         self.created_at = time.time()
         self.finished_at: Optional[float] = None
+        self._sends: Deque[Tuple[float, Optional[int]]] = deque(maxlen=MAX_SEND_SAMPLES)
+
+    def record_send(self, size: Optional[int] = None) -> None:
+        """Count one published message (``size`` = serialized bytes, if known)."""
+        self._sends.append((time.monotonic(), size))
+
+    def send_rate(self, now: Optional[float] = None,
+                  window: float = SEND_RATE_WINDOW_SEC) -> Tuple[Optional[float], Optional[float]]:
+        """(hz, bytes/s) of what this job actually sent in the last ``window`` seconds."""
+        now = time.monotonic() if now is None else now
+        recent = [s for s in list(self._sends) if now - s[0] <= window]
+        if len(recent) < 2:
+            return (0.0, 0.0) if not recent else (None, None)
+        span = recent[-1][0] - recent[0][0]
+        hz = (len(recent) - 1) / span if span > 0 else None
+        sizes = [s[1] for s in recent if s[1] is not None]
+        bps = hz * sum(sizes) / len(sizes) if hz is not None and sizes else None
+        return hz, bps
 
     def to_dict(self) -> Dict[str, Any]:
+        send_hz, send_bps = self.send_rate()
         with self.lock:
             return {'id': self.id, 'mode': self.spec.mode, 'topic': self.spec.topic,
                     'type': self.spec.type, 'rate_hz': self.spec.rate_hz,
                     'count': self.spec.count, 'source': self.spec.source,
                     'qos': dict(self.spec.qos),
                     'state': self.state, 'sent': self.sent, 'error': self.error,
-                    'created_at': self.created_at, 'finished_at': self.finished_at}
+                    'created_at': self.created_at, 'finished_at': self.finished_at,
+                    'send_hz': send_hz, 'send_bps': send_bps}
 
     @property
     def active(self) -> bool:

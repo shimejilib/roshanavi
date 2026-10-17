@@ -100,3 +100,55 @@ describe('launcher roles', () => {
     ]);
   });
 });
+
+describe('per-publisher rates on edges', () => {
+  const graphWithDummy = () => {
+    const g = chatterGraph();
+    g.nodes.push({ id: 'dummy:j1', name: 'inject periodic', namespace: '', role: 'dummy', job_id: 'j1' });
+    g.edges.push({ node: 'dummy:j1', topic: '/chatter', dir: 'pub', qos: { reliability: 'reliable', durability: 'volatile' } });
+    return g;
+  };
+  const byId = (els: ReturnType<typeof buildElements>, id: string) => edgesOf(els).find((e) => e.id === id);
+
+  it('labels the talker as estimated and the dummy as exact; subscribers get the total', () => {
+    const traffic = new Map([[
+      '/chatter',
+      entry('/chatter', {
+        hz: 2, bytes_per_sec: 60, source_count: 2,
+        publishers: [
+          { node: '/talker', hz: 1, bps: 30, basis: 'estimated' },
+          { node: 'dummy:j1', hz: 1, bps: 30, basis: 'exact' },
+        ],
+      }),
+    ]]);
+    const els = buildElements(graphWithDummy(), traffic, NOW_MS);
+    const talker = byId(els, 'e:pub:/talker:/chatter');
+    expect(talker?.label).toBe('1.00 Hz · 30 B/s (推定)');
+    expect(talker?.rateNote).toContain('推定');
+    expect(byId(els, 'e:pub:dummy:j1:/chatter')?.label).toBe('1.00 Hz · 30 B/s');
+    expect(byId(els, 'e:sub:/listener:/chatter')?.label).toBe('2.00 Hz · 60 B/s');
+    const topic = els.find((e) => e.data.id === 't:/chatter');
+    expect(topic?.data.label).toBe('/chatter\n合計 2.00 Hz / 送信元 2');
+  });
+
+  it('leaves edges unlabeled when the split is unknown', () => {
+    const traffic = new Map([[
+      '/chatter',
+      entry('/chatter', {
+        hz: 4, source_count: 2,
+        publishers: [
+          { node: '/talker', hz: null, bps: null, basis: 'unknown' },
+          { node: 'dummy:j1', hz: null, bps: null, basis: 'unknown' },
+        ],
+      }),
+    ]]);
+    const talker = byId(buildElements(graphWithDummy(), traffic, NOW_MS), 'e:pub:/talker:/chatter');
+    expect(talker?.label).toBe('');
+    expect(talker?.hz).toBe(2);
+  });
+
+  it('falls back to the topic total without per-publisher data', () => {
+    const els = buildElements(chatterGraph(), new Map([['/chatter', entry('/chatter')]]), NOW_MS);
+    expect(byId(els, 'e:pub:/talker:/chatter')?.rateBasis).toBe('total');
+  });
+});

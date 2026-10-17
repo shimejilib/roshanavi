@@ -124,6 +124,10 @@ roshanavi/
 - 重い型 (`sensor_msgs/msg/Image`, `CompressedImage`, `PointCloud2`, `PointCloud`。LaserScan は含まない) は既定で購読せず `status:"not_monitored"`, `monitored:false` で一覧に残す (グラフ情報は表示)。`--monitor-heavy` で全て監視、`PUT /api/traffic/{topic}/monitor` `{"enabled": bool}` でトピック単位に実行時切替 (既定より優先、任意のトピックを無効化も可)。購読の張り替えは次回の housekeeping (<=1 s) で反映され、`monitored` は即時に更新される。
 - 除外: 正規表現リスト (既定で `/rosout`, `/parameter_events` は統計対象だが UI で畳む)。型解決できないトピックは `unsupported` として記録し購読しない。
 - 消えたトピックは購読解除。
+- **送信元ごとの値 (`rates.py`, 純関数)**: 統計はトピック単位で、rclpy Jazzy の `MessageInfo` には publisher gid がないため、受信したサンプルの送信元は区別できない。そこで roshanavi が正確に分かる値から地図のエッジ用に分ける。`/api/traffic` と `/ws/live` の各エントリに `source_count` と `publishers:[{node, hz, bps, basis}]` を付ける。
+  - 注入ジョブ (`dummy:<id>`): 実際に送った件数から求めた送信レート (`Job.send_rate`、直近 5 秒、bytes/s は最初のメッセージのシリアライズ後サイズ × Hz) → `basis:"exact"`。恒久ダミーノード: 設定の `rate_hz` → `"configured"`。
+  - それ以外の送信元が 1 つだけ: ダミーが無ければトピック合計そのもの (`"measured"`)、あれば `max(0, 合計 − ダミーの合計)` (`"estimated"`、UI に「推定」と説明)。bytes/s はダミー全員のサイズが分かるときだけ分ける。
+  - それ以外の送信元が 2 つ以上: 分けられないので `"unknown"` (エッジに数値を出さず、トピックに「合計 X Hz / 送信元 N」)。受信側のエッジ (topic → sub) は常にトピック合計。
 
 ### 4.4 msgutil
 - `resolve_type("std_msgs/msg/String")` → クラス (`rosidl_runtime_py.utilities.get_message`)。
@@ -452,6 +456,10 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 - **右ペイン (ノード)**: 起動対象、プロセスの状態と pid、対応づけ (確実 / 推定と理由)、稼働時間、再起動ボタン、「ログを開く」(Launcher タブへ)。
 - 地図の役割色は P2 の凡例どおり (自分 = 緑、依存 = シアン、ダミー = マゼンタ、その他 = グレー)。注入ジョブの仮想ノードはジョブ ID 付きのラベル、恒久ダミーはノード名で表示する。
 - スクリーンショット: `docs/screenshots/launcher.png`, `graph-roles.png`, `graph-node-launcher.png` (`e2e/launcher.spec.ts`)。
+- **地図からノードを操作** (`graph/nodeControl.ts` 純関数, `NodeMenu.tsx`, `detail/NodeControls.tsx`): 地図のノードの右クリックメニューと右ペインに 停止 / 再起動 (止まっている起動対象には 起動)。新しい API は作らず既存の `POST /api/targets/{id}/start|stop|restart` と `DELETE /api/inject/{id}` を使う。
+  - 対象は roshanavi が起動したものだけ: Launcher の起動対象 (自分 / 依存 / 恒久ダミー) と注入ジョブ。その他のノードはボタンを無効にし、理由 (「roshanavi が起動したノードではないため停止できません…」) を出す。外部のプロセスにはシグナルを送らない。
+  - launch ファイルや 1 プロセスに複数ノードがある起動対象 (composable container など) は、対応づけ (§4.9) で分かっている全ノードを確認ダイアログに列挙してから止める。
+  - 右クリック (cytoscape `cxttap`) だけを使うので、左クリックの選択とドラッグでの移動はそのまま。メニューは矢印キーで移動、Escape / Tab で閉じる。キーボードだけの操作は右ペインのボタンで行える。
 
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。

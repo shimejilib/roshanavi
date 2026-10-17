@@ -1,7 +1,10 @@
 // All UI strings. Japanese is the default; add another locale by providing the
 // same keys (missing keys fall back to Japanese). `{name}` = interpolation.
 
+import { mapJa } from './messagesMap';
+
 export const ja = {
+  ...mapJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

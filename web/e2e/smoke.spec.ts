@@ -67,3 +67,27 @@ test('a periodic injection appears as a dummy source with a diagnostic', async (
   await running.getByRole('button', { name: '停止' }).click();
   await expect(running).toHaveCount(0, { timeout: 5_000 });
 });
+
+test('talker + dummy on /chatter: each publisher edge shows its own rate', async ({ page }) => {
+  await page.goto('/');
+  await page.getByTestId('tab-inject').click();
+  await page.getByTestId('inject-topic').fill('/chatter');
+  await expect(page.getByTestId('inject-yaml')).toHaveValue(/data:/);
+  await page.getByTestId('inject-yaml').fill('data: "split ${i}"');
+  await page.getByLabel('周期的に').check();
+  await page.getByLabel('周期 (Hz)').fill('1');
+  await page.getByTestId('inject-start').click();
+  await expect(page.getByRole('status')).toContainText('開始しました');
+
+  await page.getByTestId('tab-graph').click();
+  const outline = page.getByTestId('graph-outline');
+  // talker (1 Hz) is estimated from the total (≈2 Hz) minus the dummy's counted 1 Hz.
+  await expect(outline.locator('[data-id="e:pub:/talker:/chatter"]')).toContainText(/(0\.[89]\d|1\.[01]\d) Hz.*推定/, { timeout: 20_000 });
+  await expect(outline.locator('li[data-id^="e:pub:dummy:"][data-id$=":/chatter"]')).toContainText(/(0\.9\d|1\.0\d) Hz/);
+  await expect(outline.locator('[data-id="t:/chatter"]')).toContainText('送信元 2');
+
+  await page.getByTestId('tab-inject').click();
+  const running = page.getByTestId('job').filter({ hasText: '/chatter' }).filter({ hasText: '実行中' });
+  await running.getByRole('button', { name: '停止' }).click();
+  await expect(running).toHaveCount(0, { timeout: 5_000 });
+});

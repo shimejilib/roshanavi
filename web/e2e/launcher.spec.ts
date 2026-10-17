@@ -78,8 +78,37 @@ test('start talker from the Launcher, see it as "mine" on the map, stop it', asy
 
   await page.getByTestId('node-logs').click();
   await expect(page.getByTestId('log-viewer')).toContainText('e2e_talker');
-  await page.getByTestId('target-stop-e2e_talker').click();
-  await expect(page.getByTestId('target-status-e2e_talker')).toHaveAttribute('data-status', 'stopped', { timeout: 15_000 });
+
+  // Stop it from the map: right-click the node -> 停止 -> confirm.
   await page.getByTestId('tab-graph').click();
+  await page.waitForTimeout(1000);
+  await rightClickNode(page, 'n:/e2e_talker');
+  const menu = page.getByTestId('node-menu');
+  await expect(menu).toContainText('/e2e_talker');
+  await menu.getByTestId('node-stop').click();
+  await expect(page.getByTestId('confirm-dialog')).toContainText('/e2e_talker を停止します');
+  await page.screenshot({ path: `${SHOTS}graph-node-stop-confirm.png` });
+  await page.getByTestId('confirm-ok').click();
   await expect(outline.locator('[data-id="n:/e2e_talker"]')).toHaveCount(0, { timeout: 20_000 });
+  await page.getByTestId('tab-launcher').click();
+  await expect(page.getByTestId('target-status-e2e_talker')).toHaveAttribute('data-status', 'stopped', { timeout: 15_000 });
+
+  // A node roshanavi did not start (the demo's talker) offers no stop.
+  await page.getByTestId('tab-graph').click();
+  await rightClickNode(page, 'n:/talker');
+  await expect(page.getByTestId('node-menu').getByTestId('node-stop')).toBeDisabled();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('node-menu')).toHaveCount(0);
 });
+
+/** Right-click a cytoscape node at its rendered position (cytoscape keeps its instance on the container). */
+async function rightClickNode(page: Page, elementId: string) {
+  const canvas = page.getByTestId('graph-canvas');
+  const pos = await canvas.evaluate((el, id) => {
+    const cy = (el as unknown as { _cyreg: { cy: { getElementById: (i: string) => { renderedPosition: () => { x: number; y: number } } } } })._cyreg.cy;
+    return cy.getElementById(id).renderedPosition();
+  }, elementId);
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error('graph canvas not visible');
+  await page.mouse.click(box.x + pos.x, box.y + pos.y, { button: 'right' });
+}

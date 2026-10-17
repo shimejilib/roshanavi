@@ -279,3 +279,14 @@ th.num .th-button { width: 100%; text-align: right; }
   position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); white-space: nowrap; border: 0;
 }
+
+/* ---- map node controls (context menu + confirm dialog) ---- */
+.node-menu { position: absolute; z-index: 20; min-width: 160px; display: flex; flex-direction: column; gap: 4px; padding: 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25); }
+.node-menu-title { font-size: 11px; color: var(--muted); padding: 2px 4px 4px; border-bottom: 1px solid var(--border); }
+.node-menu button { text-align: left; }
+.control-disabled { display: inline-flex; flex-direction: column; gap: 4px; }
+button.danger { border-color: #c0392b; color: #c0392b; }
+.modal-backdrop { position: fixed; inset: 0; z-index: 50; background: rgba(0, 0, 0, 0.45); display: flex; align-items: center; justify-content: center; }
+.modal { max-width: 520px; padding: 16px 20px; background: var(--surface); color: var(--text); border-radius: 8px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.35); }
+.modal p { white-space: pre-wrap; line-height: 1.5; }
+.row.end { display: flex; gap: 8px; justify-content: flex-end; }

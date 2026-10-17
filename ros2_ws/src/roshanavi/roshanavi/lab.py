@@ -9,9 +9,9 @@ the API serves is read from those cached snapshots.
 import logging
 import os
 import time
-from typing import Any, Callable, Optional, Sequence
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
-from . import graph
+from . import graph, rates
 from .echo import EchoManager
 from .injector import Injector
 from .launcher.service import Launcher
@@ -61,6 +61,13 @@ class Lab:
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')
+
+    def traffic_view(self) -> List[Dict[str, Any]]:
+        """Traffic entries plus per-publisher rates for the map (see :mod:`rates`)."""
+        snapshot, _ = self.graph.snapshot()
+        known = rates.known_rates(self.injector.list(), snapshot['nodes'],
+                                  self.launcher.targets())
+        return rates.annotate_traffic(self.traffic.snapshot(), snapshot['edges'], known)
 
     def stop(self) -> None:
         self.launcher.close()  # idempotent; child processes go first

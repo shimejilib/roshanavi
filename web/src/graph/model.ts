@@ -1,7 +1,8 @@
 // Graph snapshot + traffic -> renderer-agnostic element list (pure, unit-tested).
 
-import type { Diagnostic, GraphSnapshot, Role, TrafficEntry } from '../api/types';
-import { ageSec, edgeLabel } from '../lib/format';
+import type { Diagnostic, GraphEdge, GraphSnapshot, RateBasis, Role, TrafficEntry } from '../api/types';
+import { t } from '../i18n';
+import { ageSec, edgeLabel, formatHz, formatRate } from '../lib/format';
 import { isHiddenTopic } from '../lib/topics';
 import { qosReasonText } from './diagnosticsText';
 
@@ -38,6 +39,56 @@ export interface EdgeData {
   state: EdgeState;
   qosBad: boolean;
   qosReason: string;
+  /** How `hz`/`bw` were obtained: per publisher (rates.py) or the topic total. */
+  rateBasis: RateBasis | 'total';
+  rateNote: string;
+}
+
+interface EdgeRate {
+  hz: number;
+  bw: number;
+  label: string;
+  basis: RateBasis | 'total';
+  note: string;
+}
+
+const RATE_NOTES: Partial<Record<RateBasis, () => string>> = {
+  exact: () => t('graph.rate.exactHelp'),
+  configured: () => t('graph.rate.configuredHelp'),
+  estimated: () => t('graph.rate.estimatedHelp'),
+  unknown: () => t('graph.rate.unknownHelp'),
+};
+
+function rateLabel(hz: number, bps: number | null, basis: RateBasis): string {
+  if (!(hz > 0)) return '';
+  const base = bps == null ? formatHz(hz) : `${formatHz(hz)} · ${formatRate(bps)}`;
+  if (basis === 'estimated') return `${base} (${t('graph.rate.estimated')})`;
+  if (basis === 'configured') return `${base} (${t('graph.rate.configured')})`;
+  return base;
+}
+
+/** Subscribers receive the topic total; publishers get their own share when known. */
+export function edgeRate(e: Pick<GraphEdge, 'node' | 'dir'>, entry: TrafficEntry | undefined): EdgeRate {
+  const totalHz = entry?.hz ?? 0;
+  const totalBw = entry?.bytes_per_sec ?? 0;
+  const total: EdgeRate = { hz: totalHz, bw: totalBw, label: edgeLabel(totalHz, totalBw), basis: 'total', note: '' };
+  const pub = e.dir === 'pub' ? entry?.publishers?.find((p) => p.node === e.node) : undefined;
+  if (!pub) return total;
+  const note = RATE_NOTES[pub.basis]?.() ?? '';
+  const share = Math.max(1, entry?.source_count ?? 1);
+  if (pub.hz == null) {
+    // Unknown split: no number on the edge; animate/size with an even share.
+    return { hz: totalHz / share, bw: totalBw / share, label: '', basis: pub.basis, note };
+  }
+  const bw = pub.bps ?? totalBw / share;
+  return { hz: pub.hz, bw, label: rateLabel(pub.hz, pub.bps, pub.basis), basis: pub.basis, note };
+}
+
+/** Topic label; with several publishers it carries the total and the source count. */
+export function topicLabel(name: string, entry: TrafficEntry | undefined): string {
+  const sources = entry?.source_count ?? 0;
+  if (sources < 2 || !entry || !(entry.hz > 0)) return name;
+  return `${name}\n${t('graph.rate.total', { hz: formatHz(entry.hz), n: sources })}`;
 }
 
 export type Element = { group: 'nodes'; data: NodeData } | { group: 'edges'; data: EdgeData };
@@ -113,8 +164,7 @@ function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, now
     if (seen.has(id)) continue;
     seen.add(id);
     const entry = traffic.get(e.topic);
-    const hz = entry?.hz ?? 0;
-    const bw = entry?.bytes_per_sec ?? 0;
+    const rate = edgeRate(e, entry);
     const reasons = e.dir === 'sub' ? (bad.get(`${e.node}\u0000${e.topic}`) ?? []) : [];
     const nodeEl = nodeElementId(e.node);
     const topicEl = topicElementId(e.topic);
@@ -125,13 +175,15 @@ function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, now
       topic: e.topic,
       node: e.node,
       dir: e.dir,
-      hz,
-      bw,
-      width: edgeWidth(bw),
-      label: edgeLabel(hz, bw),
+      hz: rate.hz,
+      bw: rate.bw,
+      width: edgeWidth(rate.bw),
+      label: rate.label,
       state: edgeState(entry, nowMs),
       qosBad: reasons.length > 0,
       qosReason: reasons.map((d) => qosReasonText(d)).join('\n'),
+      rateBasis: rate.basis,
+      rateNote: rate.note,
     });
   }
   return edges;
@@ -165,7 +217,7 @@ export function buildElements(snap: GraphSnapshot, traffic: Map<string, TrafficE
       group: 'nodes',
       data: {
         id: topicElementId(tp.name),
-        label: tp.name,
+        label: topicLabel(tp.name, entry),
         kind: 'topic',
         role: 'topic',
         ref: tp.name,

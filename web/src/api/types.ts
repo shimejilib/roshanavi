@@ -97,6 +97,20 @@ export interface TrafficEntry {
   recent_count: number;
   history: number[];
   error?: string | null;
+  /** Publishers of this topic (non-self) and their share of the rate (backend rates.py). */
+  source_count?: number;
+  publishers?: PublisherRate[];
+}
+
+/** exact = counted by roshanavi, configured = dummy node setting, measured = the only
+ * publisher (topic total), estimated = total minus known, unknown = cannot split. */
+export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown';
+
+export interface PublisherRate {
+  node: string;
+  hz: number | null;
+  bps: number | null;
+  basis: RateBasis;
 }
 
 export type InjectMode = 'once' | 'periodic' | 'stream' | 'bag';

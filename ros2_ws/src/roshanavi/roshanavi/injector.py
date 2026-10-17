@@ -19,6 +19,7 @@ import time
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from rclpy.duration import Duration
+from rclpy.serialization import serialize_message
 
 from . import msgutil
 from .bagplay import BagJob
@@ -108,15 +109,20 @@ class PublishJob(Job):
         self._timer: Any = None
         self._expected_subs = 0
         self._started = 0.0
+        self._msg_size: Optional[int] = None  # serialized size of the first message
 
     def validate_first(self) -> None:
         """Render+build the first message eagerly so bad payloads fail at submit time."""
         if not self._source.has(0):
             raise InjectError('invalid_request', 'job would send no messages')
         try:
-            self._build(self._source.get(0, 0.0))
+            first = self._build(self._source.get(0, 0.0))
         except ExprError as exc:
             raise InjectError('invalid_expression', str(exc)) from exc
+        try:  # approximate bytes/s of this job (later messages may differ slightly)
+            self._msg_size = len(serialize_message(first))
+        except Exception as exc:  # size is informational only
+            LOG.debug('cannot serialize first message of job %s: %s', self.id, exc)
 
     def _build(self, record: Any) -> Any:
         try:
@@ -163,6 +169,7 @@ class PublishJob(Job):
                     record = self._source.get(self.sent, self._clock() - self._started)
                     self._publisher.publish(self._build(record))
                     self.sent += 1
+                    self.record_send(self._msg_size)
                 more = self._source.has(self.sent)
             if not more:
                 self._linger()

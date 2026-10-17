@@ -116,7 +116,7 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.get('/api/traffic')
     def get_traffic() -> Dict[str, Any]:
-        return {'topics': lab.traffic.snapshot()}
+        return {'topics': lab.traffic_view()}
 
     @app.put('/api/traffic/{topic:path}/monitor')
     def put_monitor(topic: str, req: MonitorRequest) -> Dict[str, Any]:
@@ -185,7 +185,7 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
 
         async def push() -> None:
             snapshot, digest = lab.graph.snapshot()
-            payload: Dict[str, Any] = {'traffic': lab.traffic.snapshot(),
+            payload: Dict[str, Any] = {'traffic': lab.traffic_view(),
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
                                        'build': lab.launcher.builder.status()}

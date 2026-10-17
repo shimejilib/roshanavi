@@ -7,6 +7,7 @@ import { diagnosticTargets } from './diagnosticsText';
 import { DiagnosticsPanel } from './DiagnosticsPanel';
 import { GraphView } from './GraphView';
 import { Legend } from './Legend';
+import { NodeMenu } from './NodeMenu';
 import { buildElements, filterSnapshot, nodeElementId, topicElementId } from './model';
 import { usePalette } from './usePalette';
 
@@ -81,6 +82,9 @@ export function GraphTab({ active }: { active: boolean }) {
             selectedId={selectionToElementId(selection)}
             onSelect={(id) => select(elementIdToSelection(id))}
             fitSignal={fitSignal}
+            renderMenu={(anchor, close) => (
+              <NodeMenu key={anchor.nodeId} anchor={anchor} node={live.graph?.nodes.find((n) => n.id === anchor.nodeId)} onClose={close} />
+            )}
           />
           <Legend palette={palette} />
         </div>

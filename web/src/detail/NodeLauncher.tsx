@@ -1,8 +1,6 @@
-import { useState } from 'react';
-import { api, describeError } from '../api/client';
 import type { GraphNode } from '../api/types';
 import { t, type MessageKey } from '../i18n';
-import { isAlive, statusClass, statusLabel } from '../launcher/status';
+import { statusClass, statusLabel } from '../launcher/status';
 import { formatDuration } from '../lib/format';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
@@ -11,7 +9,6 @@ import { useLive } from '../state/LiveProvider';
 export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
   const { live } = useLive();
   const { openLogs } = useAppState();
-  const [error, setError] = useState<string | null>(null);
   if (!node || node.id.startsWith('dummy:')) return null;
   const target = node.target_id ? live.targets.find((tg) => tg.id === node.target_id) : undefined;
   if (!target) {
@@ -24,10 +21,6 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
   }
   const mapped = target.nodes?.find((n) => n.node === node.id);
   const confidence = node.confidence ?? mapped?.confidence ?? 'heuristic';
-  const restart = () => {
-    setError(null);
-    api.targetAction(target.id, 'restart').catch((err: unknown) => setError(describeError(err)));
-  };
   return (
     <section data-testid="node-launcher">
       <h4>{t('detail.launcher')}</h4>
@@ -48,10 +41,8 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
       </dl>
       <p className="muted small">{t(`launcher.confidenceHelp.${confidence}` as MessageKey)}</p>
       <div className="row">
-        <button type="button" disabled={!isAlive(target)} onClick={restart} data-testid="node-restart">{t('launcher.restart')}</button>
         <button type="button" onClick={() => openLogs(target.id)} data-testid="node-logs">{t('detail.openLogs')}</button>
       </div>
-      {error && <p className="error-box" role="alert">{error}</p>}
     </section>
   );
 }
