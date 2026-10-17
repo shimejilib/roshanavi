@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
 import type { WorkspacePackage } from '../api/types';
 import { t } from '../i18n';
-import { filterPackages, type PackageMatch } from './packages';
+import { Term } from '../lib/Term';
+import { filterPackages, visiblePackages, type PackageMatch } from './packages';
 
 export interface Pick {
   pkg: WorkspacePackage;
@@ -35,13 +36,13 @@ function PackageItems({ match, onPick }: { match: PackageMatch; onPick: Props['o
   const { pkg } = match;
   return (
     <div className="pkg-items">
-      {match.executables.length > 0 && <div className="muted small">{t('launcher.executables')}</div>}
+      {match.executables.length > 0 && <div className="muted small">{t('launcher.executables')} <Term term="executable" /></div>}
       {match.executables.map((exe) => (
         <button key={exe} type="button" className="pick mono" onClick={() => onPick({ pkg, kind: 'run', file: exe })} data-testid={`pick-run-${pkg.name}-${exe}`}>
           ▶ {exe}
         </button>
       ))}
-      {match.launchFiles.length > 0 && <div className="muted small">{t('launcher.launchFiles')}</div>}
+      {match.launchFiles.length > 0 && <div className="muted small">{t('launcher.launchFiles')} <Term term="launch" /></div>}
       {match.launchFiles.map((file) => (
         <button key={file} type="button" className="pick mono" onClick={() => onPick({ pkg, kind: 'launch', file })} data-testid={`pick-launch-${pkg.name}-${file}`}>
           ⧉ {file}
@@ -54,7 +55,8 @@ function PackageItems({ match, onPick }: { match: PackageMatch; onPick: Props['o
 export function PackagePicker({ packages, onPick, onBuild, onRefresh, buildBusy }: Props) {
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<Set<string>>(new Set());
-  const matches = useMemo(() => filterPackages(packages, query), [packages, query]);
+  const [showSystem, setShowSystem] = useState(false);
+  const matches = useMemo(() => filterPackages(visiblePackages(packages, showSystem), query), [packages, query, showSystem]);
   const autoOpen = query.trim() !== '' && matches.length <= AUTO_EXPAND;
   const toggle = (name: string) =>
     setOpen((prev) => {
@@ -70,7 +72,11 @@ export function PackagePicker({ packages, onPick, onBuild, onRefresh, buildBusy 
         <input type="search" placeholder={t('launcher.search')} value={query} onChange={(e) => setQuery(e.target.value)} data-testid="launcher-search" />
         <button type="button" onClick={onRefresh} title={t('launcher.refresh')}>⟳</button>
       </div>
-      <div className="muted small">{t('launcher.packages', { n: matches.length })}</div>
+      <label className="check small">
+        <input type="checkbox" checked={showSystem} onChange={(e) => setShowSystem(e.target.checked)} data-testid="show-system" />
+        {t('launcher.showSystem')}
+      </label>
+      <div className="muted small">{t('launcher.packages', { n: matches.length })} <Term term="package" /></div>
       {matches.length === 0 && <p className="muted">{t('launcher.noPackages')}</p>}
       <ul className="pkg-list">
         {matches.map((match) => {

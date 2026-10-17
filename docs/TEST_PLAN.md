@@ -183,3 +183,74 @@
 | I-32 | デコードの停止 (統合、間隔は ± 20 ms のまま) | 先読みの範囲内の 150 ms 停止は送信に出ない / 最初の停止中は送信を始めない (プレバッファ) | ✅ (`test_media_job.py`) |
 | I-33 | 先読みを超える停止 (700 ms) と `late_policy` (3 通り) | `late_events` ≥ 1。`shift` は 1 回・まとめ送りなし、`catch_up` はまとめ送り、`drop` は `sent + late_skipped` = 総数 | ✅ |
 | I-34 | Executor がビジーループしない (原因の回帰防止) | トラフィック監視の購読と注入が同じトピックでも、`roshanavi-executor` スレッドの CPU 時間は 0.65 秒の送信中に < 0.15 秒 (以前は 0.3〜0.8 秒) | ✅ (`test_media_job.py` の I-12 のテストに含む) |
+
+## J. デモ体験・地図の操作・パラメータ・更新タイミング (P4.5a)
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| J-01 | デモ用プロジェクトのコピー (`bootstrap_project`) | ファイルが無いときだけコピー。既存は上書きしない。壊れたテンプレートはコピーしない | ✅ (`test_project.py`) |
+| J-02 | 同梱の `examples/demo_project/roshanavi.yaml` | 検証を通り、talker (mine, autostart) / listener (dependency, autostart) | ✅ (`test_project.py`) |
+| J-03 | 自動保存 | 起動リスト・入力ノードの追加 / 削除の直後に `dirty: false` でファイルに書かれる | ✅ (`test_project.py`, `test_dummy.py`) |
+| J-04 | 読み込みに失敗したプロジェクト | `autosave: false`。自動保存で上書きしない | ✅ |
+| J-05 | 入力ノードを 1 リクエストで作成・起動 (`POST /api/dummies?start=true`) | 新しいトピックとノード (role dummy) がグラフに現れ、プロジェクトに保存される | ✅ (`test_dummy.py`) |
+| J-06 | 入力ノードの一時停止 (`paused` パラメータ) | true で送信が止まり、false で再開。型違い・終了済みジョブは理由付きで拒否 | ✅ (`test_pause.py`) |
+| J-07 | 注入ジョブの一時停止・再開 | periodic は送信数が止まって再開で増える。once は `pausable: false`、存在しないジョブは 404 | ✅ (`test_pause.py`) |
+| J-08 | パラメータの値の変換 (unit) | 10 種の型の往復。bool に 1、整数に 1.5 / 2^63、無限大、長すぎる文字列、範囲外のバイトを拒否 | ✅ (`test_params.py`) |
+| J-09 | 実ノードのパラメータ (list / describe / get / set) | 一覧に型・値・説明・読み取り専用。変更が反映され、ノードの拒否・読み取り専用・型違いは理由付きのエラー | ✅ (`test_params.py`) |
+| J-10 | 応答しないノード | 0.5 秒のタイムアウトで 504 `param_service_unavailable` (サーバーは止まらない) | ✅ |
+| J-11 | 外部ノードの変更方針 (REST) | 閲覧は可。変更は `allow_external` なしで 403、ありで反映。グラフに無いノードは 404、roshanavi 自身は 403 | ✅ (`test_params.py`) |
+| J-12 | 型の定義 (`ros2 interface show` 相当) | Header に Time の中身が字下げで入る / srv の `---` / 不正な名前は 400、未インストールは 404 | ✅ (`test_interfaces.py`) |
+| J-13 | 計算期間 1 / 5 / 10 秒 | 期間ごとに別の平均。10 秒は既定の 5 秒より前のサンプルも使う。`?window=3` は 400、WS は error + close | ✅ (`test_traffic_windows.py`) |
+| J-14 | 止まったトピックの Hz | 10 Hz が止まると 1 秒後に 0 (`stale`)、1 Hz は 3 秒後。履歴も 0 | ✅ |
+| J-15 | 右クリックメニューの項目 (役割ごと) | 自分 / 依存 / 常駐ダミー / 注入ジョブ / 外部 / トピック / エッジ / 空白で仕様どおり。外部の停止・非ワークスペースのビルドは理由付きで無効 | ✅ (vitest `menuModel.test.ts`) |
+| J-16 | 入力ノードのダイアログ → DummySpec | 文字列・式・YAML・メディア・データファイル。`/` の補完、ID の重複回避、編集時の ID 維持、平易なエラー | ✅ (vitest `inputForm.test.ts`) |
+| J-17 | ノードの入出力の振り分け | 内部トピックを除く。heavy 型と QoS 不一致を判定。最初の 3 つ (heavy と届かないものを除く) を開く | ✅ (vitest `nodeIO.test.ts`) |
+| J-18 | 「入出力だけ表示」「上流・下流だけ表示」 | ノードと直接のトピックだけ / トピックを通る経路だけ | ✅ (vitest `isolate.test.ts`) |
+| J-19 | ラベル (最終更新・計算期間・Hz の計測方法)、パラメータ入力、エッジの理由、初回の案内、パッケージの絞り込み | 「最終更新 09:05:07 (2 秒前)」、5 秒超で警告、「直近 5 秒の平均」、受信時刻ベースのときだけ「(受信時刻で概算)」 | ✅ (vitest `timing` / `paramValue` / `edgeInfo` / `guide` / `packages`) |
+| J-20 | E2E: 空白の右クリック → 新しいトピックに入力ノードを作る | ノードとトピックが地図に出て、右ペインでエコーが見える。入力ノードのメニューに一時停止・変更 | ✅ (`e2e/ux.spec.ts`) |
+| J-21 | E2E: talker のパラメータ / 外部ノード | talker の `use_sim_time` が見えて編集できる。external_talker は停止が無効、パラメータは閲覧のみ | ✅ |
+| J-22 | E2E: 型の定義とノードの入出力 | /chatter の定義に `string data`。/listener の「受信しているデータ」に /chatter と Hello World | ✅ |
+| J-23 | E2E: 初回の案内 | 起動リストが空なら案内が出て、「試しに talker を起動してみる」で talker が動き、案内が消える | ✅ |
+| J-24 | E2E: デモ構成 | talker = 自分、listener = 依存 (lab が起動)、external_talker = その他 (/external/chatter)、ROS 標準パッケージは既定で非表示 | ✅ (`smoke` / `launcher.spec.ts`) |
+| J-25 | パラメータの変更を外部ノードで確認ダイアログ経由で行う (UI) | 「変更を許可する」→ 確認 → 編集欄が出る | 🟡 (ロジックは unit、UI 操作は 👀) |
+| J-26 | 「ビルドして再起動」を地図から | ワークスペースのパッケージのノードでビルドが始まり、成功後に再起動 | 🟡 (無効化の条件は unit。デモ環境に自分のパッケージが無いため E2E 未整備) |
+| J-27 | 最終更新の警告色 (WS の切断) | 5 秒以上フレームが届かないと警告色 | 🟡 (判定は unit、切断の実操作は 👀) |
+
+## K. ノード一覧・lifecycle・launch の分解取り込み・送受信ごとのトラフィック (P4.5b)
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| K-01 | ノード一覧の集約 (unit) | 実行中のノード ∪ 止まっている起動リスト・常駐ダミー。外部は `control: none` + `reason: external`、設定エラーは `invalid`、注入ジョブは除外、外部より自分の行が先 | ✅ (`test_node_list.py`) |
+| K-02 | グループ (unit) | kind launch と 2 ノード以上のプロセスがグループになり、止まった launch もグループを保つ。1 ノードのプロセスはグループにしない | ✅ (`test_node_list.py`) |
+| K-03 | 起動元・取り込み元 (unit) | run / launch / dummy (トピック付き) / external、`imported_from` を表示 | ✅ (`test_node_list.py`, vitest `rowText.test.ts`) |
+| K-04 | lifecycle ノードの検出 (unit) | `<node>/get_state` が lifecycle_msgs の型のノードだけ。同名でも型が違えば対象外 | ✅ (`test_lifecycle.py`) |
+| K-05 | 目標までの遷移 (unit) | unconfigured→active = configure+activate、active→inactive = deactivate、同じ状態や finalized は何もしない、不正な目標は拒否 | ✅ (`test_lifecycle.py`) |
+| K-06 | 実 lifecycle ノード (`lifecycle_talker`) | unconfigured → configure → inactive → activate → active → deactivate → cleanup。使えない遷移は 409、shutdown は拒否、状態のキャッシュ | ✅ (`test_lifecycle.py`) |
+| K-07 | 応答しない lifecycle ノード | 0.3 秒で 504 `lifecycle_unavailable`、一覧の状態は null (サーバーは止まらない) | ✅ |
+| K-08 | lifecycle API の方針 | グラフに `lifecycle: true`。外部は `allow_external` なしで 403、`goal` と `transition` の両方は 400、ありで active。一覧に状態が出る | ✅ (`test_lifecycle.py`) |
+| K-09 | パラメータの解決 (unit) | rcl の YAML 規則 (入れ子・相対・`*`・`**`、ワイルドカードが先)、launch の順 (グローバル → dict → ファイル、後勝ち)、scalar と配列などの振り分け、平坦化と復元 | ✅ (`test_launch_params.py`) |
+| K-10 | Python の launch の分解 | PushRosNamespace + GroupAction の名前空間、SetRemap + remappings、dict + パラメータファイル + SetParameter、include の中のノード、条件 (if / unless)、引数の変更で結果が変わる | ✅ (`test_launch_import.py`) |
+| K-11 | 分解できない部分 | ComposableNodeContainer (中のノード名付き)、ExecuteProcess (**実行されない**: マーカーファイルが作られない)、TimerAction、読めない include がそれぞれ理由コード付きで報告される | ✅ (`test_launch_import.py`) |
+| K-12 | XML / YAML の launch | `<push-ros-namespace>`、`<param>`、`<remap>`、`<let>`、`if`、`<executable>` / YAML の `$(var)` と namespace | ✅ (`test_launch_import.py`) |
+| K-13 | 必須引数・壊れたファイル・print | 必須引数が無いと評価せず `missing_args`。構文エラーは 422 `launch_eval_failed` (理由付き)。launch ファイルの print は結果を壊さない | ✅ (`test_launch_import.py`) |
+| K-14 | 評価のタイムアウト | 60 秒眠る launch ファイルを 2 秒で打ち切り 504 `launch_eval_timeout` (10 秒以内に戻る、プロセスグループごと kill) | ✅ (`test_launch_import.py`) |
+| K-15 | 対象ファイルの制限 | ワークスペース外の絶対パス・`..`・外向き symlink・存在しないファイルは拒否。data_dir の下は 403。不正な引数名は拒否 | ✅ (`test_launch_import.py`) |
+| K-16 | 取り込み (ノードごと) | 起動リストに `kind: run` で入る。配列パラメータは data_dir の `imported_params/<id>.yaml` に書かれる。2 回目は ID を変える。期限切れの案は 404 | ✅ (`test_launch_import.py`) |
+| K-17 | 取り込み (launch 全体) とパッケージの launch | demo_nodes_cpp の talker_listener_launch.py → 2 ノード、全体は `kind: launch`。ワークスペース内の任意のファイルは全体取り込み不可 | ✅ (`test_launch_import.py`) |
+| K-18 | 検査に通らないノード | 存在しない実行ファイル・`--ros-args` を含む引数は「取り込めない」(理由コード付き)、取り込みでもエラーとして返る | ✅ (`test_launch_import.py`) |
+| K-19 | 取り込み API | `roshanavi/demo_system.launch.py` を robot:=api で解析 → 2 ノード + ExecuteProcess、取り込むとノード一覧に取り込み元付きで出る | ✅ (`test_launch_import.py`) |
+| K-20 | 遅いトピックの Hz | 0.5 Hz を 1 秒窓で見ると 10 秒で計算 (`rate_note: extended`, 0.5 Hz)。1 通だけなら `too_few` | ✅ (`test_traffic_windows.py`) |
+| K-21 | 受信者ごとの理論値 (unit) | 全送信者が QoS 適合 → トピック全体、一部 → 適合する送信者の和 (分けられなければ null)、適合なし → 0 と `delivered: false`。roshanavi 自身は除外 | ✅ (`test_sub_rates.py`) |
+| K-22 | 表の絞り込み・選択・グループ (vitest) | 役割・状態・検索 (AND)、全選択は操作できる行だけ、一部選択、消えた行の選択解除、グループの見出しと一括選択 | ✅ (`nodelist/model.test.ts`) |
+| K-23 | 一括操作の計画と確認文 (vitest) | 起動設定ごとに 1 回、一緒に止まるノード (選択外も) を列挙、対象外の理由、lifecycle は activate / deactivate で外部の注意付き | ✅ (`nodelist/bulk.test.ts`) |
+| K-24 | lifecycle と取り込みの表示 (vitest) | 遷移の並び・確認文、取り込みの既定の選択・引数の差分・要約・理由文・取り込めない理由 | ✅ (`lifecycleText.test.ts`, `importModel.test.ts`) |
+| K-25 | 一時停止中の最終更新・遅いトピックの表示 (vitest) | 一時停止中は警告色にせず「一時停止中 (HH:MM:SS の表示)」。「0.50 Hz (直近 10 秒で計算)」「— (1 秒窓では測定不可)」 | ✅ (`timing.test.ts`) |
+| K-26 | 送受信ごとの行・ノード別 (vitest) | 送信 → 受信の順、ノード別のまとめと並び、届いていない・分けられない値、根拠のラベル、すべて展開 | ✅ (`traffic/endpoints.test.ts`, `model.test.ts`) |
+| K-27 | E2E: チェックボックスで talker + listener を一括停止・起動 | ↓ キーで次の行へ、確認ダイアログに両方のノード、停止状態の行になり、起動で戻る。外部ノードのチェックは無効で案内が出る | ✅ (`e2e/nodes.spec.ts`) |
+| K-28 | E2E: 外部の lifecycle ノード (lc_talker) | configure → activate → deactivate → activate → cleanup。確認ダイアログに外部の注意 | ✅ (`e2e/nodes.spec.ts`) |
+| K-29 | E2E: launch の取り込み | roshanavi / demo_system.launch.py を解析 → 2 ノードと ExecuteProcess → 取り込むと一覧に取り込み元付きで出る | ✅ (`e2e/nodes.spec.ts`) |
+| K-30 | E2E: トラフィックの展開とノード別 | /chatter を展開して talker (送信・実測) と listener (受信・理論値)、ノード別に切り替えても同じ | ✅ (`e2e/smoke.spec.ts`) |
+| K-31 | 一緒に止まる composable container のノード (実機) | container 内の複数ノードが 1 グループになり、確認ダイアログに全ノード | 🟡 (集約・確認文は unit。デモに container が無いため E2E 未整備) |
+| K-32 | 地図の右クリック・右ペインからの lifecycle | lifecycle ノードにだけ項目が出て、ダイアログが開く | 🟡 (項目は vitest `menuModel.test.ts`、操作は 👀) |
+| K-33 | 取り込んだノードの実起動 | 取り込んだ talker を起動するとノード名・名前空間・リマップ・パラメータファイルどおりに動く | 👀 (demo_system の talker を取り込み起動 → `/demo_robot/imported_talker` が確実で対応づき実行。talker が宣言しないパラメータ `note` は rclcpp の仕様で一覧に出ない) |
+| K-34 | 非常に大きい launch (数百ノード) の評価時間 | 20 秒以内に評価が終わる | ⬜ |

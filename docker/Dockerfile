@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         ros-jazzy-rosbag2-storage-default-plugins \
         ros-jazzy-example-interfaces \
         ros-jazzy-audio-common-msgs \
+        ros-jazzy-lifecycle \
     && rm -rf /var/lib/apt/lists/*
 
 # Built UI baked into the image; the server picks it up via ROSHANAVI_STATIC_DIR

@@ -65,7 +65,8 @@ ROS 2 システムの「通信の可視化」「ダミー入力の注入」「�
 ```
 roshanavi/
   docker/Dockerfile            # ros:jazzy-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
-  docker-compose.yml           # lab (サーバー, :8080) / demo (talker・listener 等) / test
+  docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
+  examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, §4.14)
   docs/DESIGN.md
   ros2_ws/src/roshanavi/       # ament_python パッケージ
     roshanavi/
@@ -89,6 +90,10 @@ roshanavi/
       scenario/        # schema.py / runner.py / junit.py / cli.py
       server.py        # FastAPI アプリ (REST + WS)
       server_launcher.py # Launcher / プロジェクト / ビルド / ダミーの REST + /ws/logs
+      params.py        # ノードのパラメータサービス (list/describe/get/set) のクライアント (§4.13)
+      interfaces.py    # 型の定義 (`ros2 interface show` 相当, §4.13)
+      server_nodes.py  # パラメータ・型の定義の REST
+      api_errors.py    # 汎用の API エラーと `?window=` の検証
       main.py          # エントリ: `ros2 run roshanavi server`
       static/          # web のビルド成果物 (git 管理外、ビルドで生成)
     test/              # pytest (unit + rclpy 統合)
@@ -120,6 +125,8 @@ roshanavi/
 - 新規トピックを 1 秒周期で検出し `create_subscription(msg_type, topic, cb, qos, raw=True)` で購読 (デシリアライズしない)。
 - QoS 互換: 当該トピックの publisher に BEST_EFFORT が 1 つでもあれば BEST_EFFORT で購読、それ以外 RELIABLE。durability は VOLATILE、depth 10。
 - 購読コールバックは 2 引数 `(data, info)` で、rclpy Jazzy が `raw=True` でも渡す `MessageInfo` (dict: `source_timestamp`, `received_timestamp` [ns], `publication_sequence_number`, `reception_sequence_number`) を使う。`publisher_gid` は Jazzy では公開されないため gid は常に none (publisher 別集計は gid が取れる場合のみ)。サンプルは (受信 monotonic 時刻, size, source_ts, received_ts, gid, seq)。純粋な統計計算は `stats.py` (時計注入可)。
+- **計算期間 (P4.5a)**: サンプルは最長の 10 秒分を保持し、`GET /api/traffic?window=1|5|10`・`/ws/live?window=…` で指定した期間の平均を返す (各エントリに `window_sec`)。それ以外の値は 400 `invalid_window` (WS はエラーを送って close 1008)。UI は選んだ期間を「直近 5 秒の平均」のように表示する。
+- **止まったら即 0 (P4.5a, `stats.is_silent`)**: 最後の受信から max(3 × 期待周期, 1 秒) 何も届かなければ、`hz` / `hz_recv` / `hz_source` / `bytes_per_sec` を 0 にし `stale: true` を付ける (期間平均の残留で、止まったトピックが数秒間動いて見えるのをなくす)。期待周期は保持中のサンプルの平均受信間隔 (選んだ期間によらない)。サイズ・ジッタ・遅延は最後の値のまま。1 秒ごとの hz 履歴も 0 になる。
 - 統計 (スライディングウィンドウ既定 5 秒): `hz`, `hz_basis` (`"source"`|`"receive"`), `hz_recv`, `hz_source`, `bytes_per_sec`, `avg_size`, `jitter_ms`, `jitter_recv_ms`, `dropped`, `drop_ratio`, `latency_ms`, `last_seen`, `total_count`。スパークライン用に 1 秒刻みの hz 履歴を 60 点保持。
   - `hz_recv`/`jitter_recv_ms`: 受信時刻の間隔 ((n-1)/span, 標準偏差)。`ros2 topic hz` 相当で、欠落・購読遅れで過小評価し転送ジッタを含む。
   - `hz_source`: publisher 側レート。publisher (gid) ごとに source_timestamp 間隔から算出して合算。連番が単調ならロスした分も publish 数に数える。全サンプルの source_timestamp が 0/未対応なら null で、`hz`/`jitter_ms` は受信側にフォールバック (`hz_basis="receive"`)。`jitter_ms` は source 間隔の標準偏差 (publish ジッタ)。
@@ -154,6 +161,7 @@ roshanavi/
   - `stream`: JSONL (1 行 1 メッセージ dict) または CSV (ヘッダ = フィールドパス, `a.b.c` 形式) を `rate_hz` で順送り、`loop` 可。
   - `bag`: `ros2 bag play <path> [--rate r] [--loop] [--topics ...]` をサブプロセス起動、停止で SIGINT。
   - `media`: 画像・動画・音声ファイルを型に合わせて変換して送る (§4.6.1, §4.11)。
+- **一時停止 (P4.5a)**: `POST /api/inject/{id}/pause|resume`。periodic / stream / media のジョブは送信だけを飛ばし、タイマー・ペーサーは動かし続ける (再開してもまとめ送りしない。media は読んだフレームを捨てる)。once・bag・capture は `not_pausable`、終了済みは 409 `not_running`。ジョブに `paused`, `pausable` を出す。
   - (`capture`: ブラウザのマイク・カメラ。`/ws/capture` で始まり、ジョブ一覧と地図には同じ形で出る。§4.11)
 - ファイルパス (stream / bag) は設定された `data_dir` (既定 `/data`) 配下のみ許可 (realpath で検査、パストラバーサル防止)。
 - publisher はジョブごとに作成、終了時に破棄。
@@ -183,24 +191,31 @@ roshanavi/
 | Method | Path | 内容 |
 |---|---|---|
 | GET | `/api/graph` | グラフスナップショット |
-| GET | `/api/traffic` | 統計一覧 (各エントリに `monitored`, `status`: ok/not_monitored/unsupported/error) |
+| GET | `/api/traffic?window=` | 統計一覧 (各エントリに `monitored`, `status`: ok/not_monitored/unsupported/error)。`window` は 1 / 5 / 10 秒 (§4.3) |
 | PUT | `/api/traffic/{topic}/monitor` | `{"enabled": bool}` でトピック単位の監視 on/off |
 | GET | `/api/types` | 利用可能なメッセージ型一覧 |
 | GET | `/api/types/{pkg}/msg/{name}/template` | テンプレ dict |
 | POST/GET/DELETE | `/api/inject[/{id}]` | 注入ジョブ |
+| POST | `/api/inject/{id}/pause\|resume` | 注入ジョブの一時停止・再開 (§4.6) |
+| GET / PUT | `/api/nodes/{node}/parameters` | パラメータ一覧 (型・値・説明・読み取り専用・範囲) / 1 つ変更 `{name, type, value, allow_external}` (§4.13) |
+| GET | `/api/node-list` | ノード一覧 (§4.17): `{rows, groups}`。行 = グラフのノード ∪ 起動リスト・常駐ダミー (止まっているもの)。lifecycle ノードは状態付き |
+| GET / POST | `/api/nodes/{node}/lifecycle` | lifecycle の状態と可能な遷移 / 遷移 `{transition}` か目標 `{goal: active\|inactive}` + `allow_external` (§4.15) |
+| POST | `/api/launch-import/preview` | launch ファイルを別プロセスで評価し、ノードごとの起動設定案を返す `{source, args}` → `{preview_id, nodes, blocked, skipped, arguments, whole}` (§4.16) |
+| POST | `/api/launch-import/commit` | 案から取り込む `{preview_id, mode: nodes\|whole, indices, role}` (自動保存) |
+| GET | `/api/interfaces/{pkg}/{msg\|srv\|action}/{Name}` | 型の定義 `{type, text, expanded, truncated}` (§4.13) |
 | GET | `/api/files` | data_dir 内のファイル一覧 (stream/bag 選択用) |
 | GET/POST | `/api/scenarios`, `/api/scenarios/run` | シナリオ一覧・実行 (結果は JSON) |
-| WS | `/ws/live` | 1 秒毎に `{traffic, graph?(変化時), jobs}` を push。traffic 各エントリに直近 1 秒の受信数 `recent_count` |
+| WS | `/ws/live?window=` | 1 秒毎に `{traffic, graph?(変化時), jobs, server_time}` を push。traffic 各エントリに直近 1 秒の受信数 `recent_count`、`window_sec`、`stale` |
 | WS | `/ws/echo/{topic}` | エコー |
 | GET / POST | `/api/workspace`, `/api/workspace/refresh` | パッケージ・実行ファイル・launch ファイル一覧 (§4.9) |
-| GET / POST | `/api/targets` | 起動対象の一覧 (状態・pid・対応ノード) / 登録 (`TargetSpec`) |
+| GET / POST | `/api/targets[?start=true]` | 起動リストの一覧 (状態・pid・対応ノード) / 登録 (`TargetSpec`)。`start=true` で登録と同時に起動 |
 | GET / PUT / DELETE | `/api/targets/{id}` | 取得 / 設定の更新 (反映は再起動時) / 停止して削除 |
 | POST | `/api/targets/{id}/start\|stop\|restart` | 起動・停止・再起動 |
 | GET / DELETE | `/api/targets/{id}/logs?since=` | ログ (リングバッファ) の取得 / クリア。ビルドログは id `_build` |
 | GET / POST / DELETE | `/api/build` | ビルドの状態 / 開始 `{package, restart_running}` (202) / 中止 |
-| GET / PUT | `/api/project` | 作業中のプロジェクト + `dirty` / 全体を置き換えて保存 |
+| GET / PUT | `/api/project` | 作業中のプロジェクト + `dirty`, `autosave`, `save_error` / 全体を置き換えて保存 |
 | POST | `/api/project/save`, `/api/project/reload` | 現在の内容を保存 / ファイルから読み直す |
-| POST / PUT | `/api/dummies`, `/api/dummies/{id}` | 恒久ダミーの登録 / 更新 (`DummySpec`) |
+| POST / PUT | `/api/dummies[?start=true]`, `/api/dummies/{id}` | 恒久ダミー (入力ノード) の登録 / 更新 (`DummySpec`)。`start=true` で登録と同時に起動 |
 | POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
 | POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` |
 | WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |
@@ -212,14 +227,16 @@ roshanavi/
 | DELETE | `/api/recordings/{name}` | 録画の削除 (recordings ディレクトリの直下のみ) |
 
 - `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null) も毎秒送る。
+- traffic の各エントリ (REST / WS 共通) には `publishers[]` (送信者ごとの値と根拠, rates.py)、`subscribers[]` (受信者ごとの理論値, §4.17)、`rate_window_sec` / `rate_note` (§4.17) が付く。
 
-- 入力は pydantic モデルで検証。既定 bind は `127.0.0.1` (Docker 内では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:8080:8080`)。
+- 既定ポートは **6871** (ro(6)s-ha(8)-na(7)-bi(1))。ROS 2 の DDS/RTPS が使う 7400 + 250 × ドメイン ID 以上より下、Linux の一時ポート (32768–60999) の外、X11 (6000–6063)・redis (6379)・k8s (6443) などのよく使う開発用ポートとも重ならない。
+- 入力は pydantic モデルで検証。既定 bind は `127.0.0.1` (Docker 内では `0.0.0.0` を明示指定し、ポート公開は compose 側で `127.0.0.1:6871:6871`)。
 - エラーは `{error: {code, message}}` で返す。
 - ローカル Web からの攻撃対策 (認証なし localhost bind 前提, `security.py` の ASGI ミドルウェア):
   - DNS rebinding: 全 HTTP/WS リクエストの `Host` を許可リスト (`localhost`, `127.0.0.1`, `[::1]` の任意ポート + 繰り返し指定可の `--allowed-host`) で検査。違反は 403 `forbidden_host` (WS は close 1008)。
   - Cross-site WebSocket hijacking: WS ハンドシェイクに `Origin` があれば http(s) origin かつ host が許可リスト内 (または `--allowed-origin` と完全一致) であること。違反は close 1008。Origin 無し (非ブラウザ) は許可。Vite dev (`http://localhost:5173`) は localhost で通る。
   - CSRF: POST/PUT/PATCH/DELETE でボディがある場合 `Content-Type: application/json` 必須、違反は 415 `unsupported_media_type`。ボディ無し DELETE は可。
-  - Docker では compose が `127.0.0.1:8080:8080` を公開するためホストからの Host は `localhost:8080`/`127.0.0.1:8080` で許可される。別名でアクセスする場合は `--allowed-host` を足す。
+  - Docker では compose が `127.0.0.1:6871:6871` を公開するためホストからの Host は `localhost:6871`/`127.0.0.1:6871` で許可される。別名でアクセスする場合は `--allowed-host` を足す。
 
 ### 4.9 Launcher (P3)
 
@@ -294,7 +311,9 @@ watch_topics: [/chat]
 ```
 - pydantic のスキーマで検証する。未知のキーは拒否し、エラーはパス付き (`targets.0.colour: extra fields not permitted`、YAML の構文エラーは行・列付き)。
 - 保存は同じディレクトリの一時ファイル → fsync → `os.replace` (原子的)。キーはスキーマ順、空の値は省いて書く (差分が安定し、git で読みやすい)。
-- サーバーは起動時に読み込み、作業中の内容 (起動対象とダミーの登録・変更) との差を `dirty` として返す。UI の「プロジェクトに保存」で明示的に保存する。パッケージが見つからないなど検証を通らないターゲットも、`invalid` 状態で一覧に残す (古いプロジェクトでも開ける)。
+- サーバーは起動時に読み込み、作業中の内容 (起動リストとダミーの登録・変更) との差を `dirty` として返す。
+- **自動保存 (P4.5a)**: Launcher facade 経由の追加・更新・削除・常駐化はすぐにファイルへ保存する (`Launcher.add/update/remove`、UI の保存ボタンと「未保存」表示は廃止。読み直しは設定メニュー)。保存の失敗は例外にせず `save_error` で返す。**読み込みに失敗したファイルは自動では上書きしない** (`autosave: false`。読み直しか明示的な保存 `POST /api/project/save` で解除)。
+- **テンプレート (P4.5a)**: `--project-template PATH` (または `$ROSHANAVI_PROJECT_TEMPLATE`) を付けると、プロジェクトファイルが **無いときだけ** それをコピーしてから読み込む (`bootstrap_project`。`O_EXCL` で作成し既存は上書きしない。壊れたテンプレートはコピーせずログに出す)。パッケージが見つからないなど検証を通らないターゲットも、`invalid` 状態で一覧に残す (古いプロジェクトでも開ける)。
 - `autostart: true` のターゲットとダミーはサーバー起動時に起動する (`--no-autostart` で無効)。
 
 **恒久ダミーノード (`dummy_node.py`)**
@@ -302,6 +321,9 @@ watch_topics: [/chat]
 - Launcher が `kind: dummy` のターゲットとして管理する (役割 `dummy`、ノード名を `__node:=` で渡すので対応づけは exact)。設定 YAML (`{dummy: <DummySpec>, data_dir}`) はサーバーの一時ディレクトリに書く。
 - 注入タブの実行中ジョブから「常駐ノードにする」で、同じペイロード・モード・レート・QoS の恒久ダミーを作って起動し、元のジョブは止める (`POST /api/inject/{id}/persist`)。
 - **書き出し**: ワークスペース内の指定ディレクトリ (realpath で包含を検査、なければ作る) に `<id>.yaml` と `roshanavi_dummies.launch.py` を書く。`ros2 launch <dir>/roshanavi_dummies.launch.py` で、roshanavi のサーバー / UI なしで動く。ただし roshanavi パッケージのインストールは必要 (各ノードが `roshanavi dummy` を実行するため。生成ファイルの先頭に明記)。ノード名・ID は検証済みの値だけを `repr()` で埋め込む。
+
+### 4.10.1 恒久ダミーの一時停止
+- dummy ノードは bool パラメータ `paused` を宣言する。true にすると注入ジョブを一時停止する (ノードは動き続ける)。地図の「一時停止・再開」はこのパラメータを §4.13 の API で変える (`ros2 param set` でも同じ)。
 
 ### 4.11 メディア: アダプタ・ファイルソース・ブラウザ入力・ビューア (P4)
 
@@ -360,6 +382,64 @@ watch_topics: [/chat]
 - 録画中のサイズは rosbag2 のキャッシュ (既定 100 MiB) のため遅れて増える。UI は経過時間を主に出す。
 - 一覧: `recordings/` 直下のディレクトリを `metadata.yaml` から要約 (長さ・メッセージ数・トピックごとの件数・サイズ)。確定していないものは「未完了」。`/api/files` には bag として出るので、注入の bag モードでそのまま再生できる。
 - 削除: 名前が録画ディレクトリの形式に合い、`realpath` の親が recordings ディレクトリそのものであること (symlink・`..` を拒否)。録画中のものは消せない。UI は確認ダイアログを出す。
+
+### 4.13 ノードのパラメータと型の定義 (P4.5a)
+**パラメータ (`params.py`)** — rclpy / rclcpp のノードが必ず持つ `<node>/list_parameters`・`describe_parameters`・`get_parameters`・`set_parameters` (rcl_interfaces) を、サーバー自身のノードから呼ぶ。
+- クライアントは Reentrant なコールバックグループで作り、サービス名ごとに最大 24 個を LRU でキャッシュする。各呼び出しは `wait_for_service` と応答待ちのそれぞれに 2 秒のタイムアウト (応答しないノードでサーバーが止まらない)。失敗は 504 `param_service_unavailable` / `param_timeout`、502 `param_call_failed`。
+- 一覧は名前順に最大 500 個。各項目に型・値・説明・`read_only`・`dynamic_typing`・範囲。
+- 変更は値を型どおりに厳密に検査してから (`value_to_msg`: bool は true/false のみ、整数は int64 範囲、小数は有限、文字列は 4096 文字まで、配列は 1000 要素まで、バイトは 0..255)、describe で読み取り専用と型の一致 (dynamic_typing でない限り) を確かめて送る。ノードが拒否したら理由付きで `param_rejected`。
+- **方針** (`server_nodes.py`): グラフに今いるノードだけを対象にする (404 `node_not_found`、任意のサービス名を作らせない)。ノード名・パラメータ名は正規表現で検査。roshanavi が起動していないノード (role `other`) は閲覧のみが既定で、変更には `allow_external: true` が必要 (UI は確認ダイアログの後に付ける。無ければ 403 `external_node_readonly`)。roshanavi 自身のノードは変更不可 (403 `self_node`)。mutating な PUT は既存のミドルウェア (Host / Content-Type) を通る。
+**型の定義 (`interfaces.py`)** — `rosidl_runtime_py.get_interface_path` でインストール済みの `.msg/.srv/.action` を読み、入れ子の型をタブで字下げして展開する (`ros2 interface show` 相当。入れ子のコメントは省く。深さ 6・2000 行まで、循環はたどらない)。名前は `pkg/(msg|srv|action)/Name` のみ。
+
+### 4.14 デモ構成 (P4.5a)
+- `examples/demo_project/roshanavi.yaml`: `talker` (demo_nodes_cpp, role mine, autostart, ノード名 talker) と `listener` (demo_nodes_cpp, role dependency, autostart)。compose の `lab` は `--project-template` でこれを指定し、`/data/roshanavi.yaml` が無いときだけコピーする。デモ開始時点で talker / listener を地図から停止・再起動でき、ログも見られる。(P5 以降: サンプルノードの起動設定を autostart off で足す)
+- `demo` コンテナは「roshanavi が起動していないノード」の例: `external_talker` が `/external/chatter` に送り、`external_listener` が受ける。`/chatter` とは混ざらず、地図に「操作できるノード」と「見るだけのノード (停止は無効)」が並ぶ。
+- (P4.5b) `demo` コンテナは外部の lifecycle ノード `lc_talker` (unconfigured で起動) も動かす (§4.15)。launch の取り込みのデモ用に `roshanavi/demo_system.launch.py` を同梱する (§4.16)。
+
+### 4.15 lifecycle ノード (P4.5b)
+`lifecycle.py`。ROS の正規の仕組み (lifecycle_msgs の `<node>/get_state`・`get_available_transitions`・`change_state`) だけを使うので、**roshanavi が起動していないノードにも使える** (プロセスにシグナルは送らない)。
+- 検出: 毎秒のグラフ収集で `get_service_names_and_types()` を 1 回呼び、`<node>/get_state` が `lifecycle_msgs/srv/GetState` 型のノードに `lifecycle: true` を付ける (`graph.lifecycle_nodes`)。
+- 呼び出しはパラメータと共通の `service_call.ServiceCaller` (Reentrant グループ、LRU 24、`wait_for_service` と応答待ちそれぞれにタイムアウト。問い合わせ 2 秒、`change_state` は on_configure の処理を見込んで 10 秒)。新しいクライアントにも QoS イベントハンドラは登録しない (§4.1)。失敗は 504 `lifecycle_unavailable` / `lifecycle_timeout`、502 `lifecycle_call_failed`。
+- 操作は configure / activate / deactivate / cleanup のみ (shutdown は元に戻せないので出さない)。いまの状態で使えない遷移は 409 `lifecycle_transition_unavailable`、ノードが拒否したら 409 `lifecycle_transition_failed`。目標 `goal` (`active` / `inactive`) は必要な遷移を順に行う (unconfigured → configure → activate)。一括操作 (ノード一覧) はこれを使う。
+- 方針は §4.13 と同じ: グラフにいるノードだけ (404)、lifecycle でなければ 400 `not_lifecycle`、外部ノード (role other) は `allow_external: true` が必要 (UI は確認ダイアログの後に付ける。無ければ 403)、roshanavi 自身は 403。
+- ノード一覧の状態表示は lifecycle ノードだけを並列 (最大 8) に 1 秒のタイムアウトで問い合わせ、1.5 秒キャッシュする。応答しないノードは「状態を取得できません」。
+- デモ: `demo` コンテナで `ros2 run lifecycle lifecycle_talker` (ノード名 `lc_talker`、起動時は unconfigured。`ros-jazzy-lifecycle`)。
+
+### 4.16 launch の分解取り込み (P4.5b)
+既存の launch ファイルの `Node` を 1 つずつの起動設定 (`kind: run`) として起動リストに取り込み、既存システムのノードを 1 つずつ ON/OFF できるようにする。`roshanavi/launch_import/`。
+
+**信頼モデルとサンドボックス**
+- Python の launch ファイルを評価すると、その Python コードが実行される。したがって **`ros2 launch` でその利用者が実行するのと同じ範囲のファイルだけ** を受け付ける: (a) 走査で見つかったパッケージの launch ファイル (ワークスペース / source 済みの ROS)、(b) realpath がワークスペースの内側にある `.py/.xml/.yaml` (`validate.contained_file`。`..`・絶対パス・外向き symlink は拒否)。**data_dir (アップロード・録画) の下のファイルは、どちらの経路でも評価しない** (403 `forbidden_path`)。
+- 評価は **サーバーのプロセスでは行わない**。`python3 -m roshanavi.launch_import.child` を新しいセッション (プロセスグループ) で起動し、ランチャーと同じ環境 (未 source のワークスペースも overlay) で動かす。入力は stdin の JSON `{path, args}`、結果は元の stdout に 1 つの JSON (launch ファイル自身の print は stderr に回す)。20 秒で打ち切り (504 `launch_eval_timeout`)、終了後も含めてプロセスグループごと SIGKILL する (launch ファイルが裏で何かを起動していても残さない)。結果は 8 MB まで、pydantic で形を検査する。
+- 評価中もプロセスは起動しない: 子プロセスは **LaunchContext を変えるだけの action** (下表の「評価する」) だけを visit し、`Node` は execute せずに設定を読み取る。それ以外は実行せず、理由付きで報告する。
+
+**評価のしかた** (`walker.py`, `extract.py`): `AnyLaunchDescriptionSource(path).get_launch_description(context)` で読み (python / XML / YAML)、利用者が入れた引数を launch configuration に入れ、`current_launch_file_path/directory` を locals に置いてから再帰的にたどる。各要素の `condition` を先に評価し (偽ならその部分は「条件により起動されない」)、子要素は LaunchService と同じく locals を push / pop して visit する。必須の引数 (default なし) が足りなければ評価せず `missing_args` を返す (UI が入力欄を出す)。深さ 40・5000 要素で打ち切る。
+
+| 要素 | 扱い |
+|---|---|
+| `Node`, `LifecycleNode` | **分解**: package / executable / name / namespace (PushRosNamespace と合成) / remappings (SetRemap と合成) / arguments / parameters を評価して 1 つの起動設定にする |
+| `DeclareLaunchArgument`, `SetLaunchConfiguration`, `UnsetLaunchConfiguration`, `Push/Pop/ResetLaunchConfigurations`, `GroupAction` (scoped を含む), `PushRosNamespace`, `SetRemap`, `SetParameter`, `SetParametersFromFile`, `SetUseSimTime`, `SetROSLogDir` | 評価する (文脈を変えるだけ) |
+| `IncludeLaunchDescription` | 評価して中をたどる。読めない (ファイルが無い・置換が解けない) ときは「分解できない部分」(`include_failed`) |
+| `OpaqueFunction` | 評価して返り値をたどる (よく使われる `launch_setup` パターン)。**中の Python は実行される** ので警告を出す (`opaque_function_ran`)。子プロセス + タイムアウト + プロセスグループの kill の内側 |
+| 環境変数の action (`SetEnvironmentVariable` など) | 評価する (後の置換に効く)。起動設定には取り込まない (警告) |
+| `LogInfo` | 無視 |
+| `ComposableNodeContainer`, `LoadComposableNodes` | **代替**: 分解しない (1 プロセスで動くので 1 つずつ止められない)。中の composable node を一覧に出す |
+| `ExecuteProcess` / `ExecuteLocal` (Node 以外) | **代替**: 分解しない (ROS ノードではない) |
+| `RegisterEventHandler`, `UnregisterEventHandler`, `TimerAction`, `RosTimer`, `EmitEvent` / `Shutdown`, `LifecycleTransition`, `OpaqueCoroutine` | **代替**: 分解しない (イベント・時間に依存する、または起動以外の動作) |
+| 条件 (`if` / `unless`) | 評価する。偽 → 「条件により起動されない」、計算できない → 「分解できない部分」(`condition_failed`) |
+| 知らない種類の action (利用者独自のものなど) | **代替**: 実行せずに残す (`unknown_action`) |
+
+「代替」の部分があるときは、**「launch 全体として 1 つ取り込む」** (`kind: launch`、評価に使った引数を `name:=value` で付ける) を選べる。これはパッケージの launch ファイルのときだけ (ワークスペース内の任意のファイルは `ros2 launch <pkg> <file>` で指定できないため)。
+
+**パラメータ** (`params_merge.py`, 純関数): launch_ros と同じ順 (SetParameter などのグローバル → ノード自身の dict / `Parameter` / パラメータファイルの順、後勝ち) に 1 つにまとめる。パラメータファイルは rcl の YAML の規則 (入れ子・絶対・相対のノードパス、`*` と `**` のワイルドカード。ワイルドカードの項目を先に、ノード名の項目を後に適用) で、そのノードに当たる値だけを取り出す。ファイルの中身は子プロセスが読んで (1 MB まで) JSON で返す (サーバーは launch ファイルが指すパスを開かない)。ノード名が無い Node は `/**` の項目だけ (警告)。まとめた値のうち、名前が識別子で値が bool / 整数 / 小数 / 4096 文字までの文字列のものは `params` (UI で編集できる)、それ以外 (配列・入れ子) は取り込み時に `<data_dir>/imported_params/<id>.yaml` (`/**: ros__parameters:`) に書き、`params_file` で渡す。キーは重ならないので `-p` とファイルの順序に依存しない。
+
+**プレビューと取り込み**: プレビューの段階で各案をランチャーと同じ検査 (`manager.validate`: パッケージ・実行ファイルの存在、名前、引数の規則) にかけ、通らないものは理由付きで「取り込めない」。同じ package / executable / name / namespace の起動設定がすでにあれば「重複」として既定で選ばない。案はサーバーに 30 分 (最大 16 個) 保存し、`preview_id` で取り込む (クライアントからパラメータファイルの中身を受け取らない)。ID はノード名 (なければ実行ファイル名) から重複を避けて作る。取り込んだものは停止状態・autostart なしで起動リストに入り、自動保存される。`TargetSpec.imported_from` (情報用) に取り込み元 (`pkg/file` かワークスペースからの相対パス) を残す。
+- デモ: `roshanavi/demo_system.launch.py` (talker / listener を名前空間・リマップ・パラメータ付きで起動し、最後に「分解できない部分」の例として ExecuteProcess)。
+
+### 4.17 ノード一覧の集約・送受信ごとのトラフィック・遅いトピック (P4.5b)
+- **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
+- **受信者ごとの理論値** (`sub_rates.py`, 純関数): トラフィックはトピック単位でしか測れない (§6.1)。受信者の値は、QoS が合う送信者が送っている量 = 届くはずの量: 全送信者が合う → トピック全体の実測、一部だけ → 合う送信者の値 (rates.py の分割) の和 (分けられなければ null)、1 つも合わない → 0 と `delivered: false`。`basis` は `theoretical` / `not_delivered` (将来トレースで測れたら `measured`)。
+- **遅いトピック**: 計算期間 (1 / 5 / 10 秒) より遅いトピックは、期間内のメッセージが 2 個未満になり 0 Hz と誤読される。生きている (`stale` でない) のに 2 個未満なら最長の 10 秒で計算し直し `rate_note: extended`、`rate_window_sec: 10` を付ける。10 秒でも 2 個未満なら `rate_note: too_few` (hz は 0、UI は「—」)。
 
 ## 5. シナリオ (G4)
 
@@ -441,7 +521,7 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 
 ## 6. フロントエンド
 
-タブ: **Graph** / **Traffic** / **Inject** / **Launcher** / **録画** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
+タブ: **Graph** / **ノード一覧** / **Traffic** / **お試し送信** (旧 Inject) / **Launcher** / **録画** / **Scenarios**。右ペインに選択トピックの詳細 (統計・エコー・注入ショートカット)。
 - Graph (**ライブ通信マップ**, §6.1)
 - Traffic: ソート可能な表 + 行内 uPlot スパークライン。停止トピック (last_seen > 3 s) を強調。
 - Inject: トピック選択 → 型自動入力 → テンプレ YAML エディタ → mode 別フォーム → 開始。実行中ジョブ一覧と停止ボタン。
@@ -508,8 +588,8 @@ YAML は保存・CI 用の形式であり、ユーザーは原則として手で
 **実行方法**
 ```bash
 # Docker で UI + デモ
-docker compose up -d --build lab demo        # http://localhost:8080
-# UI 開発 (ホットリロード; /api と /ws は :8080 にプロキシ)
+docker compose up -d --build lab demo        # http://localhost:6871
+# UI 開発 (ホットリロード; /api と /ws は :6871 にプロキシ)
 cd web && npm ci && npm run dev              # http://localhost:5173
 # テスト
 cd web && npm test                           # vitest (純粋ロジック)
@@ -518,7 +598,7 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 ```
 
 ### 6.3 実装メモ (P3: Launcher)
-- **Launcher タブ** (`src/launcher/`): 左にパッケージ一覧 (検索、ワークスペースのパッケージを先頭、「ワークスペース」「システム」「未ビルド」「未 source」バッジ、ビルドボタン)、中央に起動設定フォーム・ビルド結果・起動対象のカード、右にログビューア。上部のプロジェクトバーに保存先、未保存バッジ、保存・読み直しボタン。
+- **Launcher タブ** (`src/launcher/`): 左にパッケージ一覧 (検索、ワークスペースのパッケージを先頭、「ワークスペース」「システム」「未ビルド」「未 source」バッジ、ビルドボタン)、中央に起動設定フォーム・ビルド結果・起動対象のカード、右にログビューア。上部のプロジェクトバーに保存先、未保存バッジ、保存・読み直しボタン (P4.5a で自動保存と設定メニューに変更、§6.5)。
   - 起動設定: ノード名、名前空間、パラメータ (名前・値の行。`true`/`false` と数値はその型)、リマップ、パラメータファイル、追加引数 / launch 引数、「開発中 (自分のノード)」、自動起動、自動再起動。クライアント側でもサーバーと同じ規則で先に検査し、平易な文で示す (`launcher/form.ts`)。
   - カード: 状態チップ、起動コマンド、稼働時間・再起動回数、対応づいたノードと「確実 / 推定」バッジ (説明はツールチップ)、起動・停止・再起動・ログ・編集・削除。
   - ログビューア (`/ws/logs/{id}`): 最新に追従、stderr と `[ERROR]`/`error:` 行を強調、検索、エラー・警告だけ表示、クリア。表示は最大 5000 行 (`launcher/logs.ts`)。
@@ -541,6 +621,57 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 - i18n: `i18n/messagesMedia.ts` (地図の操作は `i18n/messagesMap.ts`) を `ja` に合流させる。
 - スクリーンショット: `docs/screenshots/inject-media.png`, `capture-panel.png`, `image-viewer.png`, `audio-waveform.png`, `recordings.png` (`e2e/media.spec.ts`。Chromium の `--use-fake-device-for-media-stream --use-fake-ui-for-media-stream` を使う。動画の素材はテスト中にブラウザの MediaRecorder で作り `data/e2e/` に書く)。
 
+### 6.5 実装メモ (P4.5a: デモ体験・ランチャー・地図の操作)
+**デモの基本の流れ**: (1) 「＋ 入力ノードを作る」で入力 (= 新しいトピック) を作る → (2) ランチャーでサンプル / デモ用ノードを起動 → (3) 地図で流れと出力の中身を見る → (P6) 操作を記録してシナリオにする。
+
+**入力ノード (`input/`)**: 地図のツールバー・お試し送信タブ・空白の右クリック「ここにトピックを追加」・トピックの右クリック「入力ノードを作る」から、同じダイアログ (`CreateInputDialog`) を開く。トピック名 (先頭の `/` は補う。新しい名前なら「新しいトピックです」と案内)、型 (既存トピックなら自動)、ノード名 (既定 `dummy_<末尾>`)、中身 (文字列 / 式 / 画像・動画・音声ファイル / データファイル JSONL・CSV)、頻度、次回も自動起動 を選び、`POST /api/dummies?start=true` で **1 ステップで常駐ダミーノードを作って起動する** (注入してから常駐化する 2 段階は不要。注入ジョブは「お試し送信」として残す)。ROS 2 のトピックは publish された時点で存在するので、新しい名前を入れればトピックも地図に現れる。編集 (「内容・レートの変更」) は同じダイアログで PUT → 再起動。純ロジック `input/inputForm.ts`。
+- 右ペインのエコーは、トピックがグラフに現れてから始める (作成直後の `unknown topic` を避ける)。
+
+**右クリックメニュー (`graph/menuModel.ts` 純関数, `MapMenu.tsx`, `useMenuActions.ts`)**
+| 対象 | メニュー |
+|---|---|
+| 自分 / 依存ノード | 停止・再起動 (止まっていれば起動)、ログを見る、起動設定を編集、ビルドして再起動 (ワークスペースのパッケージのみ)、パラメータを見る・変更する、入出力だけ表示 |
+| 常駐ダミー (入力ノード) | 停止・再起動、一時停止・再開 (`paused` パラメータ)、内容・レートの変更、launch に書き出し、ログ、パラメータ、入出力だけ表示 |
+| 注入ジョブ (お試し送信) | 停止、一時停止 / 再開 (periodic・stream・media のみ)、内容の変更と書き出しは無効 (理由を表示) |
+| 外部ノード | 停止は無効 (理由を表示)、パラメータを見る (閲覧のみ。変更は確認ダイアログの後)、入出力だけ表示、詳細 (送受信トピックと QoS) |
+| トピック | 中身を見る、お試し送信、入力ノードを作る、録画 (録画タブで選択済み)、監視 ON/OFF、型の定義を見る、上流・下流だけ表示 |
+| エッジ | QoS の詳細、届かない理由 (両側の QoS の表と、診断・送信者なし・最近流れていない の平易な説明) |
+| 空白 | ここにトピックを追加、ノードを起動 (ランチャーの追加画面へ)、整列し直す、全体を表示 |
+- 無効な項目は理由をツールチップと小さな文で示す。停止・再起動は従来の確認ダイアログ (`useNodeControl`) を通る。「入出力だけ表示」「上流・下流だけ表示」は地図を絞り込み (`graph/isolate.ts`)、ツールバーの「すべて表示」で戻る。
+- ダイアログは `AppState.dialog` + `DialogHost` で 1 つずつ出す (入力ノード / パラメータ / 型の定義 / エッジ / launch 書き出し)。
+
+**ノードの入出力 (`detail/NodeIO.tsx`, 純関数 `detail/nodeIO.ts`)**: ノードをクリックすると右ペインに「受信しているデータ」「送信しているデータ」をトピックごとに出す (型・Hz・最新メッセージ。画像はビューア、音声は波形)。表示しているのは **トピックに流れているデータ** であり、そのノードが受け取ったとは限らないことを明記する。QoS 不一致 (診断の subscriber がこのノード) は「このノードには届いていません」。各トピックは折りたたみで、開いている間だけ購読する。最初の 3 つ (heavy 型と届かないものを除く) を自動で開く。heavy 型 (Image など) は開いたときだけ表示する。`/rosout` などの内部トピックは出さない。
+
+**ランチャー**
+- 初回の案内 (`FirstRunGuide`): 起動リストに run / launch が無ければ 3 ステップの説明と「試しに talker を起動してみる」(demo_nodes_cpp の talker を名前付き・自分のノードとして登録して起動)。
+- 「＋ ノードを起動」→ 一覧から選ぶ →「起動」。ノード名・名前空間・パラメータ・リマップ・パラメータファイル・引数・役割・自動起動は「詳細設定」に畳む。起動したものは自動で起動リストに残り、プロジェクトに自動保存される (§4.10)。「起動対象」の表記は「起動リスト」に変えた。
+- 一覧は既定でワークスペースのパッケージとデモ用 (demo_nodes_cpp / demo_nodes_py / roshanavi_examples) だけ。「ROS 標準パッケージも表示」で全件。ワークスペースに自分のパッケージが無い (roshanavi 以外が無い) ときは、マウント・設定方法を案内する。
+- 用語のツールチップ (`lib/Term.tsx`, `term.*`): launch ファイル、リマップ、名前空間、パラメータ、パラメータファイル、ノード、トピック、型、ワークスペース、QoS、パッケージ、実行ファイル、Hz。
+
+**更新タイミングの表示 (`timing/`)**
+- 計算期間のセレクタ (1 / 5 / 10 秒、地図とトラフィックで共有) は `/ws/live?window=` を張り直す。選択肢の文言自体が「直近 5 秒の平均」。止まったトピックはバックエンドで即 0 (`stale`)、地図のエッジも停止表示になる。
+- 「最終更新 HH:MM:SS (N 秒前)」を地図とトラフィックのツールバーに常に出す。最後の `/ws/live` フレームの受信時刻で、5 秒を超えると警告色 (切断・サーバーの停止が分かる)。各行の「最終受信」(last_seen) とは別物であることをツールチップで説明する。
+- Hz の計測方法: 「(送信側)」は誤読されるため既定では出さず、受信時刻ベースに落ちたときだけ「(受信時刻で概算)」。詳細は ⓘ のツールチップ。
+- i18n: `i18n/messagesUx.ts`, `messagesUx2.ts`。スクリーンショット: `docs/screenshots/menu-blank.png`, `menu-node.png`, `menu-topic.png`, `menu-input-node.png`, `create-input-dialog.png`, `params-dialog.png`, `node-io-pane.png`, `launcher-guide.png` (`e2e/ux.spec.ts`)。E2E は lab を変更するテストがあるため `workers: 1`。
+
+### 6.6 実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)
+**ノード一覧タブ** (`nodelist/`): リストとチェックボックスで、ノードを一括で ON/OFF する。`GET /api/node-list` をタブ表示中だけ 2 秒ごとに取る。
+- 列: チェックボックス、ノード名、役割 (自分 / 依存 / ダミー / 外部)、状態 (lifecycle ノードは状態と「状態を変える」)、起動元、PID、対応づけ (確実 / 推定 / ノード未確認)。(P8 以降: CPU・メモリ)
+- 検索 (名前・パッケージ・実行ファイル・launch ファイル・取り込み元、空白区切りで AND)、役割と状態 (動いている / 止まっている / 問題あり) での絞り込み、全選択 (表示中の操作できる行だけ。一部選択は indeterminate)、グループ単位の選択。純ロジック `nodelist/model.ts`。
+- グループ: launch の起動設定と composable container などのプロセスは見出し行の下にまとめ、「この N 個のノードはまとめて止まります」と書く。
+- 一括の起動・停止・再起動 (`nodelist/bulk.ts`): 起動設定ごとに 1 回だけ既存の `POST /api/targets/{id}/start|stop|restart` を呼ぶ。止める起動設定の全ノードを地図と同じ規則 (`graph/nodeControl.affectedNodes`) で求め、**選択していないのに一緒に止まるノード** も確認ダイアログに列挙する。状態が合わないもの (止まっているものの停止など) は「対象外」として理由を出す。
+- 外部ノード: チェックボックスを無効にし、理由をツールチップと行内の小さな文で示す。外部ノードがあれば一覧の上に「launch ファイルを取り込むと 1 つずつ操作できる」案内と取り込みボタンを出す。ただし **lifecycle ノード** は外部でも選べ、起動 = active へ (必要なら configure → activate)、停止 = deactivate (プロセスは止めない)。再起動は対象外。外部の lifecycle ノードを含むと確認ダイアログに注意を足し、`allow_external` を付ける。
+- キーボード: チェックボックス・ボタンは通常のフォーカス順。表の中は ↑ / ↓ で同じ列の次の行へ、Space で選択。表に説明の caption (読み上げ用)。
+- **lifecycle ダイアログ** (`lifecycle/LifecycleDialog.tsx`): 現在の状態と、いまできる操作だけを「設定する (configure)」「有効にする (activate)」「無効にする (deactivate)」「設定を破棄する (cleanup)」として出し、平易な説明付きの確認の後に実行する。ノード一覧、地図の右クリック (lifecycle ノードだけに「lifecycle の状態を変える」)、右ペイン (`detail/NodeLifecycle.tsx`、3 秒ごとに状態を更新) から開く。
+- **launch の取り込みダイアログ** (`launchImport/`): (1) パッケージ + launch ファイル、またはワークスペースからの相対パスを選び「解析する」、(2) 宣言された launch 引数の欄 (既定値入り、必須は赤) を直して「この引数で解析し直す」、(3) 取り込まれるノード (名前空間込みの名前、起動リストの ID、パラメータ・リマップ・引数の要約、警告、取り込めない理由・重複) をチェックで選ぶ、分解できない部分と理由、条件で起動されない部分、(4) 取り込み方 (ノードごと / launch 全体) と役割を選んで「取り込む」。純ロジック `launchImport/importModel.ts`。解析で Python を実行することと対象ファイルの制限をダイアログに書く。
+- 一時停止中は「最終更新」バッジを警告色にせず「一時停止中 (HH:MM:SS の表示)」にする。Hz は `rate_note` に応じて「0.50 Hz (直近 10 秒で計算)」/「— (1 秒窓では測定不可)」(`timing/timing.ts rateText`)。
+- i18n: `i18n/messagesNodes.ts`, `messagesImport.ts`, `messagesTraffic.ts`。スクリーンショット: `docs/screenshots/node-list.png`, `lifecycle.png`, `launch-import-preview.png` (`e2e/nodes.spec.ts`)。
+
+### 6.7 トラフィックの送受信ごとの表示 (P4.5b)
+- トラフィックタブの各トピック行は ▸ で展開でき (既定は折りたたみ、「すべて展開」で全部)、送信ノードごとの行 (Hz・帯域・根拠: 実測 / 推定 / 設定値 / 分けられない、`publishers[]`) と受信ノードごとの行 (理論値。ⓘ に「受信側のノードの中で数えた値ではない」。QoS が合わなければ「届いていません」、`subscribers[]`) を出す。
+- 「トピック別 / ノード別」の切り替え: ノード別は同じ行をノードごとにまとめ (送信 → 受信、トピック順)、「このノードが何を送って何を受けているか」を見る。純ロジック `traffic/endpoints.ts`。
+- 地図の受信側エッジの値も同じ理論値を使う (一部の送信者だけ QoS が合うときに表と地図がずれない)。将来トレース (C++ probe) を使うと、送信側は実測、受信側は計測値 (`basis: measured`) に置き換わる。スクリーンショット: `traffic-endpoints.png`, `traffic-by-node.png` (`e2e/smoke.spec.ts`)。
+
 ## 7. テスト方針
 - unit: expr (許可/拒否ケース, DoS 上限), msgutil (テンプレ・build・エラーパス), traffic 統計計算 (時刻注入で決定的に), scenario schema/判定ロジック。
 - 統合 (rclpy, Docker 内): publisher → traffic に Hz が出る / injector periodic → 受信数 / scenario 実行 pass・fail 両方 / API を TestClient で叩く。
@@ -552,6 +683,8 @@ docker compose --profile e2e run --rm e2e    # Playwright (lab + demo 起動中�
 3. ✅ P2 Web UI 基盤 + ライブ通信マップ (§6.1, 診断を含む) + Traffic + Inject
 4. ✅ P3 Launcher (§0.1 の 3, §4.9) + プロジェクトファイル + ビルドボタン + 恒久ダミーノード (§4.10)
 5. ✅ P4 メディア注入 (§4.6.1, §4.11) + ブラウザ入力 + 録画 (§4.12) + 画像ビューア・音声の波形と再生
+5a. ✅ P4.5a デモ体験・入力ノード・ランチャーの改善・右クリックメニュー・パラメータ・ノードの入出力・更新タイミング (§4.13-4.14, §6.5)
+5b. ✅ P4.5b ノード一覧タブ・launch の分解取り込み・lifecycle・送受信ごとのトラフィック (§4.15-4.17, §6.6-6.7)
 6. P5 サンプルノード (`roshanavi_examples`)
 7. P6 シナリオ (runner / CLI / JUnit / 記録モード / Scenarios タブ)
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF

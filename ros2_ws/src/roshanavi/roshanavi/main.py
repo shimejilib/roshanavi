@@ -25,7 +25,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='roshanavi server',
                                      description='roshanavi web/API server')
     parser.add_argument('--host', default='127.0.0.1', help='bind address (default 127.0.0.1)')
-    parser.add_argument('--port', type=int, default=8080, help='bind port (default 8080)')
+    parser.add_argument('--port', type=int, default=6871, help='bind port (default 6871: below the DDS/RTPS ports 7400+, '
+                             'outside the ephemeral range and common dev ports)')
     parser.add_argument('--data-dir', default='/data',
                         help='root for stream/bag files (default /data)')
     parser.add_argument('--static-dir', default=DEFAULT_STATIC_DIR,
@@ -46,6 +47,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='colcon workspace root (default: $ROSHANAVI_WORKSPACE or cwd)')
     parser.add_argument('--project', default=None,
                         help='project file (default: <workspace>/roshanavi.yaml)')
+    parser.add_argument('--project-template',
+                        default=os.environ.get('ROSHANAVI_PROJECT_TEMPLATE') or None,
+                        help='copy this project file to --project when that file does not '
+                             'exist yet (never overwrites; e.g. the demo project)')
     parser.add_argument('--no-autostart', action='store_true',
                         help='do not start the project targets marked autostart')
     parser.add_argument('--record-warn-free-mb', type=float, default=1024.0,
@@ -65,6 +70,17 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     return args
 
 
+def _bootstrap(args: argparse.Namespace) -> None:
+    """Install the project template if requested (a broken template is logged, not fatal)."""
+    from .launcher.errors import LauncherError
+    from .launcher.project import DEFAULT_FILE_NAME, bootstrap_project
+    path = args.project or os.path.join(args.workspace, DEFAULT_FILE_NAME)
+    try:
+        bootstrap_project(path, args.project_template)
+    except LauncherError as exc:
+        LOG.error('project template not installed: %s', exc)
+
+
 def main(argv: Optional[List[str]] = None) -> int:
     args = parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(),
@@ -80,6 +96,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not os.path.isdir(args.workspace):
         LOG.error('workspace %s does not exist', args.workspace)
         return 2
+    _bootstrap(args)
     lab = Lab(data_dir=args.data_dir, show_self=args.show_self,
               monitor_heavy=args.monitor_heavy, workspace=args.workspace,
               project_path=args.project, autostart=not args.no_autostart,

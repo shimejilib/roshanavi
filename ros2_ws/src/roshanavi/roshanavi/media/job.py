@@ -39,6 +39,8 @@ JOIN_TIMEOUT_SEC = 5.0
 
 
 class MediaJob(Job):
+    pausable = True
+
     def __init__(self, spec: InjectSpec, runtime: RosRuntime, adapter: MediaAdapter,
                  source: FrameSource, settings: MediaSettings, jitter_sec: float = 0.0,
                  drop_ratio: float = 0.0, rng: Optional[random.Random] = None,
@@ -124,6 +126,8 @@ class MediaJob(Job):
 
     def _send(self, item: Any) -> bool:
         """Pacer-thread step after the deadline: maybe drop, else stamp + publish."""
+        if self.paused:  # paused frames are read and skipped so timing stays on schedule
+            return True
         if self._drop_ratio and self._rng.random() < self._drop_ratio:
             self.dropped += 1
             return True

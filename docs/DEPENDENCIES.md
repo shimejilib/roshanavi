@@ -16,7 +16,10 @@
 | `rosidl_runtime_py` | メッセージ型の動的な解決、dict ⇄ msg の変換 |
 | `std_msgs`, `sensor_msgs` | メディア注入 (画像・音声の配列型)、テンプレート |
 | `launch_ros` | 恒久ダミーノードの launch ファイル書き出し |
-| `ros2run`, `ros2launch` | ランチャー (`ros2 run` / `ros2 launch` の実行) ※package.xml への追加は対応中 |
+| `ros2run`, `ros2launch` | ランチャー (`ros2 run` / `ros2 launch` の実行) |
+| `rcl_interfaces` | パラメータの表示・変更 (パラメータサービスのクライアント) |
+| `lifecycle_msgs` | lifecycle ノードの状態取得と状態遷移 |
+| `launch_xml`, `launch_yaml` | XML / YAML 形式の launch ファイルの取り込み (分解) |
 | `ros2bag` (+ `rosbag2_storage_default_plugins`) | bag 再生、録画 (mcap 形式) |
 
 ### システム・Python (apt / rosdep キー)
@@ -24,7 +27,7 @@
 |---|---|---|
 | `python3-fastapi` | Web API サーバー | MIT |
 | `python3-uvicorn` | ASGI サーバー | BSD-3-Clause |
-| `python3-websockets` | WebSocket (画面のリアルタイム更新) ※package.xml への追加は対応中 | BSD-3-Clause |
+| `python3-websockets` | WebSocket (画面のリアルタイム更新) | BSD-3-Clause |
 | `python3-pydantic` | API 入力とプロジェクトファイルの検証 (Ubuntu 24.04 の 1.10 系) | MIT |
 | `python3-yaml` | プロジェクトファイル、シナリオ、テンプレート | MIT |
 | `python3-psutil` | プロセス管理、ノードとプロセスの対応づけ、(P8) リソース監視 | BSD-3-Clause |
@@ -50,6 +53,7 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `python3-pytest` | テスト |
 | `python3-httpx` | FastAPI の TestClient |
 | `ros-jazzy-demo-nodes-cpp`, `ros-jazzy-demo-nodes-py`, `ros-jazzy-example-interfaces` | テストとデモの相手役ノード |
+| `ros-jazzy-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
 
 ### Web UI (ビルド時のみ。配布物にはビルド済みの静的ファイルを同梱し、利用者に npm を要求しない)
 バージョンは `web/package.json` で固定。ホストの npm 設定により、公開から約 2 週間未満のバージョンは使わない。

@@ -18,13 +18,13 @@ def client(lab):
         yield c
 
 
-@pytest.mark.parametrize('host', ['localhost', 'localhost:8080', '127.0.0.1:8080', '[::1]:8080',
+@pytest.mark.parametrize('host', ['localhost', 'localhost:6871', '127.0.0.1:6871', '[::1]:6871',
                                   'LOCALHOST'])
 def test_loopback_hosts_allowed(client, host):
     assert client.get('/api/traffic', headers={'Host': host}).status_code == 200
 
 
-@pytest.mark.parametrize('host', ['evil.com', 'evil.com:8080', 'localhost.evil.com', '', '10.0.0.5'])
+@pytest.mark.parametrize('host', ['evil.com', 'evil.com:6871', 'localhost.evil.com', '', '10.0.0.5'])
 def test_foreign_hosts_blocked(client, host):
     r = client.get('/api/traffic', headers={'Host': host})
     assert r.status_code == 403
@@ -61,7 +61,7 @@ def test_ws_bad_origin_rejected_for_echo(client):
     assert exc.value.code == 1008
 
 
-@pytest.mark.parametrize('origin', ['http://localhost:5173', 'http://127.0.0.1:8080',
+@pytest.mark.parametrize('origin', ['http://localhost:5173', 'http://127.0.0.1:6871',
                                     'http://[::1]:5173', 'https://localhost'])
 def test_ws_localhost_origin_accepted(client, origin):
     with client.websocket_connect('ws://localhost/ws/live', headers={'Origin': origin}) as ws:

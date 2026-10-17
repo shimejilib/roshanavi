@@ -1,6 +1,9 @@
 # roshanavi services
-#   lab  : API/web server on 127.0.0.1:8080
-#   demo : demo_nodes_py talker + listener (same ROS_DOMAIN_ID / network)
+#   lab  : API/web server on 127.0.0.1:6871
+#   demo : nodes roshanavi did NOT start (external_talker / external_listener on
+#          /external/chatter, and the lifecycle node lc_talker which starts
+#          unconfigured); the demo talker / listener are started by `lab` itself
+#          from examples/demo_project (copied to ./data/roshanavi.yaml if absent)
 #   test : build + full pytest suite (exit code = result)
 #   e2e  : Playwright smoke test against a running `lab` + `demo` (profile e2e)
 
@@ -23,16 +26,22 @@ services:
     volumes:
       - ./ros2_ws/src:/ws/src:ro
       - ./data:/data
+      - ./examples:/examples:ro
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:6871:6871"
     # Launcher workspace = /ws (cwd); the project file lives in ./data to survive restarts.
-    command: ["ros2", "run", "roshanavi", "server", "--host", "0.0.0.0", "--port", "8080",
-              "--data-dir", "/data", "--project", "/data/roshanavi.yaml"]
+    command: ["ros2", "run", "roshanavi", "server", "--host", "0.0.0.0", "--port", "6871",
+              "--data-dir", "/data", "--project", "/data/roshanavi.yaml",
+              "--project-template", "/examples/demo_project/roshanavi.yaml"]
 
   demo:
     <<: *ros
     command: ["bash", "-c",
-              "ros2 run demo_nodes_py talker & ros2 run demo_nodes_py listener & wait"]
+              "ros2 run demo_nodes_cpp talker --ros-args -r __node:=external_talker
+               -r chatter:=/external/chatter &
+               ros2 run demo_nodes_cpp listener --ros-args -r __node:=external_listener
+               -r chatter:=/external/chatter &
+               ros2 run lifecycle lifecycle_talker & wait"]
 
   test:
     <<: *ros
@@ -43,16 +52,17 @@ services:
       ROS_AUTOMATIC_DISCOVERY_RANGE: LOCALHOST
     volumes:
       - ./ros2_ws/src:/ws/src:ro
+      - ./examples:/examples:ro
     command: ["python3", "-m", "pytest", "-p", "no:cacheprovider", "-q", "/ws/src/roshanavi/test"]
 
   e2e:
     profiles: ["e2e"]
     image: mcr.microsoft.com/playwright:v1.63.0-noble
-    network_mode: host  # reaches the lab UI published on 127.0.0.1:8080
+    network_mode: host  # reaches the lab UI published on 127.0.0.1:6871
     user: "${UID:-1000}:${GID:-1000}"
     environment:
       HOME: /tmp
-      ROSHANAVI_URL: ${ROSHANAVI_URL:-http://localhost:8080}
+      ROSHANAVI_URL: ${ROSHANAVI_URL:-http://localhost:6871}
     working_dir: /repo/web
     volumes:
       - .:/repo

@@ -3,14 +3,24 @@
 
 import { mapJa } from './messagesMap';
 import { mediaJa } from './messagesMedia';
+import { uxJa } from './messagesUx';
+import { importJa } from './messagesImport';
+import { nodesJa } from './messagesNodes';
+import { trafficJa } from './messagesTraffic';
+import { uxJa2 } from './messagesUx2';
 
 export const ja = {
   ...mapJa,
   ...mediaJa,
+  ...uxJa,
+  ...uxJa2,
+  ...nodesJa,
+  ...importJa,
+  ...trafficJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',
-  'tab.inject': '注入',
+  'tab.inject': 'お試し送信',
   'tab.launcher': 'ランチャー',
 
   'ws.connecting': '接続中…',
@@ -161,7 +171,7 @@ export const ja = {
   'launcher.saved': '保存済み',
   'launcher.save': 'プロジェクトに保存',
   'launcher.reload': 'ファイルから読み直す',
-  'launcher.reloadConfirm': '保存していない変更は失われ、起動中のノードは停止します。読み直しますか?',
+  'launcher.reloadConfirm': 'プロジェクトファイルの内容で起動リストを置き換えます。起動中のノードは停止します。読み直しますか?',
   'launcher.projectError': 'プロジェクトファイルを読み込めませんでした: {message}',
   'launcher.refresh': 'パッケージを再検索',
   'launcher.search': 'パッケージ・実行ファイル・launch ファイルを検索',
@@ -175,7 +185,7 @@ export const ja = {
   'launcher.executables': '実行ファイル (ros2 run)',
   'launcher.launchFiles': 'launch ファイル (ros2 launch)',
   'launcher.build': 'ビルド',
-  'launcher.pick': '左の一覧から、起動する実行ファイルか launch ファイルを選んでください。',
+  'launcher.pick': '左の一覧から、起動する実行ファイルか launch ファイルを選んでください。選んだら「起動」を押すだけです。',
   'launcher.form.title': '起動設定',
   'launcher.form.editTitle': '起動設定を編集: {id}',
   'launcher.form.command': '起動コマンド',
@@ -201,8 +211,8 @@ export const ja = {
   'launcher.form.add': '登録のみ',
   'launcher.form.update': '設定を更新',
   'launcher.form.added': '{id} を登録しました',
-  'launcher.targets': '起動対象',
-  'launcher.noTargets': 'まだ起動対象がありません。左でパッケージを選んで登録してください。',
+  'launcher.targets': '起動リスト',
+  'launcher.noTargets': '起動リストは空です。「＋ ノードを起動」から選ぶと、ここに自動で残ります。',
   'launcher.start': '起動',
   'launcher.stop': '停止',
   'launcher.restart': '再起動',
@@ -233,7 +243,7 @@ export const ja = {
   'launcher.log.filter': 'ログを検索',
   'launcher.log.clear': 'クリア',
   'launcher.log.empty': 'ログはまだありません',
-  'launcher.log.pick': '起動対象の「ログ」を押すと、ここに出力が表示されます。',
+  'launcher.log.pick': '起動リストの「ログ」を押すと、ここに出力が表示されます。',
   'launcher.log.count': '{shown} / {total} 行',
   'launcher.build.title': 'ビルド',
   'launcher.build.restartRunning': '成功したら、そのパッケージの起動中ノードを再起動する',
@@ -268,7 +278,7 @@ export const ja = {
   'dummy.exportNote': '実行には roshanavi パッケージのインストールが必要です (UI は不要)。',
 
   'detail.launcher': 'ランチャー',
-  'detail.target': '起動対象',
+  'detail.target': '起動リスト上の名前',
   'detail.process': 'プロセス',
   'detail.mapping': '対応づけ',
   'detail.uptime': '稼働時間',
@@ -305,7 +315,7 @@ export const ja = {
   'error.invalid_namespace': '名前空間が正しくありません',
   'error.invalid_topic': 'トピック名が正しくありません',
   'error.invalid_id': 'ID が正しくありません',
-  'error.duplicate_id': '同じ ID の起動対象がすでにあります',
+  'error.duplicate_id': '同じ ID のものが起動リストにすでにあります',
   'error.already_running': 'すでに起動しています',
   'error.spawn_failed': 'プロセスを起動できませんでした',
   'error.ros2_not_found': 'ros2 コマンドが見つかりません (ROS 2 を source してからサーバーを起動してください)',
@@ -315,7 +325,7 @@ export const ja = {
   'error.invalid_project': 'プロジェクトファイルの内容に問題があります',
   'error.save_failed': 'プロジェクトファイルを保存できませんでした',
   'error.export_failed': 'ファイルを書き出せませんでした',
-  'error.too_many_targets': '起動対象の数が上限に達しています',
+  'error.too_many_targets': '起動リストの数が上限に達しています',
   'error.shutting_down': 'サーバーが終了処理中です',
   'error.invalid_config': 'ダミーノードの設定が正しくありません',
   'error.unknown': 'エラーが発生しました',

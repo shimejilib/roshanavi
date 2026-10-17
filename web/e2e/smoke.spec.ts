@@ -2,7 +2,8 @@ import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Requires `docker compose up -d lab demo` (talker/listener on /chatter).
+// Requires `docker compose up -d lab demo`: lab starts the demo project's talker / listener
+// (/chatter, roshanavi-owned); the demo container adds external_talker on /external/chatter.
 const SHOTS = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url));
 const MESSAGE = `e2e hello ${Date.now()}`;
 
@@ -15,6 +16,9 @@ test('map shows the demo, inject once, echo receives it', async ({ page }) => {
   await expect(outline.locator('[data-id="t:/chatter"]')).toHaveCount(1, { timeout: 15_000 });
   await expect(outline.locator('[data-id="n:/talker"]')).toHaveCount(1);
   await expect(outline.locator('[data-id="n:/listener"]')).toHaveCount(1);
+  await expect(outline.locator('[data-id="n:/talker"]')).toHaveAttribute('data-role', 'mine', { timeout: 15_000 });
+  await expect(outline.locator('[data-id="n:/external_talker"]')).toHaveAttribute('data-role', 'other');
+  await expect(outline.locator('[data-id="t:/external/chatter"]')).toHaveCount(1);
   await expect(outline.locator('[data-id="e:pub:/talker:/chatter"]')).toContainText('Hz', { timeout: 15_000 });
   await page.waitForTimeout(1500); // let the layout animation and particles settle
   await page.screenshot({ path: `${SHOTS}graph.png` });
@@ -23,6 +27,17 @@ test('map shows the demo, inject once, echo receives it', async ({ page }) => {
   const row = page.locator('tr[data-topic="/chatter"]');
   await expect(row).toBeVisible();
   await page.screenshot({ path: `${SHOTS}traffic.png` });
+
+  // Per (node × topic × direction): expand /chatter, then the node view.
+  await page.getByTestId('expand-/chatter').click();
+  await expect(page.getByTestId('endpoint-/chatter-pub-/talker')).toContainText('Hz', { timeout: 10_000 });
+  await expect(page.getByTestId('endpoint-/chatter-sub-/listener')).toContainText('理論値');
+  await page.screenshot({ path: `${SHOTS}traffic-endpoints.png` });
+  await page.getByTestId('traffic-view-node').click();
+  await expect(page.getByTestId('node-traffic-/listener-sub-/chatter')).toContainText('理論値');
+  await expect(page.getByTestId('node-traffic-/talker-pub-/chatter')).toBeVisible();
+  await page.screenshot({ path: `${SHOTS}traffic-by-node.png` });
+  await page.getByTestId('traffic-view-topic').click();
 
   // Select /chatter: the detail pane starts echoing it.
   await row.click();

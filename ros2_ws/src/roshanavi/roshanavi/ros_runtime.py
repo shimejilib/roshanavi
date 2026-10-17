@@ -204,10 +204,24 @@ class RosRuntime:
             if self._node is not None:
                 self._node.destroy_subscription(subscription)
 
+    def create_client(self, srv_type: type, service: str,
+                      group: Optional[CallbackGroup] = None) -> Any:
+        with self._lock:
+            return self.node.create_client(srv_type, service, callback_group=group)
+
+    def destroy_client(self, client: Any) -> None:
+        with self._lock:
+            if self._node is not None:
+                self._node.destroy_client(client)
+
     # ---- graph queries ---------------------------------------------------
     def node_names_and_namespaces(self) -> List[Tuple[str, str]]:
         with self._lock:
             return self.node.get_node_names_and_namespaces()
+
+    def service_names_and_types(self) -> List[Tuple[str, List[str]]]:
+        with self._lock:
+            return self.node.get_service_names_and_types()
 
     def topic_names_and_types(self) -> List[Tuple[str, List[str]]]:
         with self._lock:

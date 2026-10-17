@@ -14,10 +14,13 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 from . import graph, rates
 from .echo import EchoManager
 from .injector import Injector
+from .launch_import.importer import LaunchImporter
 from .launcher.service import Launcher
 from .media.diskguard import DiskGuard, DiskThresholds
 from .media.recorder import Recorder
 from .media.viewer import MediaViewer
+from .lifecycle import LifecycleService
+from .params import ParamService
 from .ros_runtime import RosRuntime
 from .traffic import DEFAULT_WINDOW_SEC, TrafficMonitor
 
@@ -38,6 +41,7 @@ class Lab:
         self.data_dir = data_dir
         self.launcher = Launcher(workspace or os.getcwd(), data_dir, project_path=project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
+        self.importer = LaunchImporter(self.launcher, data_dir)
         self.runtime = RosRuntime(node_name)
         self.graph = graph.GraphMonitor(show_self=show_self)
         self.traffic = TrafficMonitor(self.runtime, window_sec=window_sec,
@@ -47,6 +51,8 @@ class Lab:
                                  extra_roots=(self.launcher.workspace.root,))
         self.echo = EchoManager(self.runtime)
         self.viewer = MediaViewer(self.runtime)
+        self.params = ParamService(self.runtime)
+        self.lifecycle = LifecycleService(self.runtime)
         self.recorder = Recorder(data_dir, DiskGuard(data_dir, disk_thresholds))
         self._period = period_sec
         self._timer: Any = None
@@ -69,12 +75,13 @@ class Lab:
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')
 
-    def traffic_view(self) -> List[Dict[str, Any]]:
-        """Traffic entries plus per-publisher rates for the map (see :mod:`rates`)."""
+    def traffic_view(self, window_sec: Optional[float] = None) -> List[Dict[str, Any]]:
+        """Traffic entries (rates over ``window_sec``) plus per-publisher rates for the map."""
         snapshot, _ = self.graph.snapshot()
         known = rates.known_rates(self.injector.list(), snapshot['nodes'],
                                   self.launcher.targets())
-        return rates.annotate_traffic(self.traffic.snapshot(), snapshot['edges'], known)
+        return rates.annotate_traffic(self.traffic.snapshot(window_sec), snapshot['edges'],
+                                      known)
 
     def stop(self) -> None:
         self.launcher.close()  # idempotent; child processes go first
@@ -87,6 +94,8 @@ class Lab:
         self.injector.close()
         self.echo.close()
         self.viewer.close()
+        self.params.close()
+        self.lifecycle.close()
         self.traffic.close()
         self.runtime.stop()
 

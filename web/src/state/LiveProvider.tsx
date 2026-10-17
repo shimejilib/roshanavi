@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ReconnectingSocket, wsUrl, type SocketStatus } from '../api/reconnect';
+import { DEFAULT_WINDOW, type WindowSec } from '../timing/timing';
 import { applyLive, EMPTY_LIVE, isLiveMessage, type LiveData } from './live';
 
 interface LiveContextValue {
@@ -8,12 +9,16 @@ interface LiveContextValue {
   url: string;
   paused: boolean;
   setPaused: (paused: boolean) => void;
+  /** Averaging window of every hz / bandwidth shown (the server computes it). */
+  windowSec: WindowSec;
+  setWindowSec: (sec: WindowSec) => void;
 }
 
 const LiveContext = createContext<LiveContextValue | null>(null);
 
 export function LiveProvider({ children }: { children: ReactNode }) {
-  const url = useMemo(() => wsUrl('/ws/live'), []);
+  const [windowSec, setWindowSec] = useState<WindowSec>(DEFAULT_WINDOW);
+  const url = useMemo(() => wsUrl(`/ws/live?window=${windowSec}`), [windowSec]);
   const [status, setStatus] = useState<SocketStatus>('connecting');
   const [live, setLive] = useState<LiveData>(EMPTY_LIVE);
   const [paused, setPausedState] = useState(false);
@@ -45,8 +50,10 @@ export function LiveProvider({ children }: { children: ReactNode }) {
         setPausedState(next);
         if (!next) setLive(latest.current);
       },
+      windowSec,
+      setWindowSec,
     }),
-    [live, status, url, paused],
+    [live, status, url, paused, windowSec],
   );
   return <LiveContext.Provider value={value}>{children}</LiveContext.Provider>;
 }

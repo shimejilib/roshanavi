@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .ros_runtime import is_self_node
+from .sub_rates import topic_subscribers
 
 BASIS_EXACT = 'exact'
 BASIS_CONFIGURED = 'configured'
@@ -77,7 +78,8 @@ def publishers_by_topic(edges: Iterable[Mapping[str, Any]]) -> Dict[str, List[st
 
 def annotate_traffic(entries: Sequence[Mapping[str, Any]], edges: Iterable[Mapping[str, Any]],
                      known: Mapping[str, KnownRate]) -> List[Dict[str, Any]]:
-    """Copy of the traffic entries with ``publishers`` and ``source_count`` added."""
+    """Copy of the traffic entries with ``publishers``, ``subscribers`` and ``source_count``."""
+    edges = list(edges)
     pubs = publishers_by_topic(edges)
     result = []
     for entry in entries:
@@ -86,8 +88,10 @@ def annotate_traffic(entries: Sequence[Mapping[str, Any]], edges: Iterable[Mappi
         total_hz = entry.get('hz') if monitored else None
         total_bps = entry.get('bytes_per_sec') if monitored else None
         rates = split_topic_rates(total_hz, total_bps, topic_pubs, known)
-        result.append({**entry, 'source_count': len(topic_pubs),
-                       'publishers': [{'node': n, **rates[n]} for n in topic_pubs]})
+        annotated = {**entry, 'source_count': len(topic_pubs),
+                     'publishers': [{'node': n, **rates[n]} for n in topic_pubs]}
+        annotated['subscribers'] = topic_subscribers(annotated, edges)
+        result.append(annotated)
     return result
 
 

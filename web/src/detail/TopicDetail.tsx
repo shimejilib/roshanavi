@@ -3,7 +3,8 @@ import { api, describeError } from '../api/client';
 import type { GraphSnapshot, TrafficEntry } from '../api/types';
 import { diagnosticText } from '../graph/diagnosticsText';
 import { t } from '../i18n';
-import { formatBytes, formatHz, formatMs, formatPercent, formatRate } from '../lib/format';
+import { formatBytes, formatMs, formatPercent, formatRate } from '../lib/format';
+import { hzBasisHelp, rateText, windowLabel } from '../timing/timing';
 import { topicPath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
 import { AudioViewer } from './AudioViewer';
@@ -20,7 +21,7 @@ interface TopicDetailProps {
 
 function Stats({ entry }: { entry: TrafficEntry }) {
   const rows: [string, string][] = [
-    [t('traffic.hz'), `${formatHz(entry.hz)} (${t(`traffic.basis.${entry.hz_basis}`)})`],
+    [t('traffic.hz'), rateText(entry)],
     [t('traffic.bandwidth'), formatRate(entry.bytes_per_sec)],
     [t('traffic.avgSize'), formatBytes(entry.avg_size)],
     [t('traffic.jitter'), formatMs(entry.jitter_ms)],
@@ -28,14 +29,19 @@ function Stats({ entry }: { entry: TrafficEntry }) {
     [t('traffic.latency'), formatMs(entry.latency_ms)],
   ];
   return (
-    <dl className="stats">
-      {rows.map(([k, v]) => (
-        <div key={k}>
-          <dt>{k}</dt>
-          <dd>{v}</dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      <div className="muted small" title={hzBasisHelp(entry.hz_basis)}>
+        {windowLabel(entry.window_sec ?? 5)} <span className="info-tip" tabIndex={0}>ⓘ</span>
+      </div>
+      <dl className="stats">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </>
   );
 }
 
@@ -97,7 +103,12 @@ export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
       )}
       {viewKind === 'image' && <ImageViewer key={`img-${topic}`} topic={topic} />}
       {viewKind === 'audio' && <AudioViewer key={`aud-${topic}`} topic={topic} needsRate={!types[0]?.startsWith('audio_common_msgs/')} />}
-      <EchoView key={topic} topic={topic} autoStart={(entry?.monitored ?? true) && viewKind !== 'audio'} />
+      {/* Echo only once the topic is on the graph (a just-created input node needs ~1 s). */}
+      {info ? (
+        <EchoView key={topic} topic={topic} autoStart={(entry?.monitored ?? true) && viewKind !== 'audio'} />
+      ) : (
+        <p className="muted small">{t('detail.waitingTopic')}</p>
+      )}
     </div>
   );
 }

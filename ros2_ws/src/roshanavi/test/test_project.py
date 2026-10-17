@@ -88,7 +88,9 @@ def test_rest_project_flow(client, lab, tmp_path):
     target = {'id': 'talk', 'kind': 'run', 'package': 'demo_nodes_cpp', 'executable': 'talker',
               'role': 'mine'}
     assert client.post('/api/targets', json=target).status_code == 201
-    assert client.get('/api/project').json()['dirty'] is True
+    autosaved = client.get('/api/project').json()  # every change is saved right away
+    assert autosaved['dirty'] is False and autosaved['autosave'] is True
+    assert os.path.isfile(autosaved['path'])
     saved = client.post('/api/project/save').json()
     assert saved['dirty'] is False and os.path.isfile(saved['path'])
     on_disk = yaml.safe_load(open(saved['path']))
@@ -112,5 +114,58 @@ def test_project_with_missing_package_still_opens(tmp_path, data_dir):
     try:
         (target,) = lab.launcher.targets()
         assert target['status'] == 'invalid' and 'not_installed' in target['problem']
+    finally:
+        lab.launcher.close()
+
+
+DEMO_TEMPLATE = 'version: 1\ntargets:\n- {id: talker, kind: run, package: demo_nodes_cpp, ' \
+                'executable: talker, role: mine, autostart: true}\n'
+
+
+def test_bootstrap_copies_template_only_if_absent(tmp_path):
+    from roshanavi.launcher.project import bootstrap_project
+    template = tmp_path / 'template.yaml'
+    template.write_text(DEMO_TEMPLATE)
+    target = tmp_path / 'data' / 'roshanavi.yaml'
+    assert bootstrap_project(str(target), str(template)) is True
+    assert target.read_text() == DEMO_TEMPLATE
+    target.write_text('version: 1\n')  # the user's own project is never overwritten
+    assert bootstrap_project(str(target), str(template)) is False
+    assert target.read_text() == 'version: 1\n'
+    assert bootstrap_project(str(tmp_path / 'other.yaml'), None) is False
+
+
+def test_bootstrap_refuses_broken_template(tmp_path):
+    from roshanavi.launcher.errors import LauncherError
+    from roshanavi.launcher.project import bootstrap_project
+    template = tmp_path / 'bad.yaml'
+    template.write_text('targets: [{id: x, colour: red}]\n')
+    with pytest.raises(LauncherError):
+        bootstrap_project(str(tmp_path / 'p.yaml'), str(template))
+    assert not (tmp_path / 'p.yaml').exists()
+
+
+def test_repo_demo_project_is_valid():
+    root = os.environ.get('ROSHANAVI_EXAMPLES', '/examples')  # compose `test` mounts it
+    path = os.path.join(root, 'demo_project', 'roshanavi.yaml')
+    if not os.path.isfile(path):
+        pytest.skip('examples/ is not mounted in this environment')
+    spec = parse_project(open(path).read())
+    roles = {t.id: (t.role, t.autostart) for t in spec.targets}
+    assert roles == {'talker': ('mine', True), 'listener': ('dependency', True)}
+
+
+def test_autosave_is_off_for_a_project_that_failed_to_load(tmp_path, data_dir):
+    from roshanavi.lab import Lab
+    proj = tmp_path / 'roshanavi.yaml'
+    broken = 'targets: [unclosed\n'
+    proj.write_text(broken)
+    lab = Lab(data_dir=str(data_dir), workspace=str(tmp_path), project_path=str(proj),
+              autostart=False)
+    try:
+        state = lab.launcher.project_state()
+        assert state['error'] and state['autosave'] is False
+        lab.launcher.autosave()
+        assert proj.read_text() == broken
     finally:
         lab.launcher.close()

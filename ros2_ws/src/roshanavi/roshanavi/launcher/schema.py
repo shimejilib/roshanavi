@@ -46,6 +46,8 @@ class TargetSpec(_Strict):
     role: Literal['mine', 'dependency'] = 'dependency'
     autostart: bool = False
     auto_restart: bool = False
+    # Informational: the launch file this target was decomposed from (§4.16).
+    imported_from: Optional[constr(max_length=1024)] = None
 
     @root_validator(skip_on_failure=True)
     def _kind_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:

@@ -67,12 +67,21 @@ function rateLabel(hz: number, bps: number | null, basis: RateBasis): string {
   return base;
 }
 
-/** Subscribers receive the topic total; publishers get their own share when known. */
+/** Theoretical rate of a subscriber (QoS-compatible publishers only), like the traffic table. */
+function subscriberRate(node: string, entry: TrafficEntry | undefined, total: EdgeRate): EdgeRate {
+  const sub = entry?.subscribers?.find((s) => s.node === node);
+  if (!sub || sub.hz == null || (sub.hz === total.hz && sub.delivered)) return total;
+  const bw = sub.bps ?? 0;
+  return { hz: sub.hz, bw, label: edgeLabel(sub.hz, bw), basis: 'total', note: '' };
+}
+
+/** Subscribers receive what the compatible publishers send; publishers get their own share when known. */
 export function edgeRate(e: Pick<GraphEdge, 'node' | 'dir'>, entry: TrafficEntry | undefined): EdgeRate {
   const totalHz = entry?.hz ?? 0;
   const totalBw = entry?.bytes_per_sec ?? 0;
   const total: EdgeRate = { hz: totalHz, bw: totalBw, label: edgeLabel(totalHz, totalBw), basis: 'total', note: '' };
-  const pub = e.dir === 'pub' ? entry?.publishers?.find((p) => p.node === e.node) : undefined;
+  if (e.dir === 'sub') return subscriberRate(e.node, entry, total);
+  const pub = entry?.publishers?.find((p) => p.node === e.node);
   if (!pub) return total;
   const note = RATE_NOTES[pub.basis]?.() ?? '';
   const share = Math.max(1, entry?.source_count ?? 1);
@@ -117,7 +126,7 @@ export function edgeState(entry: TrafficEntry | undefined, nowMs: number): EdgeS
   if (!entry.monitored || entry.status === 'not_monitored') return 'not_monitored';
   if (entry.status !== 'ok') return 'idle';
   const age = ageSec(entry.last_seen, nowMs);
-  if (age == null || age > STALE_AFTER_SEC) return 'stale';
+  if (entry.stale || age == null || age > STALE_AFTER_SEC) return 'stale';
   if ((entry.drop_ratio ?? 0) > 0) return 'drops';
   return 'active';
 }

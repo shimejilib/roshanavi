@@ -24,6 +24,34 @@ HEADER = ('# roshanavi project: launch targets, persistent dummy nodes and watch
           '# Edited from the roshanavi web UI (Launcher tab); safe to keep in git.\n')
 
 
+def bootstrap_project(path: str, template: Optional[str]) -> bool:
+    """Copy ``template`` to ``path`` if no project exists there yet (never overwrites).
+
+    The template must be a valid project. Returns True when it was copied.
+    """
+    if not template or os.path.lexists(path):
+        return False
+    try:
+        with open(template, encoding='utf-8') as fh:
+            text = fh.read(MAX_PROJECT_BYTES + 1)
+    except OSError as exc:
+        raise LauncherError('invalid_project', f'cannot read template {template}: {exc}') from exc
+    if len(text) > MAX_PROJECT_BYTES:
+        raise LauncherError('invalid_project', f'template {template} is larger than 1 MB')
+    parse_project(text, os.path.basename(template))  # refuse to install a broken template
+    try:
+        os.makedirs(os.path.dirname(os.path.abspath(path)), exist_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)  # no overwrite race
+    except FileExistsError:
+        return False
+    except OSError as exc:
+        raise LauncherError('save_failed', f'cannot create {path}: {exc}', 500) from exc
+    with os.fdopen(fd, 'w', encoding='utf-8') as fh:
+        fh.write(text)
+    LOG.info('project %s created from template %s', path, template)
+    return True
+
+
 def parse_project(text: str, source: str = 'project') -> ProjectSpec:
     try:
         raw = yaml.safe_load(text)

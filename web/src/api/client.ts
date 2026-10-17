@@ -15,6 +15,16 @@ import type {
   WorkspaceInfo,
 } from './types';
 import type { MediaTypeInfo, RecordingsResponse, RecordingStatus } from './mediaTypes';
+import type { InterfaceInfo, ParamSetRequest, ParamsResponse } from './nodeTypes';
+import type {
+  ImportCommitRequest,
+  ImportCommitResult,
+  ImportPlan,
+  ImportSource,
+  LifecycleInfo,
+  LifecycleRequest,
+  NodeListResponse,
+} from './nodeListTypes';
 
 export class ApiError extends Error {
   readonly code: string;
@@ -73,13 +83,14 @@ export const api = {
   files: () => request<{ data_dir: string; files: DataFile[] }>('GET', '/api/files'),
   startInject: (req: InjectRequest) => request<Job>('POST', '/api/inject', req),
   stopInject: (id: string) => request<Job>('DELETE', `/api/inject/${encodeURIComponent(id)}`),
+  pauseInject: (id: string, paused: boolean) => request<Job>('POST', `/api/inject/${enc(id)}/${paused ? 'pause' : 'resume'}`),
   setMonitor: (topicApiPath: string, enabled: boolean) =>
     request<{ topic: string; enabled: boolean }>('PUT', topicApiPath, { enabled }),
 
   workspace: () => request<WorkspaceInfo>('GET', '/api/workspace'),
   refreshWorkspace: () => request<WorkspaceInfo>('POST', '/api/workspace/refresh'),
   targets: () => request<{ targets: Target[] }>('GET', '/api/targets').then((r) => r.targets),
-  addTarget: (spec: TargetSpec) => request<Target>('POST', '/api/targets', spec),
+  addTarget: (spec: TargetSpec, start = false) => request<Target>('POST', `/api/targets${start ? '?start=true' : ''}`, spec),
   updateTarget: (spec: TargetSpec) => request<Target>('PUT', `/api/targets/${enc(spec.id)}`, spec),
   removeTarget: (id: string) => request<Target>('DELETE', `/api/targets/${enc(id)}`),
   targetAction: (id: string, action: 'start' | 'stop' | 'restart') =>
@@ -96,8 +107,21 @@ export const api = {
   persistJob: (jobId: string, name: string, autostart: boolean) =>
     request<Target>('POST', `/api/inject/${enc(jobId)}/persist`, { name, autostart }),
   updateDummy: (spec: DummySpec) => request<Target>('PUT', `/api/dummies/${enc(spec.id)}`, spec),
+  addDummy: (spec: DummySpec, start = true) => request<Target>('POST', `/api/dummies${start ? '?start=true' : ''}`, spec),
   exportDummies: (directory: string, ids: string[] = []) =>
     request<ExportResult>('POST', '/api/dummies/export', { directory, ids }),
+
+  parameters: (node: string) => request<ParamsResponse>('GET', `${nodePath(node)}/parameters`),
+  setParameter: (node: string, req: ParamSetRequest) =>
+    request<{ node: string; parameter: unknown }>('PUT', `${nodePath(node)}/parameters`, req),
+  nodeList: () => request<NodeListResponse>('GET', '/api/node-list'),
+  lifecycle: (node: string) => request<LifecycleInfo>('GET', `${nodePath(node)}/lifecycle`),
+  changeLifecycle: (node: string, req: LifecycleRequest) =>
+    request<LifecycleInfo>('POST', `${nodePath(node)}/lifecycle`, req),
+  importPreview: (source: ImportSource, args: Record<string, string>) =>
+    request<ImportPlan>('POST', '/api/launch-import/preview', { source, args }),
+  importCommit: (req: ImportCommitRequest) => request<ImportCommitResult>('POST', '/api/launch-import/commit', req),
+  interfaceDef: (type: string) => request<InterfaceInfo>('GET', `/api/interfaces/${type.split('/').map(enc).join('/')}`),
 
   mediaTypes: (topic?: string) =>
     request<MediaTypeInfo>('GET', topic ? `/api/media/types?topic=${enc(topic)}` : '/api/media/types'),
@@ -107,6 +131,11 @@ export const api = {
   stopRecording: () => request<RecordingStatus>('POST', '/api/recordings/stop'),
   deleteRecording: (name: string) => request<{ deleted: string }>('DELETE', `/api/recordings/${enc(name)}`),
 };
+
+/** `/ns/talker` -> `/api/nodes/ns/talker` (segments encoded). */
+export function nodePath(node: string): string {
+  return `/api/nodes/${node.split('/').filter(Boolean).map(enc).join('/')}`;
+}
 
 function enc(value: string): string {
   return encodeURIComponent(value);

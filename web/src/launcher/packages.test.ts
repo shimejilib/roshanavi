@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { WorkspacePackage } from '../api/types';
-import { buildablePackages, filterPackages } from './packages';
+import { buildablePackages, filterPackages, visiblePackages, workspaceConfigured } from './packages';
 
 const pkg = (name: string, origin: 'workspace' | 'system', executables: string[] = [], launch: string[] = []): WorkspacePackage => ({
   name,
@@ -16,8 +16,8 @@ const pkg = (name: string, origin: 'workspace' | 'system', executables: string[]
 const ALL = [pkg('demo_nodes_cpp', 'system', ['talker', 'listener'], ['talker_listener_launch.py']), pkg('my_robot', 'workspace', ['driver']), pkg('a_sys', 'system')];
 
 describe('package picker', () => {
-  it('puts workspace packages first, then by name', () => {
-    expect(filterPackages(ALL, '').map((m) => m.pkg.name)).toEqual(['my_robot', 'a_sys', 'demo_nodes_cpp']);
+  it('puts workspace packages first, then demo packages, then by name', () => {
+    expect(filterPackages(ALL, '').map((m) => m.pkg.name)).toEqual(['my_robot', 'demo_nodes_cpp', 'a_sys']);
   });
 
   it('matches executables and launch files inside packages', () => {
@@ -31,5 +31,24 @@ describe('package picker', () => {
 
   it('lists buildable packages', () => {
     expect(buildablePackages(ALL).map((p) => p.name)).toEqual(['my_robot']);
+  });
+});
+
+describe('package filtering (P4.5)', () => {
+  const list = [pkg('my_robot', 'workspace', ['driver']), pkg('demo_nodes_cpp', 'system', ['talker']), pkg('rclcpp_components', 'system', ['component_container']), pkg('roshanavi', 'workspace', ['server'])];
+
+  it('shows workspace and demo packages by default, everything on request', () => {
+    expect(visiblePackages(list, false).map((p) => p.name)).toEqual(['my_robot', 'demo_nodes_cpp', 'roshanavi']);
+    expect(visiblePackages(list, true)).toHaveLength(4);
+  });
+
+  it('ranks demo packages right after the workspace', () => {
+    expect(filterPackages(list, '').map((m) => m.pkg.name)).toEqual(['my_robot', 'roshanavi', 'demo_nodes_cpp', 'rclcpp_components']);
+  });
+
+  it('detects a workspace without the user\'s own packages', () => {
+    expect(workspaceConfigured(list)).toBe(true);
+    expect(workspaceConfigured(list.filter((p) => p.name !== 'my_robot'))).toBe(false);
+    expect(workspaceConfigured([])).toBe(false);
   });
 });

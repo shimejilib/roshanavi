@@ -1,0 +1,55 @@
+/* P4.5b: node list tab, lifecycle, launch import (DESIGN §6.6). */
+.node-list-tab { display: flex; flex-direction: column; height: 100%; }
+.node-list-intro { margin: 8px 12px 0; }
+.node-list-hint { margin: 8px 12px; font-size: 13px; }
+.node-list-tab > .error-box, .node-list-tab > .ok-box { margin: 8px 12px; }
+.node-list-tab .table-wrap { padding: 0 12px 12px; }
+.push-right { margin-left: auto; }
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pre-line { white-space: pre-line; }
+.node-table th[scope='row'] { font-weight: 500; text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+.node-table tbody tr { cursor: default; }
+.node-table input[type='checkbox']:focus-visible, .node-table button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.node-table .row-stopped { color: var(--muted); }
+.node-table .group-row td { background: var(--surface-2); font-size: 12px; font-weight: 600; color: var(--text); border-top: 2px solid var(--border); }
+.lifecycle-cell { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.badge.lc-active { color: var(--ok); border-color: currentColor; }
+.badge.lc-inactive { color: var(--warn); border-color: currentColor; }
+.badge.lc-unconfigured, .badge.lc-unknown { color: var(--muted); border-style: dashed; }
+.badge.lc-finalized { color: var(--error); border-color: currentColor; }
+.role-other { color: var(--muted); }
+.lifecycle-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0 12px; }
+.last-update.paused { color: var(--accent); border-color: var(--accent); }
+.import-source label { display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
+.import-source .radio { flex-direction: row; display: inline-flex; }
+.import-args { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; margin: 8px 0; }
+.import-args .field-missing input { border-color: var(--error); }
+.import-nodes, .import-entities { list-style: none; margin: 8px 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.import-nodes li, .import-entities li { padding: 6px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+.import-nodes li.not-importable { opacity: 0.75; border-style: dashed; }
+.import-preview h4 { margin: 12px 0 4px; font-size: 13px; }
+.node-table { background: var(--surface); }
+.node-table th[scope='row'] { position: static; background: transparent; }
+.node-table .badge, .node-table .status-chip { white-space: nowrap; }
+.import-preview .radio { display: inline-flex; flex-direction: row; align-items: center; gap: 4px; }
+.import-preview .row.wrap { align-items: center; }
+.import-preview label:not(.radio):not(.check) { display: inline-flex; align-items: center; gap: 6px; }
+.import-preview .check, .import-source .radio, .import-preview .radio { flex-direction: row; display: inline-flex; align-items: center; gap: 6px; font-weight: 500; }
+/* Traffic per node × topic × direction (§6.7). */
+.topic-head { display: flex; align-items: center; gap: 6px; }
+.expander { border: none; background: none; padding: 0 4px; font-size: 12px; color: var(--muted); }
+.expander:focus-visible { outline: 2px solid var(--accent); }
+.endpoint-row td { background: var(--surface-2); font-size: 12px; }
+.endpoint-cell { padding-left: 28px !important; }
+.dir-label { font-size: 11px; font-weight: 600; }
+.dir-pub { color: var(--accent); }
+.dir-sub { color: var(--ok); }
+.badge.basis-theoretical { border-style: dashed; color: var(--accent); }
+.badge.basis-not_delivered { color: var(--error); border-color: currentColor; }
+.badge.basis-estimated, .badge.basis-unknown { color: var(--warn); border-color: currentColor; }
+.segmented { display: inline-flex; border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.segmented .seg { display: inline-flex; align-items: center; padding: 3px 10px; font-size: 12px; cursor: pointer; }
+.segmented .seg input { position: absolute; opacity: 0; pointer-events: none; }
+.segmented .seg.active { background: var(--accent); color: var(--accent-text); }
+.segmented .seg:focus-within { outline: 2px solid var(--accent); outline-offset: -2px; }
+.node-traffic tr.node-first td { border-top: 2px solid var(--border); }

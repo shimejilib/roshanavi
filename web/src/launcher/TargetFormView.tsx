@@ -1,4 +1,7 @@
+// Pick -> 「起動」: the command and one button; everything else is folded into 詳細設定.
+
 import { t } from '../i18n';
+import { Term } from '../lib/Term';
 import type { TargetForm } from './form';
 import { KeyValueRows } from './KeyValueRows';
 
@@ -20,17 +23,18 @@ function RunFields({ form, onChange }: Pick<Props, 'form' | 'onChange'>) {
   return (
     <>
       <label>
-        {t('launcher.form.name')}
+        <span>{t('launcher.form.name')} <Term term="node" /></span>
         <input value={form.name} onChange={(e) => onChange({ name: e.target.value })} data-testid="target-form-name" />
         <span className="muted small">{t('launcher.form.nameHelp')}</span>
       </label>
       <label>
-        {t('launcher.form.namespace')}
+        <span>{t('launcher.form.namespace')} <Term term="namespace" /></span>
         <input value={form.namespace} onChange={(e) => onChange({ namespace: e.target.value })} />
       </label>
-      <KeyValueRows label={t('launcher.form.params')} help={t('launcher.form.paramsHelp')} rows={form.params} onChange={(params) => onChange({ params })} testId="target-form-params" />
+      <KeyValueRows label={t('launcher.form.params')} help={`${t('launcher.form.paramsHelp')} ${t('term.parameter')}`} rows={form.params} onChange={(params) => onChange({ params })} testId="target-form-params" />
       <KeyValueRows
         label={t('launcher.form.remaps')}
+        help={t('term.remap')}
         rows={form.remaps}
         keyLabel={t('launcher.form.from')}
         valueLabel={t('launcher.form.to')}
@@ -38,12 +42,37 @@ function RunFields({ form, onChange }: Pick<Props, 'form' | 'onChange'>) {
         testId="target-form-remaps"
       />
       <label>
-        {t('launcher.form.paramsFile')}
+        <span>{t('launcher.form.paramsFile')} <Term term="paramsFile" /></span>
         <input value={form.paramsFile} onChange={(e) => onChange({ paramsFile: e.target.value })} />
       </label>
       <label>
         {t('launcher.form.args')}
         <input value={form.args} onChange={(e) => onChange({ args: e.target.value })} />
+      </label>
+    </>
+  );
+}
+
+function Advanced({ form, onChange }: Pick<Props, 'form' | 'onChange'>) {
+  return (
+    <>
+      {form.kind === 'run' ? (
+        <RunFields form={form} onChange={onChange} />
+      ) : (
+        <KeyValueRows label={t('launcher.form.launchArgs')} help={t('term.launch')} rows={form.launchArgs} onChange={(launchArgs) => onChange({ launchArgs })} testId="target-form-launch-args" />
+      )}
+      <label className="check">
+        <input type="checkbox" checked={form.mine} onChange={(e) => onChange({ mine: e.target.checked })} data-testid="target-form-mine" />
+        {t('launcher.form.mine')}
+      </label>
+      <span className="muted small">{t('launcher.form.mineHelp')}</span>
+      <label className="check">
+        <input type="checkbox" checked={form.autostart} onChange={(e) => onChange({ autostart: e.target.checked })} />
+        {t('launcher.form.autostart')}
+      </label>
+      <label className="check">
+        <input type="checkbox" checked={form.autoRestart} onChange={(e) => onChange({ autoRestart: e.target.checked })} />
+        {t('launcher.form.autoRestart')}
       </label>
     </>
   );
@@ -60,39 +89,18 @@ export function TargetFormView({ form, editing, busy, onChange, onSubmit, onCanc
       }}
     >
       <h3>{editing ? t('launcher.form.editTitle', { id: form.id }) : t('launcher.form.title')}</h3>
-      <div>
-        <div className="muted small">{t('launcher.form.command')}</div>
-        <code className="mono command-preview">{commandPreview(form)}</code>
-      </div>
-      {form.kind === 'run' ? (
-        <RunFields form={form} onChange={onChange} />
-      ) : (
-        <KeyValueRows label={t('launcher.form.launchArgs')} rows={form.launchArgs} onChange={(launchArgs) => onChange({ launchArgs })} testId="target-form-launch-args" />
-      )}
-      <label className="check">
-        <input type="checkbox" checked={form.mine} onChange={(e) => onChange({ mine: e.target.checked })} data-testid="target-form-mine" />
-        {t('launcher.form.mine')}
-      </label>
-      <span className="muted small">{t('launcher.form.mineHelp')}</span>
-      <label className="check">
-        <input type="checkbox" checked={form.autostart} onChange={(e) => onChange({ autostart: e.target.checked })} />
-        {t('launcher.form.autostart')}
-      </label>
-      <label className="check">
-        <input type="checkbox" checked={form.autoRestart} onChange={(e) => onChange({ autoRestart: e.target.checked })} />
-        {t('launcher.form.autoRestart')}
-      </label>
+      <code className="mono command-preview">{commandPreview(form)}</code>
+      <details className="advanced" open={editing} data-testid="target-form-advanced">
+        <summary>{t('launcher.form.advanced')}</summary>
+        <Advanced form={form} onChange={onChange} />
+      </details>
       <div className="row">
-        {editing ? (
-          <button type="submit" className="primary" disabled={busy}>{t('launcher.form.update')}</button>
-        ) : (
-          <>
-            <button type="submit" className="primary" disabled={busy} data-testid="target-form-submit">{t('launcher.form.addAndStart')}</button>
-            <button type="button" disabled={busy} onClick={() => onSubmit(false)}>{t('launcher.form.add')}</button>
-          </>
-        )}
+        <button type="submit" className="primary" disabled={busy} data-testid="target-form-submit">
+          {editing ? t('launcher.form.update') : t('launcher.form.launch')}
+        </button>
         <button type="button" onClick={onCancel}>{t('common.cancel')}</button>
       </div>
+      {!editing && <span className="muted small">{t('launcher.form.autoRegister')}</span>}
     </form>
   );
 }

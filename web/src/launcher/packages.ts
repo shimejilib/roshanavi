@@ -8,8 +8,24 @@ export interface PackageMatch {
   launchFiles: string[];
 }
 
+/** Demo / sample packages listed even when ROS standard packages are hidden. */
+export const DEMO_PACKAGES: ReadonlySet<string> = new Set(['demo_nodes_cpp', 'demo_nodes_py', 'roshanavi_examples']);
+/** The tool itself lives in the workspace but is not the user's own package. */
+const SELF_PACKAGE = 'roshanavi';
+
 function rank(pkg: WorkspacePackage): number {
-  return pkg.origin === 'workspace' ? 0 : 1;
+  if (pkg.origin === 'workspace') return 0;
+  return DEMO_PACKAGES.has(pkg.name) ? 1 : 2;
+}
+
+/** Default list: workspace + demo packages; `showSystem` adds every ROS standard package. */
+export function visiblePackages(packages: WorkspacePackage[], showSystem: boolean): WorkspacePackage[] {
+  return showSystem ? packages : packages.filter((p) => p.origin === 'workspace' || DEMO_PACKAGES.has(p.name));
+}
+
+/** True when the workspace holds at least one package of the user's own (not just roshanavi). */
+export function workspaceConfigured(packages: WorkspacePackage[]): boolean {
+  return packages.some((p) => p.origin === 'workspace' && p.name !== SELF_PACKAGE);
 }
 
 /** Packages whose name, executables or launch files contain `query` (case-insensitive). */

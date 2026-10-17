@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { rightClickNode } from './helpers';
 import { fileURLToPath } from 'node:url';
 
 // Requires `docker compose up -d lab demo`. Starts nodes from the Launcher tab,
@@ -14,6 +15,7 @@ async function cleanup(page: Page) {
 async function addRun(page: Page, exe: string, name: string, mine: boolean) {
   await page.getByTestId('launcher-search').fill('demo_nodes_cpp');
   await page.getByTestId(`pick-run-demo_nodes_cpp-${exe}`).click();
+  await page.getByTestId('target-form-advanced').locator('summary').click();
   await page.getByTestId('target-form-name').fill(name);
   // Own topic, so this test never disturbs the demo's /chatter (smoke test runs in parallel).
   const remaps = page.getByTestId('target-form-remaps');
@@ -32,11 +34,18 @@ test('start talker from the Launcher, see it as "mine" on the map, stop it', asy
   mkdirSync(SHOTS, { recursive: true });
   await page.goto('/');
   await page.getByTestId('tab-launcher').click();
+  await page.getByTestId('launcher-add').click();
   await expect(page.getByTestId('pkg-roshanavi')).toContainText('ワークスペース');
+  // ROS standard packages are hidden until asked for; demo packages stay visible.
+  await expect(page.getByTestId('pkg-rclcpp_components')).toHaveCount(0);
+  await page.getByTestId('show-system').check();
+  await expect(page.getByTestId('pkg-rclcpp_components')).toHaveCount(1);
+  await page.getByTestId('show-system').uncheck();
 
   await addRun(page, 'talker', 'e2e_talker', true);
   await expect(page.getByTestId('log-body')).toContainText('Publishing', { timeout: 15_000 });
-  await expect(page.getByTestId('project-dirty')).toHaveAttribute('data-dirty', 'true');
+  await expect(page.getByTestId('project-autosave')).toContainText('自動で保存');
+  await page.getByTestId('launcher-add').click();
   await addRun(page, 'listener', 'e2e_listener', false);
   await page.getByTestId('target-e2e_talker').getByRole('button', { name: 'ログ' }).click();
   await expect(page.getByTestId('target-e2e_talker')).toContainText('確実', { timeout: 15_000 });
@@ -83,9 +92,9 @@ test('start talker from the Launcher, see it as "mine" on the map, stop it', asy
   await page.getByTestId('tab-graph').click();
   await page.waitForTimeout(1000);
   await rightClickNode(page, 'n:/e2e_talker');
-  const menu = page.getByTestId('node-menu');
+  const menu = page.getByTestId('map-menu');
   await expect(menu).toContainText('/e2e_talker');
-  await menu.getByTestId('node-stop').click();
+  await menu.getByTestId('menu-stop').click();
   await expect(page.getByTestId('confirm-dialog')).toContainText('/e2e_talker を停止します');
   await page.screenshot({ path: `${SHOTS}graph-node-stop-confirm.png` });
   await page.getByTestId('confirm-ok').click();
@@ -93,22 +102,10 @@ test('start talker from the Launcher, see it as "mine" on the map, stop it', asy
   await page.getByTestId('tab-launcher').click();
   await expect(page.getByTestId('target-status-e2e_talker')).toHaveAttribute('data-status', 'stopped', { timeout: 15_000 });
 
-  // A node roshanavi did not start (the demo's talker) offers no stop.
+  // A node roshanavi did not start (the demo container's external_talker) offers no stop.
   await page.getByTestId('tab-graph').click();
-  await rightClickNode(page, 'n:/talker');
-  await expect(page.getByTestId('node-menu').getByTestId('node-stop')).toBeDisabled();
+  await rightClickNode(page, 'n:/external_talker');
+  await expect(page.getByTestId('map-menu').getByTestId('menu-stop')).toBeDisabled();
   await page.keyboard.press('Escape');
-  await expect(page.getByTestId('node-menu')).toHaveCount(0);
+  await expect(page.getByTestId('map-menu')).toHaveCount(0);
 });
-
-/** Right-click a cytoscape node at its rendered position (cytoscape keeps its instance on the container). */
-async function rightClickNode(page: Page, elementId: string) {
-  const canvas = page.getByTestId('graph-canvas');
-  const pos = await canvas.evaluate((el, id) => {
-    const cy = (el as unknown as { _cyreg: { cy: { getElementById: (i: string) => { renderedPosition: () => { x: number; y: number } } } } })._cyreg.cy;
-    return cy.getElementById(id).renderedPosition();
-  }, elementId);
-  const box = await canvas.boundingBox();
-  if (!box) throw new Error('graph canvas not visible');
-  await page.mouse.click(box.x + pos.x, box.y + pos.y, { button: 'right' });
-}

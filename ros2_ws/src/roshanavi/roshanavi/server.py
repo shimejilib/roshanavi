@@ -9,6 +9,7 @@ import asyncio
 import functools
 import logging
 import os
+import time
 from typing import Any, Awaitable, Callable, Dict, Iterable, List, Literal, Optional
 
 from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
@@ -19,7 +20,9 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
-from . import msgutil, security, server_launcher, server_media
+from . import (msgutil, security, server_launch_import, server_launcher, server_media,
+               server_nodes)
+from .api_errors import ApiError, parse_window
 from .echo import EchoError
 from .files import FileAccessError, list_files
 from .jobs import InjectError, InjectSpec
@@ -93,7 +96,7 @@ def _install_error_handlers(app: FastAPI) -> None:
         return _error(status, getattr(exc, 'code', 'error'), str(exc))
 
     for exc_type in (InjectError, EchoError, msgutil.MsgUtilError, FileAccessError,
-                     LauncherError, MediaError):
+                     LauncherError, MediaError, ApiError):
         app.add_exception_handler(exc_type, _domain_error)
 
     @app.exception_handler(StarletteHTTPException)
@@ -119,8 +122,8 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
         return {**snapshot, 'hash': digest}
 
     @app.get('/api/traffic')
-    def get_traffic() -> Dict[str, Any]:
-        return {'topics': lab.traffic_view()}
+    def get_traffic(window: Optional[str] = None) -> Dict[str, Any]:
+        return {'topics': lab.traffic_view(parse_window(window))}
 
     @app.put('/api/traffic/{topic:path}/monitor')
     def put_monitor(topic: str, req: MonitorRequest) -> Dict[str, Any]:
@@ -152,6 +155,14 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
     @app.delete('/api/inject/{job_id}')
     def delete_inject(job_id: str) -> Dict[str, Any]:
         return lab.injector.stop(job_id)
+
+    @app.post('/api/inject/{job_id}/pause')
+    def pause_inject(job_id: str) -> Dict[str, Any]:
+        return lab.injector.set_paused(job_id, True)
+
+    @app.post('/api/inject/{job_id}/resume')
+    def resume_inject(job_id: str) -> Dict[str, Any]:
+        return lab.injector.set_paused(job_id, False)
 
     @app.get('/api/files')
     def get_files() -> Dict[str, Any]:
@@ -185,11 +196,18 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
     @app.websocket('/ws/live')
     async def ws_live(ws: WebSocket) -> None:
         await ws.accept()
+        try:
+            window = parse_window(ws.query_params.get('window'))
+        except ApiError as exc:
+            await ws.send_json({'error': {'code': exc.code, 'message': str(exc)}})
+            await ws.close(code=1008)
+            return
         state = {'hash': None}
 
         async def push() -> None:
             snapshot, digest = lab.graph.snapshot()
-            payload: Dict[str, Any] = {'traffic': lab.traffic_view(),
+            payload: Dict[str, Any] = {'traffic': lab.traffic_view(window),
+                                       'server_time': time.time(),
                                        'jobs': lab.injector.list(),
                                        'targets': lab.launcher.targets(),
                                        'build': lab.launcher.builder.status(),
@@ -232,6 +250,8 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     _register_rest(app, lab)
     server_launcher.register(app, lab)
     server_media.register(app, lab)
+    server_nodes.register(app, lab)
+    server_launch_import.register(app, lab)
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')
@@ -245,6 +265,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
                     'api': ['/api/graph', '/api/traffic', '/api/types', '/api/inject',
                             '/api/files', '/api/targets', '/api/workspace', '/api/build',
                             '/api/project', '/api/dummies', '/api/media/types',
-                            '/api/recordings', '/ws/live', '/ws/echo/{topic}',
+                            '/api/recordings', '/api/nodes/{node}/parameters',
+                            '/api/interfaces/{pkg}/{kind}/{name}', '/ws/live', '/ws/echo/{topic}',
                             '/ws/logs/{log_id}', '/ws/capture', '/ws/view/{topic}']}
     return app

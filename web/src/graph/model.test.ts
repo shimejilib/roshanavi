@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Diagnostic } from '../api/types';
 import { chatterGraph, entry, NOW_MS } from '../test/fixtures';
-import { borderWidth, buildElements, edgeState, edgeWidth, filterSnapshot, type EdgeData } from './model';
+import { borderWidth, buildElements, edgeRate, edgeState, edgeWidth, filterSnapshot, type EdgeData } from './model';
 
 const edgesOf = (els: ReturnType<typeof buildElements>): EdgeData[] =>
   els.filter((e) => e.group === 'edges').map((e) => e.data as EdgeData);
@@ -150,5 +150,16 @@ describe('per-publisher rates on edges', () => {
   it('falls back to the topic total without per-publisher data', () => {
     const els = buildElements(chatterGraph(), new Map([['/chatter', entry('/chatter')]]), NOW_MS);
     expect(byId(els, 'e:pub:/talker:/chatter')?.rateBasis).toBe('total');
+  });
+});
+
+describe('subscriber edge rate', () => {
+  it('uses the theoretical rate when only some publishers are QoS-compatible', () => {
+    const e = entry('/chatter', {
+      hz: 3, bytes_per_sec: 300,
+      subscribers: [{ node: '/picky', hz: 1, bps: 100, basis: 'theoretical', delivered: true, sources: ['/a'] }],
+    });
+    expect(edgeRate({ node: '/picky', dir: 'sub' }, e)).toMatchObject({ hz: 1, bw: 100 });
+    expect(edgeRate({ node: '/other', dir: 'sub' }, e)).toMatchObject({ hz: 3, bw: 300 });
   });
 });

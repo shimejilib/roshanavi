@@ -17,8 +17,8 @@ function errorOf(value: unknown): string | null {
   return `${tDynamic(`error.${err.code ?? 'unknown'}`, 'error.unknown')} (${err.message ?? ''})`;
 }
 
-/** Live echo of one topic over /ws/echo (server throttles to <= 10 Hz). */
-export function EchoView({ topic, autoStart }: { topic: string; autoStart: boolean }) {
+/** Live echo of one topic over /ws/echo (server throttles to <= 10 Hz). `compact`: no header. */
+export function EchoView({ topic, autoStart, compact = false }: { topic: string; autoStart: boolean; compact?: boolean }) {
   const [running, setRunning] = useState(autoStart);
   const [message, setMessage] = useState<EchoMessage | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -43,19 +43,21 @@ export function EchoView({ topic, autoStart }: { topic: string; autoStart: boole
 
   const text = message ? JSON.stringify(message.msg, null, 2) : '';
   return (
-    <section className="echo" aria-labelledby="echo-title">
-      <h4 id="echo-title">
-        {t('detail.echo')}{' '}
-        <button type="button" onClick={() => setRunning(!running)} data-testid="echo-toggle">
-          {running ? t('detail.echoStop') : t('detail.echoStart')}
-        </button>
-      </h4>
+    <section className="echo" aria-label={t('detail.echo')}>
+      {!compact && (
+        <h4>
+          {t('detail.echo')}{' '}
+          <button type="button" onClick={() => setRunning(!running)} data-testid="echo-toggle">
+            {running ? t('detail.echoStop') : t('detail.echoStart')}
+          </button>
+        </h4>
+      )}
       {error && <p className="error-box">{error}</p>}
       {running && !message && !error && <p className="muted">{status === 'open' ? t('detail.echoWaiting') : t('ws.connecting')}</p>}
       {message && (
         <>
           <div className="muted small">#{message.seq} · {message.type}</div>
-          <pre className="echo-body" data-testid="echo-body">{text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text}</pre>
+          <pre className="echo-body" data-testid={compact ? 'io-echo-body' : 'echo-body'}>{text.length > MAX_CHARS ? `${text.slice(0, MAX_CHARS)}…` : text}</pre>
         </>
       )}
     </section>

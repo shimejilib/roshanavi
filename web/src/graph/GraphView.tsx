@@ -8,7 +8,8 @@ import cytoscape, { type CollectionReturnValue, type Core, type EventObject, typ
 import dagre from 'cytoscape-dagre';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { TrafficEntry } from '../api/types';
-import type { MenuAnchor } from './NodeMenu';
+import type { MenuAnchor } from './MapMenu';
+import type { MenuTarget } from './menuModel';
 import { diffElements, indexElements } from './diff';
 import { focusSet } from './focus';
 import { topicElementId, type EdgeData, type Element } from './model';
@@ -32,7 +33,9 @@ export interface GraphViewProps {
   selectedId: string | null;
   onSelect: (elementId: string | null) => void;
   fitSignal: number;
-  /** Right-click menu for a node element (`ref` = ROS node id). */
+  /** Increment to re-run the layout from scratch ("整列し直す"). */
+  layoutSignal: number;
+  /** Right-click menu (nodes, topics, edges, blank area). */
   renderMenu?: (anchor: MenuAnchor, close: () => void) => ReactNode;
 }
 
@@ -118,9 +121,9 @@ export function GraphView(props: GraphViewProps) {
     });
     cy.on('mouseout', 'edge', () => setTooltip(null));
     // Right click (cxttap) only: left-click selection and drag-panning stay untouched.
-    cy.on('cxttap', 'node[kind = "node"]', (evt: EventObject) => {
+    cy.on('cxttap', (evt: EventObject) => {
       const pos = evt.renderedPosition;
-      setMenu({ x: pos.x, y: pos.y, nodeId: String(evt.target.data('ref')) });
+      setMenu({ x: pos.x, y: pos.y, target: menuTargetOf(evt, cy) });
     });
     cy.on('tap viewport', () => setMenu(null));
     cyRef.current = cy;
@@ -154,6 +157,11 @@ export function GraphView(props: GraphViewProps) {
 
   useEffect(() => {
     const cy = cyRef.current;
+    if (cy && props.layoutSignal > 0 && cy.nodes().length > 0) runLayout(cy, true);
+  }, [props.layoutSignal]);
+
+  useEffect(() => {
+    const cy = cyRef.current;
     if (cy && props.fitSignal > 0) {
       cy.fit(cy.elements(), 30);
       capZoom(cy);
@@ -181,6 +189,16 @@ export function GraphView(props: GraphViewProps) {
       )}
     </div>
   );
+}
+
+function menuTargetOf(evt: EventObject, cy: Core): MenuTarget {
+  if (evt.target === cy) return { kind: 'blank' };
+  if (evt.target.isEdge()) {
+    const data = evt.target.data() as EdgeData;
+    return { kind: 'edge', topic: data.topic, node: data.node, dir: data.dir };
+  }
+  const ref = String(evt.target.data('ref'));
+  return evt.target.data('kind') === 'topic' ? { kind: 'topic', topic: ref } : { kind: 'node', nodeId: ref };
 }
 
 /** Text outline of the map for screen readers (and E2E tests); the canvas itself is opaque. */

@@ -1,4 +1,5 @@
 import { DetailPane } from './detail/DetailPane';
+import { DialogHost } from './dialogs/DialogHost';
 import { t } from './i18n';
 import { AppStateProvider, useAppState } from './state/AppState';
 import { LiveProvider, useLive } from './state/LiveProvider';
@@ -51,6 +52,7 @@ function Shell() {
         </main>
         <DetailPane />
       </div>
+      <DialogHost />
     </div>
   );
 }

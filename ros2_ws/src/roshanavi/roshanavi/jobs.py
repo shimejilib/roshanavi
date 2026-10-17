@@ -51,7 +51,13 @@ def validate_topic(topic: Optional[str]) -> str:
 
 
 class Job:
-    """Common job bookkeeping; subclasses implement ``_begin`` and ``_teardown``."""
+    """Common job bookkeeping; subclasses implement ``_begin`` and ``_teardown``.
+
+    ``pausable`` jobs skip sending while ``paused`` (the timer / pacer keeps running,
+    so resuming continues at the same rate without a burst).
+    """
+
+    pausable = False
 
     def __init__(self, spec: InjectSpec):
         self.id = uuid.uuid4().hex[:12]
@@ -59,6 +65,7 @@ class Job:
         self.lock = threading.Lock()
         self.state = 'running'
         self.sent = 0
+        self.paused = False
         self.error: Optional[str] = None
         self.created_at = time.time()
         self.finished_at: Optional[float] = None
@@ -89,8 +96,21 @@ class Job:
                     'count': self.spec.count, 'source': self.spec.source,
                     'qos': dict(self.spec.qos),
                     'state': self.state, 'sent': self.sent, 'error': self.error,
+                    'paused': self.paused, 'pausable': self.can_pause,
                     'created_at': self.created_at, 'finished_at': self.finished_at,
                     'send_hz': send_hz, 'send_bps': send_bps}
+
+    @property
+    def can_pause(self) -> bool:
+        return self.pausable and self.spec.mode != 'once'  # once sends a single message
+
+    def set_paused(self, paused: bool) -> None:
+        if not self.can_pause:
+            raise InjectError('not_pausable', f'a {self.spec.mode} job cannot be paused')
+        with self.lock:
+            if self.state != 'running':
+                raise InjectError('not_running', f'job {self.id} is not running', 409)
+            self.paused = paused
 
     @property
     def active(self) -> bool:

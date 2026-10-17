@@ -6,6 +6,9 @@ always pass it, which also lets the Launcher map the node to this process
 exactly). It reuses the injector (once / periodic / stream, ``${}``
 expressions, JSONL / CSV files) and keeps running until SIGINT/SIGTERM, so the
 node stays visible on the graph even after a finite job completes.
+
+The node declares a bool parameter ``paused``: setting it to true (from the
+roshanavi map, or ``ros2 param set``) stops sending without stopping the node.
 """
 
 import argparse
@@ -13,7 +16,10 @@ import logging
 import signal
 import sys
 import threading
-from typing import List, Optional
+from typing import Any, List, Optional
+
+from rcl_interfaces.msg import ParameterDescriptor, SetParametersResult
+from rclpy.parameter import Parameter
 
 from .injector import Injector
 from .jobs import InjectError
@@ -26,6 +32,7 @@ LOG = logging.getLogger('roshanavi.dummy')
 POLL_SEC = 0.5
 EXIT_CONFIG_ERROR = 2
 EXIT_JOB_ERROR = 1
+PAUSED_PARAM = 'paused'
 
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
@@ -58,6 +65,7 @@ def run(config_path: str, stop: threading.Event) -> int:
     injector = Injector(runtime, config['data_dir'])
     try:
         job = injector.start(inject_spec(spec))
+        install_pause_parameter(runtime.node, injector, job['id'])
         LOG.info('dummy node publishing %s (%s, %s)', spec.topic, spec.type, spec.mode)
         return _wait(injector, job['id'], stop)
     except (InjectError, MsgUtilError) as exc:
@@ -66,6 +74,25 @@ def run(config_path: str, stop: threading.Event) -> int:
     finally:
         injector.close()
         runtime.stop()
+
+
+def install_pause_parameter(node: Any, injector: Injector, job_id: str) -> None:
+    """``paused`` (bool) parameter that pauses / resumes the injection job."""
+    node.declare_parameter(PAUSED_PARAM, False, ParameterDescriptor(
+        description='true: stop sending (the node keeps running); false: send again'))
+
+    def on_set(params: List[Parameter]) -> SetParametersResult:
+        for param in params:
+            if param.name != PAUSED_PARAM:
+                continue
+            if param.type_ != Parameter.Type.BOOL:
+                return SetParametersResult(successful=False, reason='paused must be true/false')
+            try:
+                injector.set_paused(job_id, bool(param.value))
+            except InjectError as exc:
+                return SetParametersResult(successful=False, reason=str(exc))
+        return SetParametersResult(successful=True)
+    node.add_on_set_parameters_callback(on_set)
 
 
 def _wait(injector: Injector, job_id: str, stop: threading.Event) -> int:

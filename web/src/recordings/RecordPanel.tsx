@@ -6,6 +6,7 @@ import type { RecordingStatus } from '../api/mediaTypes';
 import { t } from '../i18n';
 import { formatBytes, formatDuration } from '../lib/format';
 import { isHiddenTopic } from '../lib/topics';
+import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
 import { addAll, inputTopics, myNodeOutputs, toggle } from './presets';
 
@@ -25,7 +26,8 @@ function ActiveRecording({ rec, onStop, busy }: { rec: RecordingStatus; onStop: 
 
 export function RecordPanel({ onChanged }: { onChanged: () => void }) {
   const { live } = useLive();
-  const [selected, setSelected] = useState<string[]>([]);
+  const { recordTopic } = useAppState();
+  const [selected, setSelected] = useState<string[]>(() => (recordTopic ? [recordTopic] : []));
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
   // /ws/live reports the stop up to 1 s later; hide the stopped recording right away.

@@ -13,6 +13,12 @@ from collections import defaultdict, deque
 from typing import Any, Callable, Deque, Dict, List, Mapping, NamedTuple, Optional, Sequence, Tuple
 
 DEFAULT_WINDOW_SEC = 5.0
+WINDOWS_SEC = (1.0, 5.0, 10.0)  # averaging windows the UI can choose
+MAX_WINDOW_SEC = max(WINDOWS_SEC)
+# A topic counts as stopped (hz 0) after this many expected periods of silence, at least
+# STALE_MIN_SEC; without it a stopped topic would keep its old average for a whole window.
+STALE_PERIODS = 3.0
+STALE_MIN_SEC = 1.0
 HISTORY_LEN = 60
 MAX_SAMPLES = 20000  # bounds memory for very high-rate topics
 NS_PER_MS = 1e6
@@ -45,12 +51,15 @@ class TopicStats:
     """Sliding-window statistics for one topic.
 
     ``clock`` is monotonic seconds (intervals), ``wall_clock`` epoch seconds
-    (``last_seen``). Both are injectable for deterministic tests.
+    (``last_seen``). Both are injectable for deterministic tests. Samples are
+    kept for the longest selectable window so any of :data:`WINDOWS_SEC` can be
+    computed on request (``snapshot(window_sec)``).
     """
 
     def __init__(self, window_sec: float = DEFAULT_WINDOW_SEC, clock: Clock = time.monotonic,
                  wall_clock: Clock = time.time, max_samples: int = MAX_SAMPLES):
         self._window = window_sec
+        self._retain = max(window_sec, MAX_WINDOW_SEC)
         self._clock = clock
         self._wall = wall_clock
         self._lock = threading.Lock()
@@ -67,26 +76,75 @@ class TopicStats:
             self._last_seen = self._wall()
 
     def _prune(self, now: float) -> None:
-        cutoff = now - self._window
+        cutoff = now - self._retain
         while self._samples and self._samples[0].t < cutoff:
             self._samples.popleft()
 
-    def snapshot(self) -> Dict[str, Any]:
+    def snapshot(self, window_sec: Optional[float] = None) -> Dict[str, Any]:
+        """Statistics over the last ``window_sec`` (default: the configured window)."""
+        window = window_sec or self._window
         now = self._clock()
         with self._lock:
             self._prune(now)
-            samples = list(self._samples)
+            retained = list(self._samples)
             total, last_seen = self._total, self._last_seen
             history = list(self._history)
+        samples = [s for s in retained if s.t >= now - window]
         recent = sum(1 for s in samples if s.t > now - RECENT_SEC)
-        return {**compute_stats(samples), 'last_seen': last_seen, 'total_count': total,
-                'recent_count': recent, 'history': history}
+        stale = bool(retained) and is_silent(retained, now)
+        samples, rate_window, rate_note = rate_samples(samples, retained, now, window, stale)
+        stats = compute_stats(samples)
+        if stale:
+            stats = zero_rates(stats)
+        return {**stats, 'last_seen': last_seen, 'total_count': total,
+                'recent_count': recent, 'history': history, 'window_sec': window,
+                'rate_window_sec': rate_window, 'rate_note': rate_note, 'stale': stale}
 
     def tick(self) -> None:
         """Append the current hz to the 1 s history (called once per second)."""
         hz = self.snapshot()['hz']
         with self._lock:
             self._history.append(hz)
+
+
+def rate_samples(samples: Sequence[Sample], retained: Sequence[Sample], now: float,
+                 window: float, stale: bool) -> Tuple[Sequence[Sample], float, Optional[str]]:
+    """Samples to compute rates from, the span actually used and a note for the UI.
+
+    A live topic slower than the window (fewer than 2 messages in it) would read
+    0 Hz although it is alive. Its rate is then computed over the longest window
+    (``rate_note='extended'``); when even that holds fewer than 2 messages the
+    rate cannot be measured (``'too_few'``, hz 0 but the UI shows a dash).
+    """
+    if stale or len(samples) >= 2 or not retained:
+        return samples, window, None
+    longer = [s for s in retained if s.t >= now - MAX_WINDOW_SEC]
+    if MAX_WINDOW_SEC > window and len(longer) >= 2:
+        return longer, MAX_WINDOW_SEC, 'extended'
+    return samples, window, 'too_few'
+
+
+def expected_period(samples: Sequence[Sample]) -> Optional[float]:
+    """Mean receive interval of the retained samples (None with fewer than 2)."""
+    if len(samples) < 2:
+        return None
+    span = samples[-1].t - samples[0].t
+    return span / (len(samples) - 1) if span > 0 else None
+
+
+def is_silent(samples: Sequence[Sample], now: float) -> bool:
+    """True when nothing arrived for max(3 x expected period, 1 s)."""
+    if not samples:
+        return False
+    period = expected_period(samples)
+    limit = max(STALE_PERIODS * period if period else 0.0, STALE_MIN_SEC)
+    return now - samples[-1].t > limit
+
+
+def zero_rates(stats: Dict[str, Any]) -> Dict[str, Any]:
+    """Rates of a stopped topic: 0 (sizes, jitter and latency keep their last values)."""
+    hz_source = 0.0 if stats.get('hz_source') is not None else None
+    return {**stats, 'hz': 0.0, 'hz_recv': 0.0, 'hz_source': hz_source, 'bytes_per_sec': 0.0}
 
 
 def _rate_and_intervals(times: Sequence[float], count: Optional[int] = None

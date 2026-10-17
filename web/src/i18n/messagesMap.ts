@@ -19,7 +19,7 @@ export const mapJa = {
   'control.confirmTitle': '停止の確認',
   'control.confirmSingle': '{node} を停止します。よろしいですか?',
   'control.confirmLaunch': 'このノードは launch ファイル {file} で起動されています。停止すると次の {n} 個のノードも停止します: {nodes}',
-  'control.confirmGroup': 'このノードは起動対象 {target} のプロセスで動いています。停止すると次の {n} 個のノードも停止します: {nodes}',
+  'control.confirmGroup': 'このノードは起動リストの {target} のプロセスで動いています。停止すると次の {n} 個のノードも停止します: {nodes}',
   'control.confirmRestart': '再起動すると、次の {n} 個のノードもいったん停止します: {nodes}',
   'control.confirmOk': '停止する',
   'control.confirmRestartOk': '再起動する',

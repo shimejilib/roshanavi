@@ -31,6 +31,7 @@ class RawGraph:
     topics: Dict[str, List[str]] = field(default_factory=dict)  # name -> types
     publishers: Dict[str, List[Endpoint]] = field(default_factory=dict)
     subscribers: Dict[str, List[Endpoint]] = field(default_factory=dict)
+    lifecycle: Tuple[str, ...] = ()  # managed nodes (offer lifecycle_msgs get_state)
 
 
 def fq_name(name: str, namespace: str) -> str:
@@ -47,7 +48,18 @@ def collect(runtime: RosRuntime) -> RawGraph:
         pubs[topic] = [_endpoint(i) for i in runtime.publishers_info(topic)]
         subs[topic] = [_endpoint(i) for i in runtime.subscriptions_info(topic)]
     return RawGraph(nodes=list(runtime.node_names_and_namespaces()), topics=topics,
-                    publishers=pubs, subscribers=subs)
+                    publishers=pubs, subscribers=subs,
+                    lifecycle=tuple(lifecycle_nodes(runtime.service_names_and_types())))
+
+
+GET_STATE_TYPE = 'lifecycle_msgs/srv/GetState'
+
+
+def lifecycle_nodes(services: Iterable[Tuple[str, List[str]]]) -> List[str]:
+    """Nodes that offer ``<node>/get_state`` of the lifecycle_msgs type (sorted)."""
+    found = {name[:-len('/get_state')] for name, types in services
+             if name.endswith('/get_state') and GET_STATE_TYPE in types}
+    return sorted(n for n in found if n)
 
 
 def _endpoint(info: Any) -> Endpoint:
@@ -112,6 +124,8 @@ def build_snapshot(raw: RawGraph, show_self: bool = False,
         seen.add(node_id)
         info = (node_info or {}).get(node_id)
         node = {'id': node_id, 'name': name, 'namespace': namespace, 'role': ROLE_OTHER}
+        if node_id in raw.lifecycle:
+            node['lifecycle'] = True
         if info:
             node.update(role=info['role'], target_id=info['target_id'],
                         confidence=info['confidence'])

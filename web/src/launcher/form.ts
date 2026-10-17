@@ -25,6 +25,8 @@ export interface TargetForm {
   mine: boolean;
   autostart: boolean;
   autoRestart: boolean;
+  /** Kept from a launch-decomposition import (not editable). */
+  importedFrom: string;
 }
 
 export const EMPTY_FORM: TargetForm = {
@@ -43,6 +45,7 @@ export const EMPTY_FORM: TargetForm = {
   mine: true,
   autostart: false,
   autoRestart: false,
+  importedFrom: '',
 };
 
 export type Result<T> = { ok: true; value: T } | { ok: false; error: string };
@@ -148,6 +151,7 @@ export function buildTargetSpec(form: TargetForm, takenIds: Iterable<string>): R
       role: form.mine ? 'mine' : 'dependency',
       autostart: form.autostart,
       auto_restart: form.autoRestart,
+      ...(form.importedFrom ? { imported_from: form.importedFrom } : {}),
     },
   };
 }
@@ -181,5 +185,6 @@ export function formFromSpec(spec: TargetSpec): TargetForm {
     mine: spec.role === 'mine',
     autostart: spec.autostart ?? false,
     autoRestart: spec.auto_restart ?? false,
+    importedFrom: spec.imported_from ?? '',
   };
 }

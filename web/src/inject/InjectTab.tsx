@@ -33,7 +33,7 @@ function useRemoteList<T>(load: () => Promise<T[]>, enabled: boolean, reloadKey 
 
 export function InjectTab() {
   const { live } = useLive();
-  const { injectTopic } = useAppState();
+  const { injectTopic, openDialog } = useAppState();
   const [form, setForm] = useState<InjectForm>(DEFAULT_FORM);
   const [typeAuto, setTypeAuto] = useState(false);
   const [notice, setNotice] = useState<Notice>(null);
@@ -105,6 +105,12 @@ export function InjectTab() {
 
   return (
     <div className="inject-tab">
+      <div className="inject-intro">
+        <p className="muted small">{t('inject.tryIntro')}</p>
+        <button type="button" className="primary" onClick={() => openDialog({ kind: 'createInput', topic: form.topic || undefined, type: form.type || undefined })} data-testid="inject-create-input">
+          {t('input.create')}
+        </button>
+      </div>
       <form
         className="inject-form"
         onSubmit={(e) => {

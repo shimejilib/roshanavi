@@ -98,6 +98,8 @@ class StreamSource(RecordSource):
 
 
 class PublishJob(Job):
+    pausable = True
+
     def __init__(self, spec: InjectSpec, runtime: RosRuntime, source: RecordSource,
                  clock: Callable[[], float]):
         super().__init__(spec)
@@ -167,6 +169,8 @@ class PublishJob(Job):
             with self.lock:
                 if self.state != 'running':
                     return False
+                if self.paused:
+                    return True
                 if self._source.has(self.sent):
                     record = self._source.get(self.sent, self._clock() - self._started)
                     self._publisher.publish(self._build(record))
@@ -295,6 +299,16 @@ class Injector:
         if job is None:
             raise InjectError('not_found', f'no such job: {job_id}', 404)
         job.finish('stopped')
+        return job.to_dict()
+
+    def set_paused(self, job_id: str, paused: bool) -> Dict[str, Any]:
+        """Pause / resume sending of a running job (once / periodic / stream / media)."""
+        with self._lock:
+            job = self._jobs.get(job_id)
+        if job is None:
+            raise InjectError('not_found', f'no such job: {job_id}', 404)
+        job.set_paused(paused)
+        LOG.info('inject job %s %s', job_id, 'paused' if paused else 'resumed')
         return job.to_dict()
 
     def get(self, job_id: str) -> Dict[str, Any]:

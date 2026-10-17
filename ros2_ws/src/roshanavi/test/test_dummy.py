@@ -127,3 +127,31 @@ def test_export_launch_file_names_its_path_and_compiles(tmp_path):
         text = fh.read()
     assert f'#     ros2 launch {launch_file!r}' in text
     compile(text, launch_file, 'exec')
+
+
+def test_input_node_created_and_started_in_one_request(client):
+    """`＋ 入力ノードを作る`: POST /api/dummies?start=true on a brand-new topic."""
+    body = {'id': 'rn-input', 'name': 'rn_input', 'topic': '/rn_brand_new_topic',
+            'type': 'std_msgs/msg/String', 'mode': 'periodic', 'payload': {'data': 'n ${i}'},
+            'rate_hz': 5, 'autostart': True}
+    resp = client.post('/api/dummies?start=true', json=body)
+    assert resp.status_code == 201, resp.text
+    assert resp.json()['status'] in ('starting', 'running')
+    project = client.get('/api/project').json()
+    assert project['dirty'] is False  # autosaved
+    assert project['project']['dummies'][0]['topic'] == '/rn_brand_new_topic'
+
+    def on_graph():
+        graph = client.get('/api/graph').json()
+        topic = any(t['name'] == '/rn_brand_new_topic' for t in graph['topics'])
+        node = any(n['id'] == '/rn_input' and n['role'] == 'dummy' for n in graph['nodes'])
+        return topic and node
+    wait_for(on_graph, timeout=20)
+    params = wait_for(lambda: client.get('/api/nodes/rn_input/parameters').json()
+                      .get('parameters'), timeout=10)
+    assert any(p['name'] == 'paused' for p in params)
+    paused = client.put('/api/nodes/rn_input/parameters',
+                        json={'name': 'paused', 'type': 'bool', 'value': True})
+    assert paused.status_code == 200, paused.text  # roshanavi-owned: no confirmation needed
+    assert client.delete('/api/targets/rn-input').status_code == 200
+    assert client.get('/api/project').json()['project'].get('dummies', []) == []

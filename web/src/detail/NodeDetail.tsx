@@ -1,11 +1,17 @@
 import type { GraphSnapshot } from '../api/types';
 import { diagnosticText } from '../graph/diagnosticsText';
 import { t, type MessageKey } from '../i18n';
+import { useAppState } from '../state/AppState';
+import { useLive } from '../state/LiveProvider';
 import { NodeControls } from './NodeControls';
+import { NodeIO } from './NodeIO';
+import { NodeLifecycle } from './NodeLifecycle';
 import { NodeLauncher } from './NodeLauncher';
 import { NodeLinks } from './NodeLinks';
 
 export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnapshot | null }) {
+  const { openDialog } = useAppState();
+  const { live } = useLive();
   const node = graph?.nodes.find((n) => n.id === nodeId);
   const edges = graph?.edges.filter((e) => e.node === nodeId) ?? [];
   const diags = graph?.diagnostics.filter((d) => d.nodes.includes(nodeId)) ?? [];
@@ -25,9 +31,19 @@ export function NodeDetail({ nodeId, graph }: { nodeId: string; graph: GraphSnap
         </ul>
       )}
       <NodeControls node={node} />
+      {node?.lifecycle && <NodeLifecycle nodeId={nodeId} />}
+      {node && !node.job_id && (
+        <button type="button" onClick={() => openDialog({ kind: 'params', nodeId })} data-testid="detail-params">
+          {t('menu.params')}
+        </button>
+      )}
+      <NodeIO nodeId={nodeId} graph={graph} traffic={live.traffic} />
       <NodeLauncher node={node} />
-      <NodeLinks title={t('detail.publishesTo')} edges={edges.filter((e) => e.dir === 'pub')} showTopic />
-      <NodeLinks title={t('detail.subscribesTo')} edges={edges.filter((e) => e.dir === 'sub')} showTopic />
+      <details className="qos-details">
+        <summary>{t('io.qosDetails')}</summary>
+        <NodeLinks title={t('detail.publishesTo')} edges={edges.filter((e) => e.dir === 'pub')} showTopic />
+        <NodeLinks title={t('detail.subscribesTo')} edges={edges.filter((e) => e.dir === 'sub')} showTopic />
+      </details>
     </div>
   );
 }

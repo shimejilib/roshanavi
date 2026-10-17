@@ -24,6 +24,8 @@ export interface GraphNode {
   job_id?: string;
   /** Launcher target that owns this node (when mapped). */
   target_id?: string;
+  /** Managed (lifecycle) node: offers lifecycle_msgs services. */
+  lifecycle?: boolean;
   confidence?: MappingConfidence;
 }
 
@@ -99,14 +101,37 @@ export interface TrafficEntry {
   recent_count: number;
   history: number[];
   error?: string | null;
+  /** Averaging window of hz / bytes_per_sec (1, 5 or 10 s). */
+  window_sec?: number;
+  /** Nothing arrived for max(3 x expected period, 1 s): rates are reported as 0. */
+  stale?: boolean;
+  /** Span the rate was actually computed over (longer than window_sec when extended). */
+  rate_window_sec?: number | null;
+  /** extended = slower than the window, measured over the longest one; too_few = not measurable. */
+  rate_note?: 'extended' | 'too_few' | null;
   /** Publishers of this topic (non-self) and their share of the rate (backend rates.py). */
   source_count?: number;
   publishers?: PublisherRate[];
+  /** Subscribers and their theoretical rate (sum of QoS-compatible publishers, backend sub_rates.py). */
+  subscribers?: SubscriberRate[];
 }
 
 /** exact = counted by roshanavi, configured = dummy node setting, measured = the only
  * publisher (topic total), estimated = total minus known, unknown = cannot split. */
 export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown';
+
+/** theoretical = what compatible publishers send (not measured inside the subscriber);
+ * not_delivered = no QoS-compatible publisher. A tracing probe may later report measured. */
+export type SubscriberBasis = 'theoretical' | 'not_delivered' | 'measured';
+
+export interface SubscriberRate {
+  node: string;
+  hz: number | null;
+  bps: number | null;
+  basis: SubscriberBasis;
+  delivered: boolean;
+  sources: string[];
+}
 
 export interface PublisherRate {
   node: string;
@@ -133,6 +158,9 @@ export interface Job {
   created_at: number;
   finished_at: number | null;
   send_hz?: number | null;
+  paused?: boolean;
+  /** periodic / stream / media jobs can be paused (sending skipped, timing kept). */
+  pausable?: boolean;
   /** media / capture jobs */
   dropped?: number;
   companions?: string[];
@@ -149,6 +177,8 @@ export interface LiveMessage {
   targets?: Target[];
   build?: BuildStatus;
   recording?: RecordingStatus | null;
+  /** Server clock (epoch seconds) when the frame was built. */
+  server_time?: number;
 }
 
 // ---- Launcher (DESIGN §4.9) ------------------------------------------------
@@ -170,6 +200,8 @@ export interface TargetSpec {
   role?: 'mine' | 'dependency';
   autostart?: boolean;
   auto_restart?: boolean;
+  /** The launch file this target was decomposed from (informational). */
+  imported_from?: string;
 }
 
 export interface DummySpec {
@@ -178,13 +210,14 @@ export interface DummySpec {
   namespace?: string;
   topic: string;
   type: string;
-  mode: 'once' | 'periodic' | 'stream';
+  mode: 'once' | 'periodic' | 'stream' | 'media';
   payload?: Record<string, unknown>;
   rate_hz?: number;
   count?: number;
   source?: string;
   loop?: boolean;
   qos?: { reliability: string; durability: string; depth: number };
+  media?: MediaOptions;
   autostart?: boolean;
   auto_restart?: boolean;
 }
@@ -256,6 +289,10 @@ export interface ProjectState {
   exists: boolean;
   dirty: boolean;
   error: string | null;
+  /** Last autosave failure (null when the last save worked). */
+  save_error?: string | null;
+  /** False while a project file that failed to load is protected from overwriting. */
+  autosave?: boolean;
   project: { version: number; targets?: TargetSpec[]; dummies?: DummySpec[]; watch_topics?: string[] };
 }
 

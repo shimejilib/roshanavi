@@ -1,0 +1,18 @@
+# roshanavi demo project: copied to the server's project file when none exists yet
+# (docker compose `lab`: /data/roshanavi.yaml). Edit it from the web UI.
+version: 1
+targets:
+- id: talker
+  kind: run
+  package: demo_nodes_cpp
+  executable: talker
+  name: talker
+  role: mine
+  autostart: true
+- id: listener
+  kind: run
+  package: demo_nodes_cpp
+  executable: listener
+  name: listener
+  role: dependency
+  autostart: true

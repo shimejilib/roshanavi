@@ -18,7 +18,7 @@ from .graph import RawGraph, topic_is_live
 from .msgutil import MsgUtilError, resolve_type
 from .ros_runtime import RosRuntime, compatible_sub_qos
 from .stats import (Clock, DEFAULT_WINDOW_SEC, HISTORY_LEN, MAX_SAMPLES,  # noqa: F401
-                    Sample, TopicStats, compute_stats)
+                    WINDOWS_SEC, Sample, TopicStats, compute_stats)
 
 LOG = logging.getLogger(__name__)
 
@@ -34,7 +34,8 @@ EMPTY_STATS: Dict[str, Any] = {
     'hz': 0.0, 'hz_basis': 'receive', 'hz_recv': 0.0, 'hz_source': None,
     'bytes_per_sec': 0.0, 'avg_size': 0.0, 'jitter_ms': 0.0, 'jitter_recv_ms': 0.0,
     'dropped': None, 'drop_ratio': None, 'latency_ms': None,
-    'last_seen': None, 'total_count': 0, 'recent_count': 0, 'history': []}
+    'last_seen': None, 'total_count': 0, 'recent_count': 0, 'history': [],
+    'rate_window_sec': None, 'rate_note': None, 'stale': False}
 
 
 class _Tracked:
@@ -158,7 +159,9 @@ class TrafficMonitor:
         for s in stats:
             s.tick()
 
-    def snapshot(self) -> List[Dict[str, Any]]:
+    def snapshot(self, window_sec: Optional[float] = None) -> List[Dict[str, Any]]:
+        """All tracked topics; rates averaged over ``window_sec`` (default window if None)."""
+        window = window_sec or self._window
         with self._lock:
             items = sorted(self._topics.items())
         result = []
@@ -168,9 +171,10 @@ class TrafficMonitor:
                 'monitored': self.is_monitored(topic, tracked.type_name),
                 'collapsed': any(p.search(topic) for p in self._collapsed)}
             if tracked.stats is not None:
-                entry.update(tracked.stats.snapshot())
+                entry.update(tracked.stats.snapshot(window))
             else:
-                entry.update({**EMPTY_STATS, 'history': [], 'error': tracked.error})
+                entry.update({**EMPTY_STATS, 'history': [], 'window_sec': window,
+                              'error': tracked.error})
             result.append(entry)
         return result
 

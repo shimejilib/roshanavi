@@ -63,7 +63,7 @@ describe('confirmText', () => {
   it('lists nodes sharing one process (composable container)', () => {
     const tg = target({ nodes: [{ node: '/x', confidence: 'exact', pid: 1 }, { node: '/y', confidence: 'heuristic', pid: 1 }] });
     const c = nodeControl(node({ id: '/x', role: 'mine', target_id: 'talker' }), [tg]);
-    expect(confirmText('stop', c, '/x')).toContain('起動対象 talker のプロセス');
+    expect(confirmText('stop', c, '/x')).toContain('起動リストの talker のプロセス');
     expect(affectedNodes(target({ nodes: [] }), '/z')).toEqual(['/z']);
   });
 

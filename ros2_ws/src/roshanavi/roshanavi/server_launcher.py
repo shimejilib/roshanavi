@@ -62,8 +62,8 @@ def _register_targets(app: FastAPI, lab: Lab) -> None:
         return {'targets': launcher.targets()}
 
     @app.post('/api/targets', status_code=201)
-    def add_target(spec: TargetSpec) -> Dict[str, Any]:
-        return manager.add(spec)
+    def add_target(spec: TargetSpec, start: bool = False) -> Dict[str, Any]:
+        return launcher.add(spec, start=start)
 
     @app.get('/api/targets/{target_id}')
     def get_target(target_id: str) -> Dict[str, Any]:
@@ -71,11 +71,11 @@ def _register_targets(app: FastAPI, lab: Lab) -> None:
 
     @app.put('/api/targets/{target_id}')
     def put_target(target_id: str, spec: TargetSpec) -> Dict[str, Any]:
-        return manager.update(target_id, spec)
+        return launcher.update(target_id, spec)
 
     @app.delete('/api/targets/{target_id}')
     def delete_target(target_id: str) -> Dict[str, Any]:
-        return manager.remove(target_id)
+        return launcher.remove(target_id)
 
     @app.post('/api/targets/{target_id}/{action}')
     def target_action(target_id: str, action: str) -> Dict[str, Any]:
@@ -100,12 +100,13 @@ def _register_dummies(app: FastAPI, lab: Lab) -> None:
     launcher = lab.launcher
 
     @app.post('/api/dummies', status_code=201)
-    def add_dummy(spec: DummySpec) -> Dict[str, Any]:
-        return launcher.manager.add(spec)
+    def add_dummy(spec: DummySpec, start: bool = False) -> Dict[str, Any]:
+        """Register a persistent dummy (input node); ``?start=true`` also starts it."""
+        return launcher.add(spec, start=start)
 
     @app.put('/api/dummies/{dummy_id}')
     def put_dummy(dummy_id: str, spec: DummySpec) -> Dict[str, Any]:
-        return launcher.manager.update(dummy_id, spec)
+        return launcher.update(dummy_id, spec)
 
     @app.post('/api/inject/{job_id}/persist', status_code=201)
     def persist_job(job_id: str, req: PersistRequest) -> Dict[str, Any]:

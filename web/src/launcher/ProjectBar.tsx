@@ -1,9 +1,11 @@
+// Project file path + autosave status; reload lives in the ⚙ settings menu.
+
 import { useEffect, useState } from 'react';
 import { api, describeError } from '../api/client';
 import type { ProjectState } from '../api/types';
 import { t } from '../i18n';
 
-/** Project file path, unsaved indicator, explicit save / reload. `version` changes trigger a re-check. */
+/** `version` changes (launch list edits) trigger a re-check of the autosave state. */
 export function ProjectBar({ version }: { version: string }) {
   const [state, setState] = useState<ProjectState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -20,11 +22,12 @@ export function ProjectBar({ version }: { version: string }) {
     };
   }, [version]);
 
-  const run = async (fn: () => Promise<ProjectState>) => {
+  const reload = async () => {
+    if (!window.confirm(t('launcher.reloadConfirm'))) return;
     setBusy(true);
     setError(null);
     try {
-      setState(await fn());
+      setState(await api.reloadProject());
     } catch (err) {
       setError(describeError(err));
     } finally {
@@ -32,33 +35,33 @@ export function ProjectBar({ version }: { version: string }) {
     }
   };
 
+  const autosaveOff = state?.autosave === false;
   return (
     <div className="toolbar project-bar">
       <strong>{t('launcher.project')}</strong>
       {state && (
         <span className="muted small mono" title={state.path}>
-          {t('launcher.projectPath', { path: state.path })} {!state.exists && t('launcher.projectNew')}
+          {t('launcher.projectPath', { path: state.path })}
         </span>
       )}
       {state && (
-        <span className={state.dirty ? 'badge unsaved' : 'badge'} data-testid="project-dirty" data-dirty={state.dirty}>
-          {state.dirty ? t('launcher.unsaved') : t('launcher.saved')}
+        <span className={autosaveOff ? 'badge unsaved' : 'badge'} data-testid="project-autosave" title={t('launcher.autosaveHelp')}>
+          {autosaveOff ? t('launcher.autosaveOff') : t('launcher.autosaveOn')}
         </span>
       )}
-      <button type="button" className={state?.dirty ? 'primary' : ''} disabled={busy} onClick={() => void run(api.saveProject)} data-testid="project-save">
-        {t('launcher.save')}
-      </button>
-      <button
-        type="button"
-        disabled={busy}
-        onClick={() => {
-          if (!state?.dirty || window.confirm(t('launcher.reloadConfirm'))) void run(api.reloadProject);
-        }}
-      >
-        {t('launcher.reload')}
-      </button>
       {state?.error && <span className="error-text small">{t('launcher.projectError', { message: state.error })}</span>}
+      {state?.save_error && <span className="error-text small" role="alert">{t('launcher.saveError', { message: state.save_error })}</span>}
       {error && <span className="error-text small" role="alert">{error}</span>}
+      <span className="spacer" />
+      <details className="settings-menu">
+        <summary data-testid="launcher-settings">⚙ {t('launcher.settings')}</summary>
+        <div className="settings-items">
+          <button type="button" disabled={busy} onClick={() => void reload()} data-testid="project-reload">
+            {t('launcher.reload')}
+          </button>
+          <span className="muted small">{t('launcher.reloadHelp')}</span>
+        </div>
+      </details>
     </div>
   );
 }

@@ -1,13 +1,17 @@
-import { useMemo, useState } from 'react';
-import type { TrafficEntry } from '../api/types';
-import { STALE_AFTER_SEC } from '../graph/model';
+import { Fragment, useMemo, useState } from 'react';
 import { usePalette } from '../graph/usePalette';
 import { t, type MessageKey } from '../i18n';
-import { ageSec, formatBytes, formatHz, formatMs, formatPercent, formatRate } from '../lib/format';
 import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
-import { Sparkline } from './Sparkline';
+import { LastUpdateBadge } from '../timing/LastUpdate';
+import { WindowSelect } from '../timing/WindowSelect';
+import { toggleAllTopics, toggleTopic } from './endpoints';
+import { EndpointRows } from './EndpointRows';
+import { NodeTrafficView } from './NodeTrafficView';
 import { sortTraffic, toggleSort, type SortKey, type SortState } from './sort';
+import { TrafficRow } from './TrafficRow';
+
+type View = 'topic' | 'node';
 
 const COLUMNS: { key: SortKey; label: MessageKey; numeric: boolean }[] = [
   { key: 'topic', label: 'traffic.topic', numeric: false },
@@ -20,74 +24,14 @@ const COLUMNS: { key: SortKey; label: MessageKey; numeric: boolean }[] = [
   { key: 'last_seen', label: 'traffic.lastSeen', numeric: true },
 ];
 
-export function isStale(entry: TrafficEntry, nowMs: number): boolean {
-  if (entry.status !== 'ok' || !entry.monitored) return false;
-  const age = ageSec(entry.last_seen, nowMs);
-  return age == null || age > STALE_AFTER_SEC;
-}
-
-function lastSeenText(entry: TrafficEntry, nowMs: number): string {
-  const age = ageSec(entry.last_seen, nowMs);
-  return age == null ? t('traffic.never') : t('traffic.agoSec', { n: age.toFixed(age < 10 ? 1 : 0) });
-}
-
-function StatusBadge({ entry, stale }: { entry: TrafficEntry; stale: boolean }) {
-  if (entry.status !== 'ok') {
-    const key = `traffic.status.${entry.status}` as MessageKey;
-    return <span className="badge muted-badge" title={entry.error ?? undefined}>{t(key)}</span>;
-  }
-  return stale ? <span className="badge stale-badge">{t('traffic.stale')}</span> : null;
-}
-
-function HzCell({ entry }: { entry: TrafficEntry }) {
-  const basis = entry.hz_basis;
-  const help = basis === 'source' ? t('traffic.basis.sourceHelp') : t('traffic.basis.receiveHelp');
-  return (
-    <>
-      {formatHz(entry.hz)}{' '}
-      <span className={`badge basis-${basis}`} title={help} tabIndex={0}>
-        {t(`traffic.basis.${basis}`)}
-      </span>
-    </>
-  );
-}
-
-function DropCell({ entry }: { entry: TrafficEntry }) {
-  if (entry.dropped == null) return <span title={t('traffic.approxHelp')}>—</span>;
-  return (
-    <span className={entry.dropped > 0 ? 'warn-text' : undefined} title={t('traffic.approxHelp')}>
-      {entry.dropped} ({formatPercent(entry.drop_ratio)}) <span className="badge">≈</span>
-    </span>
-  );
-}
-
-function Row({ entry, nowMs, color, onSelect }: { entry: TrafficEntry; nowMs: number; color: string; onSelect: () => void }) {
-  const stale = isStale(entry, nowMs);
-  return (
-    <tr className={stale ? 'row-stale' : undefined} onClick={onSelect} data-topic={entry.topic}>
-      <td className="topic-cell">
-        <div className="mono">{entry.topic}</div>
-        <div className="muted small">{entry.type}</div>
-        <StatusBadge entry={entry} stale={stale} />
-      </td>
-      <td className="num"><HzCell entry={entry} /></td>
-      <td className="num">{formatRate(entry.bytes_per_sec)}</td>
-      <td className="num">{formatBytes(entry.avg_size)}</td>
-      <td className="num">{formatMs(entry.jitter_ms)}</td>
-      <td className="num"><DropCell entry={entry} /></td>
-      <td className="num" title={t('traffic.latencyHelp')}>{formatMs(entry.latency_ms)}</td>
-      <td className="num">{lastSeenText(entry, nowMs)}</td>
-      <td><Sparkline values={entry.history} color={color} /></td>
-    </tr>
-  );
-}
-
 export function TrafficTab() {
   const { live } = useLive();
   const { select } = useAppState();
   const palette = usePalette();
   const [sort, setSort] = useState<SortState>({ key: 'topic', desc: false });
   const [showCollapsed, setShowCollapsed] = useState(false);
+  const [view, setView] = useState<View>('topic');
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const nowMs = live.receivedAt || Date.now();
 
   const rows = useMemo(() => {
@@ -102,8 +46,25 @@ export function TrafficTab() {
           <input type="checkbox" checked={showCollapsed} onChange={(e) => setShowCollapsed(e.target.checked)} />
           {t('traffic.showCollapsed')}
         </label>
+        <div role="radiogroup" aria-label={t('traffic.view')} className="segmented">
+          {(['topic', 'node'] as const).map((v) => (
+            <label key={v} className={view === v ? 'seg active' : 'seg'} data-testid={`traffic-view-${v}`}>
+              <input type="radio" name="traffic-view" checked={view === v} onChange={() => setView(v)} />
+              {t(`traffic.view.${v}`)}
+            </label>
+          ))}
+        </div>
+        {view === 'topic' && (
+          <button type="button" onClick={() => setExpanded((prev) => toggleAllTopics(prev, rows.map((r) => r.topic)))} data-testid="traffic-expand-all">
+            {rows.length > 0 && rows.every((r) => expanded.has(r.topic)) ? t('traffic.collapseAll') : t('traffic.expandAll')}
+          </button>
+        )}
+        <WindowSelect />
+        <span className="spacer" />
+        <LastUpdateBadge />
       </div>
       <div className="table-wrap">
+        {view === 'node' ? <NodeTrafficView entries={rows} /> : (
         <table className="traffic-table">
           <thead>
             <tr>
@@ -124,10 +85,15 @@ export function TrafficTab() {
               </tr>
             )}
             {rows.map((entry) => (
-              <Row key={entry.topic} entry={entry} nowMs={nowMs} color={palette.edge} onSelect={() => select({ kind: 'topic', id: entry.topic })} />
+              <Fragment key={entry.topic}>
+                <TrafficRow entry={entry} nowMs={nowMs} color={palette.edge} onSelect={() => select({ kind: 'topic', id: entry.topic })}
+                  expanded={expanded.has(entry.topic)} onToggle={() => setExpanded((prev) => toggleTopic(prev, entry.topic))} />
+                {expanded.has(entry.topic) && <EndpointRows entry={entry} span={COLUMNS.length + 1} />}
+              </Fragment>
             ))}
           </tbody>
         </table>
+        )}
       </div>
     </div>
   );

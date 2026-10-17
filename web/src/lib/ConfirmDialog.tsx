@@ -28,7 +28,7 @@ export function ConfirmDialog({ title, text, okLabel, onOk, onCancel }: ConfirmD
         onKeyDown={(e) => e.key === 'Escape' && onCancel()}
       >
         <h3 id="confirm-title">{title}</h3>
-        <p id="confirm-text">{text}</p>
+        <p id="confirm-text" className="pre-line">{text}</p>
         <div className="row end">
           <button type="button" ref={cancelRef} onClick={onCancel}>{t('common.cancel')}</button>
           <button type="button" className="danger" onClick={onOk} data-testid="confirm-ok">{okLabel}</button>

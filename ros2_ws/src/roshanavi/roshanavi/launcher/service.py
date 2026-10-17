@@ -3,6 +3,11 @@
 Owns workspace discovery, the process manager, the build runner, the project
 file and the node<->process mapper, and implements the cross-cutting flows
 (project load/save, autostart, inject job -> persistent dummy, export).
+
+Every registry change made through this facade (add / update / remove /
+persist) is saved to the project file right away (autosave). A project file
+that failed to load is never overwritten automatically: autosave stays off
+until it is reloaded successfully or saved explicitly.
 """
 
 import logging
@@ -10,7 +15,7 @@ import os
 import re
 import threading
 import time
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
 from pydantic import ValidationError
 
@@ -23,15 +28,16 @@ from .dummy_config import export, format_errors
 from .errors import LauncherError
 from .manager import ProcessManager
 from .project import DEFAULT_FILE_NAME, ProjectStore
-from .schema import DummySpec, ProjectSpec, QosSpec, clean_dict
+from .schema import DummySpec, ProjectSpec, QosSpec, TargetSpec, clean_dict
 
 LOG = logging.getLogger(__name__)
 
 AUTOSTART_DELAY_SEC = 2.0  # let DDS discovery see pre-existing nodes first (baseline)
 PERSISTABLE_MODES = ('once', 'periodic', 'stream', 'media')
+Spec = Union[TargetSpec, DummySpec]
 
 
-def _id_from_name(name: str, taken: Iterable[str]) -> str:
+def id_from_name(name: str, taken: Iterable[str]) -> str:
     base = re.sub(r'[^a-z0-9_-]', '_', name.lower()).strip('_-') or 'dummy'
     base = base[:56] if validate.TARGET_ID_RE.match(base) else f'd_{base}'[:56]
     candidate, n, used = base, 2, set(taken)
@@ -56,6 +62,8 @@ class Launcher:
         self._autostart_pending = autostart
         self._watch_topics: List[str] = []
         self.load_error: Optional[str] = None
+        self.save_error: Optional[str] = None
+        self._autosave_blocked = False
         self.reload_project()
 
     # ---- project -----------------------------------------------------------
@@ -64,9 +72,11 @@ class Launcher:
             spec = self.project.load()
         except LauncherError as exc:
             self.load_error = str(exc)
-            LOG.error('project not loaded: %s', exc)
+            self._autosave_blocked = True
+            LOG.error('project not loaded (autosave is off until it loads): %s', exc)
             return self.project_state()
         self.load_error = None
+        self._autosave_blocked = False
         self.manager.replace_all([*spec.targets, *spec.dummies])
         self._watch_topics = list(spec.watch_topics)
         return self.project_state()
@@ -79,6 +89,7 @@ class Launcher:
         current = self.current_project()
         return {'path': self.project.path, 'exists': self.project.exists(),
                 'dirty': self.project.is_dirty(current), 'error': self.load_error,
+                'save_error': self.save_error, 'autosave': not self._autosave_blocked,
                 'project': clean_dict(current)}
 
     def put_project(self, spec: ProjectSpec) -> Dict[str, Any]:
@@ -88,8 +99,36 @@ class Launcher:
 
     def save_project(self) -> Dict[str, Any]:
         self.project.save(self.current_project())
-        self.load_error = None
+        self.load_error = self.save_error = None
+        self._autosave_blocked = False
         return self.project_state()
+
+    def autosave(self) -> None:
+        """Save after a change; failures are reported in the project state, not raised."""
+        if self._autosave_blocked:
+            return
+        try:
+            self.project.save(self.current_project())
+            self.save_error = None
+        except LauncherError as exc:
+            self.save_error = str(exc)
+            LOG.error('autosave failed: %s', exc)
+
+    # ---- registry (autosaved) ------------------------------------------------
+    def add(self, spec: Spec, start: bool = False) -> Dict[str, Any]:
+        result = self.manager.add(spec)
+        self.autosave()
+        return self.manager.start(spec.id) if start else result
+
+    def update(self, target_id: str, spec: Spec) -> Dict[str, Any]:
+        result = self.manager.update(target_id, spec)
+        self.autosave()
+        return result
+
+    def remove(self, target_id: str) -> Dict[str, Any]:
+        result = self.manager.remove(target_id)
+        self.autosave()
+        return result
 
     def set_watch_topics(self, topics: Sequence[str]) -> None:
         self._watch_topics = list(topics)
@@ -138,7 +177,7 @@ class Launcher:
         validate.node_name(name)
         taken = [t['id'] for t in self.manager.list()]
         try:
-            dummy = DummySpec(id=dummy_id or _id_from_name(name, taken), name=name,
+            dummy = DummySpec(id=dummy_id or id_from_name(name, taken), name=name,
                               namespace=namespace or None, topic=spec.topic, type=spec.type,
                               mode=spec.mode, payload=spec.payload, rate_hz=spec.rate_hz,
                               count=spec.count, source=spec.source, loop=spec.loop,
@@ -146,8 +185,7 @@ class Launcher:
                               autostart=autostart)
         except ValidationError as exc:
             raise LauncherError('invalid_request', format_errors(exc)) from exc
-        self.manager.add(dummy)
-        return self.manager.start(dummy.id)
+        return self.add(dummy, start=True)
 
     def export_dummies(self, directory: str, ids: Sequence[str] = ()) -> Dict[str, Any]:
         target_dir = validate.contained_dir(directory, self.workspace.root)

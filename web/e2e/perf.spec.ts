@@ -35,7 +35,7 @@ function syntheticFrame(withGraph: boolean): string {
 }
 
 test('200 elements with particles keep a smooth frame rate', async ({ page }) => {
-  await page.routeWebSocket(/\/ws\/live$/, (ws) => {
+  await page.routeWebSocket(/\/ws\/live(\?.*)?$/, (ws) => {
     ws.send(syntheticFrame(true));
     const timer = setInterval(() => ws.send(syntheticFrame(false)), 1000);
     ws.onClose(() => clearInterval(timer));

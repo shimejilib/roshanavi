@@ -164,5 +164,5 @@ def test_log_websocket_and_mutations_pass_the_security_middleware(client):
     resp = client.post('/api/targets', content='{}', headers={'Content-Type': 'text/plain'})
     assert resp.status_code == 415
     resp = client.post('/api/build', json={'package': 'roshanavi'},
-                       headers={'Host': 'evil.example:8080'})
+                       headers={'Host': 'evil.example:6871'})
     assert resp.status_code == 403
