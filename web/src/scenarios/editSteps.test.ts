@@ -100,3 +100,14 @@ describe('describeStep', () => {
       .toBe('メモリの増え方: /busy が 5 MB/分以下 (10 秒)');
   });
 });
+
+describe('call step (class node action)', () => {
+  it('is listed, editable and described in plain words', async () => {
+    const { STEP_KINDS, TOPIC_FIELDS, describeStep } = await import('./editSteps');
+    expect(STEP_KINDS).toContain('call');
+    expect(TOPIC_FIELDS.call).toEqual(['node', 'method']);
+    const step = { call: { node: '/moving_average', method: 'reset' } };
+    expect(describeStep(step)).toBe('呼ぶ: /moving_average の reset()');
+    expect(setField(step, 'method', 'clear')).toEqual({ call: { node: '/moving_average', method: 'clear' } });
+  });
+});

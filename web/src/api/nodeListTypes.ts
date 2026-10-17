@@ -6,7 +6,7 @@ export type RowControl = 'target' | 'lifecycle' | 'none';
 export type RowRole = 'mine' | 'dependency' | 'dummy' | 'transform' | 'function' | 'other';
 
 export interface RowOrigin {
-  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function' | 'external';
+  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function' | 'class' | 'external';
   package?: string;
   executable?: string;
   launch_file?: string;

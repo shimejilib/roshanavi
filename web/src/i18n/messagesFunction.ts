@@ -1,8 +1,8 @@
 // UI strings for function nodes (関数ノード, docs/design/nodes.md; merged into `ja`).
 
 export const functionJa = {
-  'function.create': '＋ 関数ノードを作る',
-  'function.title': '関数ノードを作る',
+  'function.create': '＋ 関数・クラスノードを作る',
+  'function.title': '関数・クラスノードを作る',
   'function.editTitle': '関数ノード {name} を変更',
   'function.intro': 'ふつうの Python 関数を、そのままノードとして動かします。ROS のコードは書きません。受け取った値で関数を呼び、戻り値を送ります。ファイルを保存すると自動で読み直します。',
   'function.name': 'ノード名',
@@ -56,11 +56,11 @@ export const functionJa = {
   'function.exportDir': '書き出し先 (ワークスペース内のフォルダ)',
   'function.exportHelp': '同じ動きをする、コメント付きの普通の rclpy ノードを書き出します。自分の関数が ROS ではどう包まれているかが読め、ツールなしで動かすときの移行先になります。',
   'function.exported': '書き出しました: {file} (実行: {command})',
-  'graph.legend.function': '関数ノード',
-  'nodes.role.function': '関数',
-  'detail.role.function': '関数ノード (roshanavi が動かす Python 関数)',
-  'launcher.role.function': '関数',
-  'nodes.roleFilter.function': '関数',
+  'graph.legend.function': '関数・クラスノード',
+  'nodes.role.function': '関数・クラス',
+  'detail.role.function': '関数・クラスノード (roshanavi が動かす Python の関数・クラス)',
+  'launcher.role.function': '関数・クラス',
+  'nodes.roleFilter.function': '関数・クラス',
   'nodes.origin.function': 'roshanavi 関数ノード (→ {topic})',
   'nodes.origin.functionNoTopic': 'roshanavi 関数ノード',
   'menu.editFunction': '関数ノードの設定を変更',

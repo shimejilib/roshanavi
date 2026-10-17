@@ -3,7 +3,7 @@
 import type { Condition, Op, StepKind, StepRaw } from '../api/scenarioTypes';
 
 export const STEP_KINDS: StepKind[] = [
-  'send', 'start', 'stop', 'play', 'wait', 'expect', 'always', 'never', 'rate', 'throughput', 'latency', 'resources', 'mem_growth',
+  'send', 'start', 'stop', 'play', 'wait', 'expect', 'always', 'never', 'rate', 'throughput', 'latency', 'resources', 'mem_growth', 'call',
 ];
 export const OPS: Op[] = ['eq', 'ne', 'lt', 'le', 'gt', 'ge', 'range', 'approx', 'regex', 'contains', 'exists', 'len_eq', 'len_range'];
 
@@ -29,6 +29,8 @@ export const TOPIC_FIELDS: Partial<Record<StepKind, string[]>> = {
   // not a topic: the node whose process is measured (resource monitoring)
   resources: ['node'],
   mem_growth: ['node'],
+  // a class node's action method (docs/design/nodes.md)
+  call: ['node', 'method'],
 };
 export const WHERE_KINDS: StepKind[] = ['expect', 'always', 'never'];
 
@@ -191,6 +193,8 @@ export function describeStep(step: StepRaw): string {
         .join('、');
       return `負荷: ${String(b.node)} が ${limits} (${String(b.for ?? 5)} 秒)`;
     }
+    case 'call':
+      return `呼ぶ: ${String(b.node)} の ${String(b.method)}()`;
     case 'mem_growth':
       return `メモリの増え方: ${String(b.node)} が ${String(b.max_mb_per_min)} MB/分以下 (${String(b.for)} 秒)`;
   }

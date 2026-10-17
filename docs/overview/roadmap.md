@@ -14,6 +14,7 @@
 5d. ✅ P4.7 詳細計測モード (LTTng のトレース): 受信・処理の実測、処理時間、処理が追いついていない診断 ([measurement.md#詳細計測モード](../design/measurement.md#詳細計測モード-トレース計測-p47))
 6. ✅ P5 サンプルノード (`roshanavi_examples`, [nodes.md#同梱サンプルノード](../design/nodes.md#同梱サンプルノード-roshanavi_examples-p5))・変換ノード ([nodes.md#変換ノード](../design/nodes.md#変換ノード-p5))・パーセプションデモとプロジェクトの切り替え ([launcher.md#プロジェクトファイル](../design/launcher.md#プロジェクトファイル-p3)、[launcher.md#デモ構成](../design/launcher.md#デモ構成-p45a))
 6a. ✅ P5.5 初心者向け: データの種類と詳細設定モード ([nodes.md#データの種類](../design/nodes.md#データの種類-ros-のメッセージ型を意識させないp55))・関数ノード ([nodes.md#関数ノード](../design/nodes.md#関数ノード-ふつうの関数をそのままノードにするp55))
+6b. ✅ クラスノード (#43): 状態を持つ Python クラスをそのままノードに (`__init__` の引数 = パラメータ、メソッドをトピックや操作ボタンに、単一スレッド、close、ホットリロードでの状態の扱い)、シナリオの `call`、rclpy / lifecycle ノードへのコード書き出し ([nodes.md#クラスノード](../design/nodes.md#クラスノード-状態を持つ処理をそのままノードにする))
 7. ✅ P6 シナリオ: runner / CLI / JUnit / Python API (launch_pytest) / 記録モード / Scenarios タブ ([scenarios.md](../design/scenarios.md)、[ui.md#実装メモ (P6: シナリオ)](../design/ui.md#実装メモ-p6-シナリオ))
 8. P7 監査、README (サービス・アクションは今後対応予定と明記)、デモ GIF
 9. ✅ P8 リソース監視 Lv1 (#32): 同じ PC の CPU・メモリ・ディスク・ネットワーク・GPU、ノード ⇄ プロセスの対応づけ、メモリリークと UDP 受信バッファ溢れの診断、地図のバッジ・リソースタブ、シナリオの `resources` / `mem_growth` ([resources.md](../design/resources.md))。Lv2 (複数 PC・コンテナ) は将来の課題

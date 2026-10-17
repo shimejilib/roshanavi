@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .. import data_kinds
-from ..launcher.schema import FunctionSpec
+from ..launcher.schema import ClassSpec, FunctionSpec
 from ..transform.pipeline import Joiner
 from .loader import FunctionLoader, Problem, describe, required_positional, user_location
 
@@ -32,21 +32,41 @@ class Port:
     type: str
 
 
-def adopt_topic_types(spec: FunctionSpec,
-                      topic_types: Callable[[str], Sequence[str]]) -> FunctionSpec:
+def adopt_input_types(inputs: Sequence[Any],
+                      topic_types: Callable[[str], Sequence[str]]) -> List[Any]:
     """Inputs given only a kind take the type of the existing topic when exactly one of its
     types carries that kind (Lyrical's /chatter is example_interfaces/msg/String, not the
-    std_msgs/msg/String the kind ``string`` would pick). Otherwise the spec is unchanged."""
-    inputs = []
-    for port in spec.inputs:
+    std_msgs/msg/String the kind ``string`` would pick). Others are returned as they are."""
+    adopted = []
+    for port in inputs:
         if port.type is None and port.kind not in (None, data_kinds.MESSAGE_KIND):
             fitting = [t for t in topic_types(port.topic) if data_kinds.fits(port.kind, t)]
             if len(fitting) == 1:
                 port = port.model_copy(update={'type': fitting[0]})
-        inputs.append(port)
+        adopted.append(port)
+    return adopted
+
+
+def adopt_topic_types(spec: FunctionSpec,
+                      topic_types: Callable[[str], Sequence[str]]) -> FunctionSpec:
+    """``adopt_input_types`` for a function node; the spec itself when nothing changes."""
+    inputs = adopt_input_types(spec.inputs, topic_types)
     if all(a is b for a, b in zip(inputs, spec.inputs)):
         return spec
     return spec.model_copy(update={'inputs': inputs})
+
+
+def adopt_class_topic_types(spec: ClassSpec,
+                            topic_types: Callable[[str], Sequence[str]]) -> ClassSpec:
+    """``adopt_input_types`` for every bound method of a class node."""
+    methods = []
+    for method in spec.methods:
+        inputs = adopt_input_types(method.inputs, topic_types)
+        changed = any(a is not b for a, b in zip(inputs, method.inputs))
+        methods.append(method.model_copy(update={'inputs': inputs}) if changed else method)
+    if all(a is b for a, b in zip(methods, spec.methods)):
+        return spec
+    return spec.model_copy(update={'methods': methods})
 
 
 def resolve_ports(spec: FunctionSpec) -> Tuple[List[Port], Port]:
@@ -70,7 +90,29 @@ class FunctionStats:
         return asdict(self)
 
 
-def _stamp_of(msg: Any) -> Any:
+class ErrorLog:
+    """Logs at most one error line per 5 s and says how many more were held back."""
+
+    def __init__(self, clock: Callable[[], float] = time.monotonic):
+        self._clock = clock
+        self._lock = threading.Lock()
+        self._logged_at: Optional[float] = None
+        self._suppressed = 0
+
+    def emit(self, title: str, text: str) -> None:
+        now = self._clock()
+        with self._lock:
+            log_it = self._logged_at is None or now - self._logged_at >= ERROR_LOG_EVERY_SEC
+            suppressed, self._suppressed = (self._suppressed, 0) if log_it else \
+                (0, self._suppressed + 1)
+            if log_it:
+                self._logged_at = now
+        if log_it:
+            more = f' (+{suppressed} more since the last report)' if suppressed else ''
+            LOG.error('%s: %s%s', title, text, more)
+
+
+def stamp_of(msg: Any) -> Any:
     header = getattr(msg, 'header', None)
     stamp = getattr(header, 'stamp', None)
     return stamp if stamp is not None and (stamp.sec or stamp.nanosec) else None
@@ -90,8 +132,7 @@ class FunctionCore:
         self._started = clock()
         self._lock = threading.Lock()       # stats
         self._call_lock = threading.Lock()  # one call at a time
-        self._logged_at: Optional[float] = None
-        self._suppressed = 0
+        self._errors = ErrorLog(clock)
         self._joiner = Joiner([p.topic for p in self.inputs], spec.trigger) \
             if spec.call == 'multi_input' else None
 
@@ -104,7 +145,7 @@ class FunctionCore:
         except (data_kinds.KindError, ValueError, TypeError) as exc:
             self.report(Problem('convert', f'{port.topic}: {exc}', None))
             return
-        stamp = _stamp_of(msg)
+        stamp = stamp_of(msg)
         if self._joiner is None:
             self._invoke([value], stamp)
             return
@@ -162,19 +203,11 @@ class FunctionCore:
 
     def report(self, problem: Problem) -> None:
         """Count an error, keep it for the UI and log it (at most one line per 5 s)."""
-        now = self._clock()
         with self._lock:
             if problem.kind != 'import':
                 self.stats.errors += 1
             self.last_error = {**problem.to_dict(), 'at': time.time()}
-            log_it = self._logged_at is None or now - self._logged_at >= ERROR_LOG_EVERY_SEC
-            suppressed, self._suppressed = (self._suppressed, 0) if log_it else \
-                (0, self._suppressed + 1)
-            if log_it:
-                self._logged_at = now
-        if log_it:
-            more = f' (+{suppressed} more since the last report)' if suppressed else ''
-            LOG.error('関数でエラーが起きました / the function failed: %s%s', problem.text(), more)
+        self._errors.emit('関数でエラーが起きました / the function failed', problem.text())
 
     def on_reload(self, problem: Optional[Problem]) -> None:
         if problem is not None:

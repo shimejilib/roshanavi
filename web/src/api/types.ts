@@ -6,6 +6,7 @@ import type { SubscriberTrace, TracingStatus } from './tracingTypes';
 import type { MediaOptions, RecordingStatus } from './mediaTypes';
 import type { TransformSpec } from './transformTypes';
 import type { FunctionSpec, FunctionStatus } from './functionTypes';
+import type { ClassSpec, ClassStatus } from './classTypes';
 
 export type Role = 'mine' | 'dependency' | 'dummy' | 'transform' | 'function' | 'other';
 
@@ -299,9 +300,9 @@ export interface TargetNode {
 
 export interface Target {
   id: string;
-  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function';
+  kind: 'run' | 'launch' | 'dummy' | 'transform' | 'function' | 'class';
   role: 'mine' | 'dependency' | 'dummy' | 'transform' | 'function';
-  spec: TargetSpec | DummySpec | TransformSpec | FunctionSpec;
+  spec: TargetSpec | DummySpec | TransformSpec | FunctionSpec | ClassSpec;
   status: TargetStatus;
   exit_code: number | null;
   problem: string | null;
@@ -313,8 +314,8 @@ export interface Target {
   restart_count: number;
   pending_restart: boolean;
   nodes?: TargetNode[];
-  /** Function nodes: the running node's status (null when stopped / not reported yet). */
-  function_status?: FunctionStatus | null;
+  /** Function / class nodes: the running node's status (null when stopped / not reported yet). */
+  function_status?: FunctionStatus | ClassStatus | null;
 }
 
 export interface WorkspacePackage {

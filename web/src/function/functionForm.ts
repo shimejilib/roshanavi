@@ -26,9 +26,9 @@ export interface FunctionForm {
 }
 
 export const MAX_FUNCTION_INPUTS = 8;
-const TOPIC_RE = /^(\/[A-Za-z_][A-Za-z0-9_]*)+$/;
-const NODE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const EMPTY_ROW: FnPortRow = { topic: '', kind: '', type: '' };
+export const TOPIC_RE = /^(\/[A-Za-z_][A-Za-z0-9_]*)+$/;
+export const NODE_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+export const EMPTY_ROW: FnPortRow = { topic: '', kind: '', type: '' };
 
 export function defaultFunctionForm(topic = ''): FunctionForm {
   return {
@@ -76,11 +76,11 @@ export function applyFunction(form: FunctionForm, info: FunctionInfo, nameTouche
   return { ...form, fn: info.name, call, inputs: rows, output: { ...output, topic: output.topic || `/${name}_out` }, name };
 }
 
-function portSpec(row: FnPortRow): FunctionPortSpec {
+export function portSpec(row: FnPortRow): FunctionPortSpec {
   return { topic: normalizeTopic(row.topic), kind: row.kind as PortKind, ...(row.type ? { type: row.type } : {}) };
 }
 
-function checkPort(row: FnPortRow): string | null {
+export function checkPort(row: FnPortRow): string | null {
   const topic = normalizeTopic(row.topic);
   if (!TOPIC_RE.test(topic)) return t('function.error.topic', { topic: row.topic || '—' });
   if (!row.kind) return t('function.error.kind', { topic });

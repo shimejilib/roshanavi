@@ -13,7 +13,8 @@ export type StepKind =
   | 'throughput'
   | 'latency'
   | 'resources'
-  | 'mem_growth';
+  | 'mem_growth'
+  | 'call';
 
 export type Op =
   | 'eq'
@@ -159,6 +160,7 @@ export type RecordEvent =
 export type RecordedOp =
   | { kind: 'inject'; job_id: string; request: Record<string, unknown> }
   | { kind: 'inject_stop'; job_id: string }
+  | { kind: 'class_call'; node: string; method: string }
   | { kind: 'target_start' | 'target_stop' | 'target_restart'; target_id: string; target_kind?: string };
 
 export interface RecordSession {

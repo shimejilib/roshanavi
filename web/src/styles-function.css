@@ -1,4 +1,4 @@
-/* データの種類 picker, ⚙ 設定 in the top bar, function-node dialog (docs/design/ui.md). */
+/* データの種類 picker, ⚙ 設定 in the top bar, function / class node dialog (docs/design/ui.md). */
 .app-settings { margin-left: auto; margin-right: 8px; }
 .app-settings .settings-items { min-width: 280px; }
 .data-kind-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
@@ -21,6 +21,16 @@
 .function-status h4 { margin: 0 0 4px; }
 .function-status p { margin: 2px 0; }
 .function-export .row { align-items: flex-end; gap: 8px; }
+/* class nodes */
+.node-mode { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.class-methods .plain-list, .class-actions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.class-method { border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px; display: flex; flex-direction: column; gap: 6px; }
+.class-method[data-use='none'] { opacity: 0.8; }
+.class-method-body { display: flex; flex-direction: column; gap: 8px; padding-left: 8px; border-left: 3px solid #db2777; }
+.class-output-row { display: flex; flex-direction: column; gap: 4px; }
+.class-params label { display: flex; flex-direction: column; gap: 4px; }
+.class-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.notice-box { padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--accent); }
 @media (max-width: 640px) {
   .function-port-row { grid-template-columns: minmax(0, 1fr); }
 }

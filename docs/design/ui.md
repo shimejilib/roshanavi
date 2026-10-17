@@ -124,6 +124,7 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 | 自分 / 依存ノード | 停止・再起動 (止まっていれば起動)、ログを見る、起動設定を編集、ビルドして再起動 (ワークスペースのパッケージのみ)、パラメータを見る・変更する、入出力だけ表示 |
 | 常駐ダミー (入力ノード) | 停止・再起動、一時停止 / 再開 (`paused` パラメータの現在値を取得して、合う方だけを出す。取得できない間は両方)、内容・レートの変更、launch に書き出し、ログ、パラメータ、入出力だけ表示 |
 | 注入ジョブ (お試し送信) | 停止、一時停止 / 再開 (periodic・stream・media のみ)、内容の変更と書き出しは無効 (理由を表示) |
+| 関数・クラスノード | 停止・再起動、(クラスのみ) 操作メソッドごとの「<メソッド> を呼ぶ」、設定の変更 (関数 / クラス)、launch に書き出し、ログ、パラメータ、入出力だけ表示 |
 | 外部ノード | 停止は無効 (理由を表示)、パラメータを見る (閲覧のみ。変更は確認ダイアログの後)、入出力だけ表示、詳細 (送受信トピックと QoS) |
 | トピック | 中身を見る、お試し送信、入力ノードを作る、録画 (録画タブで選択済み)、監視 ON/OFF、型の定義を見る、上流・下流だけ表示 |
 | エッジ | QoS の詳細、届かない理由 (両側の QoS の表と、診断・送信者なし・最近流れていない の平易な説明) |
@@ -173,12 +174,15 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - 画面の保護: `lib/ErrorBoundary.tsx` をアプリ全体・各タブ・地図・右ペイン・ダイアログに置き、描画中の例外は日本語の「エラーが起きました」パネル (エラー内容・再読み込み・知らせてほしい旨) に置き換わる。1 か所の不具合で全画面が真っ黒にならない。`t()` は存在しないキーでも例外を投げずキーを表示する (原因: `detail.role.transform` が未定義で変換ノードを選ぶと全画面が消えた。回帰: `e2e/transform-crash.spec.ts`、`i18n.test.ts`)。
 - i18n: `i18n/messagesTransform.ts`。スタイル: `styles-transform.css`。スクリーンショット: [`transform-editor.png`](../images/transform-editor.png) (`e2e/transform.spec.ts`)、[`perception-demo-map.png`](../images/perception-demo-map.png) (`e2e/perception.spec.ts`)。
 
-## 実装メモ (P5.5: データの種類・詳細設定モード・関数ノード)
+## 実装メモ (P5.5: データの種類・詳細設定モード・関数ノード・クラスノード)
 - `datakind/DataKindField.tsx`: 入力ノードの作成画面、変換ノードの入力と出力、お試し送信、関数ノードの入力と出力で共通。既存のトピック (地図のトピックに型がある) なら検出結果だけを出し (`<id>-detected`)、新しいトピックなら種類の選択 (`<id>-kind`)。詳細設定モードでは ROS の型の検索 (`<id>-raw-search`) とグループ付きの一覧 (`<id>-raw-type`、`optgroup` = よく使う型 / ワークスペースの独自型 / パッケージ名)。純ロジックは `datakind/kinds.ts` (表示・検索・既存の型 → 種類)、カタログは `useDataKinds.ts` (1 ページ 1 回取得)。
 - 画面右上の ⚙ 設定 (`datakind/SettingsMenu.tsx`) に「詳細設定モード」。`advancedMode.ts` が `localStorage` を try/catch で読み書きし、同じページの全ダイアログに即時に反映する。
-- 関数ノード: 地図のツールバー「＋ 関数ノードを作る」(`function/CreateFunctionDialog.tsx`)。モジュール (ワークスペースの Python パッケージ) → 関数 (シグネチャ付き。ファイル:行と docstring を表示) → 呼び出し方 (引数の数から推す: 0 → 周期、1 → 受信ごと、必須 2 以上 → 複数入力) → 入力 (引数ごとに トピック + データの種類。注釈から種類を推す) → 出力 (戻り値の注釈から種類を推す)。純ロジック `function/functionForm.ts`。編集時 (地図の右クリック「関数ノードの設定を変更」) は動作状況 (`FunctionStatusPanel.tsx`: 状態・数・最後のエラーと場所) と「ROS ノードのコードとして書き出す」。右ペインのノードの「起動」欄にも同じ動作状況を出す。
+- 関数ノード: 地図のツールバー「＋ 関数・クラスノードを作る」(`function/CreateFunctionDialog.tsx`。先頭の「作るもの」で 関数 / クラス を選ぶ。関数は `function/FunctionMode.tsx`)。モジュール (ワークスペースの Python パッケージ) → 関数 (シグネチャ付き。ファイル:行と docstring を表示) → 呼び出し方 (引数の数から推す: 0 → 周期、1 → 受信ごと、必須 2 以上 → 複数入力) → 入力 (引数ごとに トピック + データの種類。注釈から種類を推す) → 出力 (戻り値の注釈から種類を推す)。純ロジック `function/functionForm.ts`。編集時 (地図の右クリック「関数ノードの設定を変更」) は動作状況 (`FunctionStatusPanel.tsx`: 状態・数・最後のエラーと場所) と「ROS ノードのコードとして書き出す」。右ペインのノードの「起動」欄にも同じ動作状況を出す。
+- クラスノード (#43、`function/ClassMode.tsx`): 「作るもの」で「クラス」→ モジュール → クラス (`__init__` のシグネチャ付き。ファイル:行を表示) → ノード名 → **初期化の設定** (`__init__` の引数 = ROS パラメータ。型ヒントのある引数ごとに既定値入りの入力欄。値は種類 (整数・小数・true/false・数値の並び・JSON・文字列) で検査し、既定値と同じなら保存しない。`on_param_change` があるかで「変えると状態が残る / 作り直す」を説明) → **メソッドの使い方** (公開メソッドごとに 使わない / トピックにつなぐ / 操作メソッド (引数なしのものだけ)。「トピックにつなぐ」は呼び出し方 (受信ごと・周期・複数入力) と入力・出力 (関数ノードと同じデータの種類の選択) と「dict を返し、キーごとに別のトピックへ送る」)。最初に、引数のあるメソッド 1 つを「つなぐ」、引数のないメソッドを「操作メソッド」に仮決めする (`classForm.ts applyClass`)。出力トピックの仮の名前はノード名に追従する (利用者が書き換えた分は動かさない)。純ロジックは `function/classForm.ts` と `ClassNodeFields.tsx` (部品)。編集 (右クリック「クラスノードの設定を変更」) では `ClassStatusPanel.tsx` が動作状況 (状態・パラメータの現在値・数・最後のエラーと場所・**「状態をリセットしました」の通知**・操作メソッドごとの「<メソッド> を呼ぶ」ボタンと最後の呼び出し) と「ROS ノードのコードとして書き出す」(「ライフサイクルノードとして書き出す」チェック) を出す。右ペインのノードの「起動」欄にも同じ動作状況とボタンを出す。
+- 役割の表示: クラスノードは関数ノードと同じ役割 `function` (同じ色。ターゲットの種類は `class`)。凡例「関数・クラスノード」、ノード一覧の役割「関数・クラス」(絞り込みも)、由来「roshanavi クラスノード (→ トピック)」。右クリックメニューは、動いている間「<メソッド> を呼ぶ」(操作メソッドごと。止まっていれば無効で理由を出す) / クラスノードの設定を変更 / launch に書き出し / ログ / パラメータ / 入出力だけ表示。「<メソッド> を呼ぶ」は `POST /api/classes/{id}/call`。
+- シナリオの編集画面・記録モード: ステップ `call` (ノード・メソッド) を編集でき、記録モード中にボタンを押すと `call` ステップが記録される (`scenarios/editSteps.ts`、`record.ts`)。
 - ノード一覧 ([ui.md#実装メモ (P4.5b: ノード一覧・lifecycle・launch の取り込み)](ui.md#実装メモ-p45b-ノード一覧lifecyclelaunch-の取り込み)) の行と一括操作の計画は、`GET /api/node-list` の同じ応答 (`rows` と `targets`) から作る (`nodelist/bulk.ts planFromSnapshot`)。以前は行が 2 秒ごとのポーリング、計画が WebSocket の `live.targets` で、停止直後に一括起動すると計画が空になることがあった (issue #1)。
-- i18n: `i18n/messagesKinds.ts`、`i18n/messagesFunction.ts`。スタイル: `styles-function.css`。スクリーンショット: [`data-kind-picker.png`](../images/data-kind-picker.png) (`e2e/datakind.spec.ts`)、[`function-dialog.png`](../images/function-dialog.png) (`e2e/function.spec.ts`)。
+- i18n: `i18n/messagesKinds.ts`、`i18n/messagesFunction.ts`、`i18n/messagesClass.ts`。スタイル: `styles-function.css`。スクリーンショット: [`data-kind-picker.png`](../images/data-kind-picker.png) (`e2e/datakind.spec.ts`)、[`function-dialog.png`](../images/function-dialog.png) (`e2e/function.spec.ts`)、[`class-node-dialog.png`](../images/class-node-dialog.png)・[`class-node-pane.png`](../images/class-node-pane.png) (`e2e/class.spec.ts`)。
 
 ## 実装メモ (P6: シナリオ)
 仕様と判定のルールは [scenarios.md](scenarios.md)。

@@ -87,6 +87,17 @@ functions:                # 関数ノード (docs/design/nodes.md)。id は targ
   call: on_message                   # on_message | periodic (rate_hz) | multi_input (trigger)
   inputs: [{topic: /chatter, kind: string}]          # kind = データの種類 (docs/design/nodes.md)、type は任意
   output: {topic: /shouted, kind: string}
+classes:                  # クラスノード (docs/design/nodes.md)。id は他の種類と合わせて一意
+- id: moving_average
+  name: moving_average
+  module: roshanavi_examples.stateful
+  class_name: MovingAverage
+  params: {window: 5}                # __init__ の引数の開始値 (ROS パラメータ)
+  methods:                           # トピックにつなぐメソッド (関数ノードと同じ call / inputs / output(s))
+  - method: process
+    inputs: [{topic: /number, kind: float}]
+    outputs: [{topic: /average, kind: float}]   # dict を返すなら各出力に key:
+  actions: [reset]                   # 操作メソッド: /<node>/reset (std_msgs/Empty) とボタンで呼ぶ
 watch_topics: [/chat]
 ```
 - pydantic のスキーマで検証する。未知のキーは拒否し、エラーはパス付き (`targets.0.colour: extra fields not permitted`、YAML の構文エラーは行・列付き)。

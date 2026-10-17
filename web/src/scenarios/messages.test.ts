@@ -12,10 +12,10 @@ describe('scenario messages', () => {
       ...OPS.map((op) => `scn.op.${op}`),
       ...['volatile', 'changes', 'big', 'element'].map((r) => `scn.pick.reason.${r}`),
       ...['once', 'periodic', 'stream', 'media', 'bag'].map((m) => `scn.rec.mode.${m}`),
-      ...['target_start', 'target_stop', 'target_restart'].map((o) => `scn.rec.op.${o}`),
+      ...['target_start', 'target_stop', 'target_restart', 'class_call'].map((o) => `scn.rec.op.${o}`),
       ...['always', 'never', 'rate', 'throughput', 'latency'].map((k) => `scn.rec.rangeKind.${k}`),
       ...['topic', 'input', 'output', 'within', 'count', 'for', 'min_count', 'min_hz', 'max_hz', 'min_ratio', 'p50_ms', 'p95_ms', 'max_ms',
-        'node', 'cpu_max', 'mem_max_mb', 'max_mb_per_min']
+        'node', 'method', 'cpu_max', 'mem_max_mb', 'max_mb_per_min']
         .map((f) => `scn.field.${f}`),
     ];
     for (const key of keys) expect(ja[key as MessageKey], key).toBeTruthy();

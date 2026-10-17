@@ -1,6 +1,6 @@
-# roshanavi — ノード (入力・変換・関数・サンプル)
+# roshanavi — ノード (入力・変換・関数・クラス・サンプル)
 
-入力ノード (恒久ダミー)、変換ノード、関数ノード、同梱サンプルノード、データの種類 (ROS のメッセージ型を意識させない仕組み)。起動・停止・プロジェクトへの保存は [launcher.md](launcher.md)、画面は [ui.md](ui.md)。
+入力ノード (恒久ダミー)、変換ノード、関数ノード、クラスノード、同梱サンプルノード、データの種類 (ROS のメッセージ型を意識させない仕組み)。起動・停止・プロジェクトへの保存は [launcher.md](launcher.md)、画面は [ui.md](ui.md)。
 
 ## 恒久ダミーノード (P3)
 - `ros2 run roshanavi dummy --config <yaml> --ros-args -r __node:=<name>`: 1 つの注入 (once / periodic / stream、`${}` 式、JSONL / CSV) を **独立した ROS ノード** として実行する。injector をそのまま使い、SIGINT / SIGTERM まで動き続ける (once や count 付きでも、送り終えた後もノードは残る)。設定エラーは終了コード 2、注入エラーは 1。
@@ -124,7 +124,7 @@
 def shout(text: str) -> str:
     return text.upper() + "!"
 ```
-roshanavi で「＋ 関数ノードを作る」→ モジュール `my_pkg.logic`、関数 `shout`、入力 `/chatter`、出力 `/shouted` を選ぶだけで、ノードとして動く。
+roshanavi で「＋ 関数・クラスノードを作る」→「関数」→ モジュール `my_pkg.logic`、関数 `shout`、入力 `/chatter`、出力 `/shouted` を選ぶだけで、ノードとして動く。
 
 | 呼び出し方 (`call`) | 内容 |
 |---|---|
@@ -136,7 +136,7 @@ roshanavi で「＋ 関数ノードを作る」→ モジュール `my_pkg.logic
 - 入力に種類 (`kind`) だけを書いて型 (`type`) を省いたときは、起動の時点で地図にあるそのトピックの型のうち、その種類を運べるものが 1 つだけならその型で購読する (`function/core.adopt_topic_types`。例: Lyrical のデモの `/chatter` は `example_interfaces/msg/String` なので、`kind: string` の `text_shout` もそれを購読する)。トピックがまだ無い・候補が複数なら種類の既定の型 (`std_msgs/msg/String` など)。書かれた型は常にそのまま使う。
 - 例外が起きたら、そのメッセージは送らず、ログと画面に「関数でエラーが起きました」と **ファイル:行番号 (関数名)** 付きで出す (利用者のパッケージ内でいちばん深いフレーム。ログは 5 秒に 1 行まで、抑えた件数を添える)。ノードは止めない。値の変換の失敗 (戻り値の型が合わない、届いた JSON が読めない) も同じ扱い。
 - 値の受け渡しは [nodes.md#データの種類](nodes.md#データの種類-ros-のメッセージ型を意識させないp55) の表 (入力側も同じ)。関数には ROS のメッセージではなく Python の値を渡す。詳細設定モードの「専用の型」では、メッセージ全体を dict で受け取り、dict で返す。画像・音声の出力には、呼び出しのきっかけになった入力の `header.stamp` を引き継ぐ (latency を測れるように。無ければいまの時刻)。
-- 地図上の役割は `function` (変換・ダミーと同じ系統の色で、ピンク。凡例「関数ノード」、ノード一覧の役割「関数」、右クリック「関数ノードの設定を変更」)。プロジェクトの `functions:` に保存し ([launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3))、自動起動・自動再起動・停止・ログ・launch への書き出し (`executable='function'`) はダミー・変換ノードと同じ。
+- 地図上の役割は `function` (変換・ダミーと同じ系統の色で、ピンク。凡例「関数・クラスノード」、ノード一覧の役割「関数・クラス」、右クリック「関数ノードの設定を変更」。クラスノードも同じ役割)。プロジェクトの `functions:` に保存し ([launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3))、自動起動・自動再起動・停止・ログ・launch への書き出し (`executable='function'`) はダミー・変換ノードと同じ。
 
 **実行と安全**
 - 関数は独立したノードのプロセス (`ros2 run roshanavi function --config <yaml>`、設定は `{function: <FunctionSpec>, workspace: <root>, status_file?: <path>}`) で動く。**roshanavi のサーバーの中では実行も import もしない**。サーバーはモジュールの一覧と関数のシグネチャを **`ast` の静的解析だけ** で作る (`function/modules.py`: トップレベルの公開 `def`、引数・注釈・既定値の有無・戻り値の注釈・docstring の最初の段落・行番号。注釈から種類を推す: `str` → 文字列、`np.ndarray` → 画像 …)。
@@ -158,3 +158,83 @@ roshanavi で「＋ 関数ノードを作る」→ モジュール `my_pkg.logic
 **サンプル**: `roshanavi_examples/logic.py` (ROS を import しない): `shout` (文字列 → 文字列)、`only_long` (短い文字列は `None` = 送らない)、`invert` (画像 → 画像、numpy)、`add` (数値 × 2 → 数値、複数入力)、`wave` (周期、経過秒 → 正弦波)。`examples/demo_project` に `text_shout` (`/chatter` → `/shouted`、自動起動なし)。
 
 **詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) での見え方**: 関数ノードは rclpy なので受信数だけ (変換ノードと同じ)。
+
+## クラスノード (状態を持つ処理を、そのままノードにする)
+**目的**: 実際のロジックは「初期化 → 処理のたびに内部状態を更新 → 必要に応じてリセット」というクラスで書かれることが多い。関数ノードの拡張として、ROS を import しない普通の Python クラスを、そのままノードとして動かす。関数ノードと同じく **ROS のコードを書かない**。
+
+```python
+# roshanavi_examples/stateful.py — ROS を import しない、普通のクラス
+class MovingAverage:
+    def __init__(self, window: int = 5):
+        self.window = window
+        self.values = []
+
+    def process(self, x: float) -> float:
+        self.values = (self.values + [x])[-self.window:]
+        return sum(self.values) / len(self.values)
+
+    def reset(self) -> None:
+        self.values = []
+```
+「＋ 関数・クラスノードを作る」→「クラス」→ モジュール `roshanavi_examples.stateful`、クラス `MovingAverage`、`process` の入力 `/number`・出力 `/average`、`reset` を「操作メソッド」に、で動く。
+
+| クラスの部分 | roshanavi の仕組み |
+|---|---|
+| `__init__` の引数 (型ヒントと既定値) | ROS のパラメータ。UI のパラメータ画面や `ros2 param set` で変えると `on_param_change(name, value)` が呼ばれ (無ければインスタンスを作り直し)、不正な値は理由付きで断る |
+| 処理メソッド | 関数ノードと同じ呼び出し方 (受信ごと / 周期 / 複数入力)。1 つのクラスの複数メソッドを別々のトピックに割り当てられる |
+| 戻り値が dict | キーごとに別の出力トピックへ送る |
+| 操作メソッド (引数なし。`reset` など) | 地図の右クリックとノード詳細の「<メソッド名> を呼ぶ」ボタン、トピック `/<ノード名>/<メソッド名>` (`std_msgs/Empty`)、シナリオの `call` ステップ |
+| `close()` (なければ `shutdown()`) | ノード停止時に呼ぶ (後片付け)。作り直しで捨てる古いインスタンスにも呼ぶ |
+| `get_state()` / `set_state(state)` | あれば、ホットリロードで状態を引き継ぐ |
+
+**実行のしくみ (決定: 関数ノードの実行ファイルを拡張する)**
+- 同じ `ros2 run roshanavi function --config <yaml>` で動く。設定は `{class: <ClassSpec>, workspace: <root>, status_file?: <path>}` (関数ノードは `function:` キー)。新しい実行ファイルにしなかった理由: プロセスの起動・停止・自動再起動・ログ・launch への書き出し (`executable='function'`)・状態ファイル・利用者コードの import の閉じ込め・ホットリロードの見張りを、そのまま使えるため。違うのは「関数を 1 つ呼ぶ」代わりに「クラスのインスタンスを 1 つ持つ」ことだけで、そこは `function/class_core.py` に分けた。
+- 仕様は `ClassSpec` (`launcher/schema.py`): `id`、`name`、`namespace`、`module`、`class_name`、`params` (`__init__` の引数の開始値)、`methods[]` (処理メソッド: `method`、`call`、`inputs[]`、`outputs[]` (dict を返すなら各出力に `key`)、`rate_hz`、`trigger`)、`actions[]` (操作メソッド)、`autostart`、`auto_restart`。プロジェクトの `classes:` に保存し、ID は他の種類と合わせて一意。検査: 1 つ以上のメソッドをつなぐか操作メソッドを決める、`close` / `shutdown` / `get_state` / `set_state` / `on_param_change` は roshanavi が呼ぶのでつなげない、1 つのメソッドを「つなぐ」と「操作」の両方にしない、出力トピックの重複と「入力と同じ」を拒否、出力が複数のメソッドは全部にキー。
+- 起動ターゲットの種類は `class`、地図の役割は **`function` (関数ノードと同じ系統のピンク)**。凡例は「関数・クラスノード」、ノード一覧の役割は「関数・クラス」(絞り込みも同じ)、右クリックは「クラスノードの設定を変更」。種類を分けたのは、仕様と設定画面が関数と違うため。色と役割は同じにして、初心者が「自分のロジックのノード」を 1 つの系統として見られるようにした。
+- クラスの一覧は **`ast` の静的解析だけ** (`function/class_modules.py`。サーバーでは import しない。`security.md` の閉じ込めは関数ノードと同じ): トップレベルの公開クラスごとに、`__init__` の引数 (型ヒント・既定値・パラメータにできる種類)、公開メソッド (シグネチャ・戻り値の注釈・「引数なしで呼べる = 操作メソッドにできる」か)、定義しているフック。`staticmethod` / `classmethod` / `property` は一覧に出さない。
+
+**`__init__` の引数 = パラメータ** (`function/class_params.py`)
+- 種類は [データの種類](#データの種類-ros-のメッセージ型を意識させないp55) の表と同じ注釈の対応で決める: `str` → 文字列 (STRING)、`float` → 数値 (DOUBLE)、`int` → 整数 (INTEGER)、`bool` → ON/OFF (BOOL)、数値の `list` → 数値の並び (DOUBLE_ARRAY)、`dict` / 数値以外の `list` → JSON (JSON テキストの STRING)。型ヒントが無ければ既定値の型から決める。画像・バイト列など、パラメータにできない型の引数は宣言せず、Python の既定値で動く (既定値が無い引数は「値がありません」と表示)。
+- 開始値の優先順位: `ros2 run ... --ros-args -p` → `ClassSpec.params` → `__init__` の既定値。既定値が `None` や、値のない必須の引数は「未設定」で宣言し、未設定のままなら引数を渡さない (必須なら「初期化に失敗」と理由を表示し、パラメータを設定すれば作り直す)。`params` に書いた値は型で厳密に検査する (整数の引数に小数、など)。`__init__` に無い名前は警告として状態に出す。
+- 変更時 (`ros2 param set` / UI): ① 型が合わなければ ROS が断る (宣言した型のため) ② `on_param_change(name, value)` があればそれを呼び、インスタンスは作り直さない (例外ならその理由を返して変更を断る) ③ 無ければ **新しい値でインスタンスを作り直し、状態はリセット** (UI に「状態をリセットしました」)。作り直しに失敗 (`__init__` が例外) したら古いインスタンスのまま、理由を `ros2 param set` の応答と画面に出す。パラメータの変更は決まった順 (単一スレッド) で処理し、10 秒待っても終わらなければ断る。
+- 動いている間のパラメータの値はノードの ROS パラメータが持つ。プロジェクトの `params` (開始値) は編集画面で変え、「保存して再起動」で反映する。
+
+**処理メソッドと出力**
+- 受信のたびに呼ぶ / 周期 / 複数入力は関数ノードと同じ ([nodes.md#関数ノード](#関数ノード-ふつうの関数をそのままノードにするp55))。入力の種類 (`kind`) だけで型を省くと、地図にある既存トピックの型を採用する規則も同じ。メソッドごとに入力・出力・呼び出し方を持つので、1 つのクラスが複数のトピックに別々の働きをする。
+- 戻り値: `None` は送らない。出力が 1 つでキーなしなら戻り値全体をその種類に変換して送る (JSON の種類なら dict もそのまま)。出力にキーを付けると **戻り値は dict** で、キーごとに別のトピックへ送る (キーが無い・`None` の出力は送らない。dict に出力の無いキーがあっても無視し、状態に `ignored_keys` として出す。dict 以外を返したら変換エラー)。出力が 0 個のメソッドは戻り値を使わない (副作用だけ)。
+- 例外・変換の失敗は関数ノードと同じ扱い (ログと画面に ファイル:行番号 (関数名) 付きで出し、ノードは止めない)。
+
+**操作メソッド (引数なし、`reset` など)**
+- ノードは各操作メソッドについて、トピック `~/<メソッド名>` (= `/<名前空間>/<ノード名>/<メソッド名>`、`std_msgs/Empty`、reliable) を購読し、届くとそのメソッドを呼ぶ。ボタン・シナリオ・`ros2 topic pub --once /<ノード名>/reset std_msgs/msg/Empty` のどれも同じ道を通る。サービス (`std_srvs/Trigger`) は #35 の後で足す。
+- 呼び出しはノードの状態に **記録** する: 呼んだ回数 (`count`)、最後の時刻、成功か失敗か、戻り値 (200 文字まで) またはエラー (場所付き)。記録は呼び出しのたびにすぐ状態ファイルへ書く。サーバーの `POST /api/classes/{id}/call` と、シナリオの `call` は、`std_msgs/Empty` を送ったあと **記録の `count` が増えるのを待ち**、結果 (戻り値・エラー) を返す。待つ上限は 5 秒。
+- そのトピックは「購読だけで送り手がいない」状態が普通なので、診断の「送信しているノードがありません」から除く (`diagnostics.diagnose(quiet_topics=)`)。
+
+**呼び出しは 1 本のスレッド (保証)** (`function/serial.py`)
+- `__init__`、処理メソッド、操作メソッド、`on_param_change`、ホットリロード (新しい import・新しいインスタンス・状態の引き継ぎ)、`close()` は **すべて 1 本の作業スレッドで、受け付けた順に 1 つずつ** 呼ばれる。同時に 2 つが動くことも、別のスレッドから呼ばれることもない。利用者はロックを書かなくてよい (DB 接続や GUI 部品などスレッドを選ぶものも安全)。ROS のコールバックは受け取った値を変換して作業スレッドに依頼するだけ。
+- 作業のキューは 1000 件まで。クラスの処理が追いつかず溢れたら、新しいメッセージを捨てて数える (状態の `dropped`)。メモリを使い切らない。周期の呼び出しはメソッドごとに 1 件しか待たせない (遅いメソッドで周期が積み上がらない)。
+- 例外は、モジュール直下のコード (import 時に動く部分。ノード起動時に 1 回だけ起動側のスレッドで動き、ホットリロードのときは作業スレッドで動く)。クラスのメソッドは必ず作業スレッド。
+
+**`close()` と停止** — ノード停止 (SIGINT / SIGTERM) では、入力を止めたあと、作業スレッドでインスタンスの `close()` (無ければ `shutdown()`) を呼ぶ。**待つのは最大 3 秒**: それを超えたら記録して終了する (ノードの停止が止まらない)。`close()` の例外も記録するだけで、停止は続く。
+
+**ホットリロードと状態** (`function/class_core.py`、ファイルの見張りと新しい import は関数ノードと同じ [loader](#関数ノード-ふつうの関数をそのままノードにするp55))
+- ファイルを保存すると、作業スレッドで ① 新しく import し直す (失敗したら古いモジュールに戻る) ② `__init__` の引数が変わっていればパラメータを宣言し直す ③ **新しいインスタンスを作る**。作ってから古い方の `close()` を呼ぶ (作成に失敗したとき古い方を動かし続けるため。同じ資源を `__init__` で取り合うクラスは `get_state` / `set_state` を使う)。
+- 既定は **状態をリセット** (新しい `__init__` からやり直し)。画面に「状態をリセットしました (時刻、ファイルを保存したため)」と出す。古いインスタンスに `get_state()` が、新しいクラスに `set_state(state)` があれば、**状態を引き継ぐ** (「状態を引き継ぎました」)。
+- 失敗 (構文エラー・import の例外・クラスの名前が変わった・新しい `__init__` の例外・`get_state` / `set_state` の例外) は、**古いインスタンスが動き続け**、状態 `reload_error` と理由・場所を表示する。直して保存すると読み込む (関数ノードと同じ)。
+- 最初の `__init__` の例外は「初期化に失敗」(状態 `init_error`) として表示し、ファイルの修正かパラメータの変更を待つ。起動直後の初期化中は `starting`。
+
+**状態の表示**: 関数ノードの状態ファイルに加え、`kind: class`、状態 (`starting` / `running` / `import_error` / `init_error` / `reload_error` / `stopped`)、パラメータ (名前・種類・現在の値・必須か)、警告、メソッドごとの呼び出し数、操作メソッドの記録 (上記)、最後の通知 (`notice`: `{kind: reset | kept, reason: reload | param, at}`)、定義しているフック。数は `received` / `calls` / `published` / `skipped` / `waiting` / `errors` / `reloads` に `dropped` (溢れて捨てた) と `resets` (作り直した回数) を足す。
+
+**API** (`server_functions.py`): `GET /api/functions/module?name=` は `classes[{name, line, signature, init_params[{name, annotation, has_default, default, default_text, kind}], methods[{name, line, signature, params, required, returns, returns_kind, action_candidate, doc}], hooks, doc}]` も返す。`POST /api/classes` (`?start=true`)、`PUT /api/classes/{id}`、`POST /api/classes/{id}/call {method}` (`{method, topic, record}`。動いていない 409 `not_running`、操作メソッドでない 404 `unknown_action`、5 秒待っても呼ばれない 504 `call_failed`)、`POST /api/classes/{id}/export-code {directory, lifecycle?}`。削除・起動・停止・ログは `/api/targets/{id}`、状態は `function_status`。詳細は [api.md](api.md)。
+
+**シナリオ** ([scenarios.md](scenarios.md)): ステップ `call: {node, method, timeout?}` (操作メソッドを呼び、実行されるまで待つ。例: reset のあとに出力が初期値に戻ることを確かめる)、setup の `class: {...}` (`ClassSpec`。関数ノードの `function:` と同じ)。例: `examples/scenarios/class_moving_average.yaml`。
+
+**ROS への卒業 (コード書き出し)** (`function/class_codegen.py`、`POST /api/classes/{id}/export-code`、書き出し先・検査・上書きの扱いは関数ノードと同じ)
+- クラスを包む、コメント付きの普通の rclpy ノード `<directory>/<name>_node.py` を生成する。入力・出力ごとの変換関数 (`input_0_0(msg)`、`to_message_0_0(result, stamp)`)、`__init__` の引数を宣言するパラメータ (`INIT_PARAMETERS`)、パラメータ変更の処理 (`on_param_change` があればそれを呼び、無ければ作り直す)、`run_method` (`None` は送らない・dict はキーごとに送る・例外はログにして止まらない)、操作メソッドの `~/<メソッド名>` の購読、`close()` を呼ぶ後片付け、`main()`、ament_python のパッケージに入れる手順をコメント付きで含む。`rclpy.spin` は 1 本のスレッドなので、書き出したコードでもメソッドは同時に呼ばれない。
+- **`lifecycle: true`** で rclpy の `LifecycleNode` として書き出す。対応: `__init__` → `on_configure` (インスタンスを作り、パブリッシャーを作る)、メソッドの購読・周期のタイマー・操作メソッドの購読 → `on_activate` (`on_deactivate` で外す。インスタンスと状態は残る)、`close` → `on_cleanup` (インスタンスを捨てる)。パブリッシャーは `create_lifecycle_publisher` で、activate の間だけ送る。`ros2 lifecycle set /<ノード名> configure` → `activate` の順で進める (生成ファイルの先頭に書く)。ROS の lifecycle を学ぶ教材にもなる。rclpy の `LifecycleNode` の API (`create_lifecycle_publisher`、`on_configure` ほか) は Jazzy と Lyrical で同じ (両方で実行して確かめた)。
+- 生成したソースは書く前に `compile()` で確かめる。値は検証済みのものだけを `repr()` で埋め込み、書き出し先は関数ノードと同じ検査 (ワークスペース内の realpath、制御文字は拒否、roshanavi が生成したファイルだけ置き換え)。クラスが無い・`__init__` が静的に読めない場合は 404 `unknown_class` 等で断る。
+
+**対象外**: C++ のクラス (C++ のロジックは普通の ROS ノードとして書き、ランチャーから起動する)。メソッドの引数を持つ呼び出し (操作メソッドは引数なし)。`async def` のメソッド。
+
+**サンプル** (`roshanavi_examples/stateful.py`、ROS を import しない): `MovingAverage(window)` (`process`、`reset`、`on_param_change`、`get_state` / `set_state`)、`Counter(start)` (`process`、`reset`、`close`)、`RunningStats()` (平均・件数・最大を 1 つの dict で返して 3 つのトピックへ)。`examples/demo_project` に `moving_average` (`/number` → `/average`) と `message_counter` (`/chatter` → `/message_count`)、どちらも `reset` つきで自動起動なし。シナリオ `examples/scenarios/class_moving_average.yaml` が `call` と reset を使う。
+
+**詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) での見え方**: 関数ノードと同じ (rclpy なので受信数だけ)。

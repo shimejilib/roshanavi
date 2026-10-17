@@ -59,13 +59,14 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | B-09 | 統計計算の決定性 | 時刻を注入した unit test で hz / 帯域 / ジッタが一致する | ✅ |
 | B-10 | 長時間稼働 (24 h) | メモリが増え続けない (リングバッファ上限) | ⬜ |
 | B-11 | 計測ノード: 1 トピックに 2 つの送信ノード (5 Hz と 2 Hz) | 送信ノードごとに 5 / 2 Hz (±5%) で `basis: measured`、トピック合計 7 Hz、`gid_resolution: matched` | ✅ (`test_probe_ros.py`) |
-| B-12 | 計測ノードの統計 (gtest) | 欠番、複数 publisher の合計、連番非対応で null、送信時刻が無ければ受信側、計算期間の選択、遅いトピックの延長・`too_few`、止まったら 0、publisher ごとの値と停止、リングバッファの上限 | ✅ (`roshanavi_probe/test/test_stats.cpp`) |
+| B-12 | 計測ノードの統計 (gtest) | 欠番、複数 publisher の合計、連番非対応で null、送信時刻が無ければ受信側、計算期間の選択、遅いトピックの延長・`too_few`、止まったら 0、publisher ごとの値と停止、リングバッファの上限 (コンパクション後のビュー)。元の実装 (`reference_stats.hpp`) との照合: 乱数の流れ (複数 publisher・欠番・連番非対応・送信時刻なし・停止・遅れて参加・同時刻・窓の境界) × 5 つの窓で、トピック全体と publisher ごとの全項目がビット単位で一致 (#18)。送信元ノードの対応表を作り直す条件 (グラフ変化・未知の gid を 1 回だけ・5 秒・照会の失敗) | ✅ (`roshanavi_probe/test/test_stats.cpp`) |
 | B-13 | 計測ノードが使えないとき | `--probe off` / 未ビルド → Python の計測 (`measurement: python`、理由付き)。繰り返し異常終了 → 5 回で Python に切り替え | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
+| B-11b | 計測ノード: 後から参加した・入れ替わった送信ノード | グラフ変化時だけの照会 (#18) でも、後から同じトピックに publish し始めたノード、別名のノードに置き換わったときも、送信ノード名が付く (`basis: measured`) | ✅ (`test_probe_ros.py`) |
 | B-14 | 計測ノードの異常終了 | 再起動され (1 秒後〜)、TRANSIENT_LOCAL の設定を受け取って計測を再開する | ✅ (`test_probe_ros.py`) |
 | B-15 | 自分用のトピック | `/roshanavi/_probe/*` と計測ノードは地図・診断・トラフィックに出ない | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
 | B-16 | gid がグラフと対応しない RMW | `resolved: false` ならトピック合計の分割 (`rates.py`) にフォールバック、UI に案内 | ✅ (判定は `test_probe_unit.py` / `measurement.test.ts`)、Cyclone DDS の実機は 👀 (gid 不一致・連番非対応を確認) |
 | B-17 | 送信ノードごとの値 (unit) | 送っていない送信者は 0 Hz の実測、注入ジョブは `exact` のまま、件数未確定のジョブは自分のノードの実測、受信者は実測値の和 | ✅ (`test_probe_unit.py`) |
-| B-18 | 計測ノードの負荷 | 10 トピック × 100 Hz、画像 720p 30 Hz で計測ノード + サーバーの CPU が Python の計測より小さい | 👀 ([measurement.md#C++ 計測ノード](../design/measurement.md#c-計測ノード-roshanavi_probe-p46) の表: 9.5% 対 32.3%、11.8% 対 17.4%) |
+| B-18 | 計測ノードの負荷 | 10 トピック × 100 Hz、画像 720p 30 Hz (と、大規模を模した 100 × 10 Hz・200 × 1 Hz・2 × 500 Hz: `scripts/bench_probe.py`) で計測ノード + サーバーの CPU が Python の計測より小さい | 👀 ([measurement.md#C++ 計測ノード](../design/measurement.md#c-計測ノード-roshanavi_probe-p46) の表: 9.5% 対 32.3%、11.8% 対 17.4%) |
 | B-19 | 止まったトピックの Hz 表示 (vitest) | hz 0 / `stale` のとき「(受信時刻で概算)」を付けない | ✅ (`timing.test.ts`) |
 | B-20 | 計測の経路の表示・実測バッジ (vitest) | 「計測: C++ 計測ノード (CPU x%)」、再起動中・RMW の制限・Python の理由、`measured` は「実測」 | ✅ (`traffic/measurement.test.ts`) |
 | B-21 | E2E: talker + 1 Hz の入力ノードが /chatter | 地図の talker の辺が約 1 Hz で「推定」が付かない。トラフィックタブで talker が約 1 Hz の「実測」、入力ノードが約 1 Hz、ツールバーに「C++ 計測ノード」 | ✅ (`e2e/smoke.spec.ts`) |
@@ -465,3 +466,32 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | R-13 | Lyrical のデモ (`/chatter` が `example_interfaces/msg/String`) | Lyrical の demo_nodes_cpp の talker / listener は std_msgs ではなく example_interfaces の String を使う。example_interfaces の String・Bool・整数・小数も「文字列」などのデータの種類として扱う (型はそのまま)。種類だけの関数ノードの入力 (デモの `text_shout`) は既存のトピックの型を使う。チュートリアル「届かない原因を見つけて直す」は受信側を先に起動し、送信側をその型にそろえる。E2E は `/chatter` の型をサーバーに聞いて使う | ✅ (`test_data_kinds.py`、`test_function_unit.py::test_inputs_with_only_a_kind_adopt_the_existing_topic_type`、vitest `tour/fixtures.test.ts`、E2E) |
 | R-11 | Python 3.14 | 式の評価器 (`expr.py`、`msg_view.py`) の許可・拒否のテストが通る (削除された `ast.Num` などは使っていない)。警告なし | ✅ (`test_expr.py`、`test_expr_fields.py`、`test_security.py`) |
 
+
+### S. クラスノード (#43)
+
+仕様は [nodes.md#クラスノード](../design/nodes.md#クラスノード-状態を持つ処理をそのままノードにする)。単体は `test_class_unit.py` (ROS のグラフ不要)、実ノードは `test_class_ros.py`、画面のロジックは `classForm.test.ts`、E2E は `web/e2e/class.spec.ts`。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| S-01 | クラス・`__init__`・メソッドの静的な一覧 (unit) | import せずに、`__init__` の引数 (型ヒント・既定値・種類)、公開メソッド (シグネチャ・戻り値・「引数なしで呼べる」)、フックの有無を読む。`_` で始まるメソッドと `staticmethod` は出さない。パラメータにできない型 (画像・バイト列) の引数は種類 `null` | ✅ |
+| S-02 | 引数の種類の対応 (unit) | `int` / `float` / `str` / `bool` / `list[float]` → 数値の並び / `list[str]`・`dict` → JSON / `Optional[int] = None` / 型ヒントなし (既定値の型) / 型ヒントも既定値もない → パラメータにしない、の 23 通り | ✅ |
+| S-03 | パラメータの値の変換は厳密 (unit) | 整数に小数・bool・文字列、小数に bool、JSON の壊れた文字列、数値の並びに文字列を拒否 (理由は平易な文) | ✅ |
+| S-04 | 仕様の検査 (unit) | 何もつながない・メソッドの重複・フックは操作にもつなぎにもできない・入力数・周期の rate_hz・出力のキー (全部に付ける / 重複しない)・入力と同じ出力・`_` で始まるメソッド・roshanavi のモジュールを拒否。設定 YAML の往復 | ✅ |
+| S-05 | 受信 → メソッド → 送信 (unit) | 値が積み上がる、`None` は送らない・例外は場所付きで数えノードは続く、戻り値の型違いは変換のエラー、複数入力は最新値を結合 (trigger)、周期は経過秒を引数があるときだけ渡し、遅いメソッドで周期が積み上がらない | ✅ |
+| S-06 | dict の戻り値 (unit + 実ノード) | キーごとに別トピック (`RunningStats` の mean / count / max)、無いキー・`None` は送らない、出力に無いキーは `ignored_keys`、dict 以外は変換のエラー | ✅ |
+| S-07 | 操作メソッド (unit + 実ノード) | トピック `/<node>/reset` (`std_msgs/Empty`) で呼ばれ、状態に回数・最後の時刻・戻り値・エラー (場所付き) が残る。登録外のメソッドは呼ばない。記録が変わるたびに状態ファイルへ即書く | ✅ |
+| S-08 | パラメータ: 宣言と開始値 (unit + 実ノード) | `ros2 param list/get` に `__init__` の引数が出る (spec の値 → 既定値)、`None` の既定値・必須で値なしは未設定、`params` の不正・存在しない名前は警告、必須で値なしは「初期化に失敗」と理由 → パラメータを設定すると動き出す | ✅ |
+| S-09 | パラメータの変更 (unit + 実ノード) | `on_param_change` があれば呼ぶ (インスタンスと状態は残り、例外は理由付きで断る)、無ければ新しい値で作り直して状態リセット (古い方に `close()`、画面用の通知 `reset` / `param`)、`__init__` が断る値・型違い (`ros2 param set` の応答) は古いインスタンスのまま | ✅ |
+| S-10 | ホットリロード (unit + 実ノード) | 既定はインスタンスを作り直して状態リセット (通知 `reset` / `reload`、古い方に `close()`)、`get_state` / `set_state` があれば引き継ぐ (通知 `kept`)。構文エラー・`__init__` の例外・`get_state` / `set_state` の例外は古いインスタンスのまま `reload_error` と場所、直すと `running`。`__init__` の引数が変わればパラメータを宣言し直す | ✅ |
+| S-11 | 起動時の失敗 (unit + 実ノード) | 読めないモジュールは `import_error` で待ち、直すと動く。`__init__` が例外なら `init_error` (場所と理由)。起動直後は `starting`。ノードは終了しない | ✅ |
+| S-12 | `close()` / `shutdown()` (unit + 実ノード) | 停止時に呼ぶ (`close` が無ければ `shutdown`)、例外は記録するだけ、**固まった `close()` は 3 秒で諦める** (テストでは 0.3 秒に縮めて確認)。実ノードの停止ログに `Counter stopped at 101` | ✅ |
+| S-13 | 呼び出しは 1 本のスレッド (unit) | 6 スレッドから受信・操作・パラメータ変更を同時に浴びせても、利用者のコード (`__init__` / メソッド / `close`) は作業スレッド 1 本だけで、重なりが 0 (テスト用のクラスが数える)。キューが溢れたら捨てて `dropped` に数える | ✅ |
+| S-14 | コード書き出し (unit) | 通常の rclpy ノードと lifecycle ノードの両方が、複数のメソッド・dict 出力・複数入力・周期・操作メソッド・パラメータ込みで `compile()` を通る。値は検証済みのものだけを `repr()` で埋め込む (クォートを含む値でも壊れない)、制御文字のディレクトリは拒否、クラス・フックの有無で生成が変わる、利用者のファイルは上書きしない (409) | ✅ |
+| S-15 | 書き出したコードがツールなしで動く (実ノード) | 通常のノード: 入力 → 出力 (平均)、`/<node>/reset`、`ros2 param set` (`on_param_change`)。lifecycle: 未設定の間は購読が無く → configure → activate で購読が現れ出力 → deactivate で購読が消え → cleanup → 再 configure / activate でやり直し | ✅ |
+| S-16 | API・地図・ノード一覧・プロジェクト (実ノード) | 一覧に `classes[]`、`POST /api/classes?start=true` → 役割 function・種類 class・`classes:` に保存・状態、`POST .../call` で記録 (`count`)・登録外のメソッド 404・不正な名前 422・未登録の id 404・止まっているときは 409 `not_running`、ノード一覧の由来、`/<node>/reset` が診断の「送り手なし」に出ない | ✅ |
+| S-17 | launch への書き出し (実ノード) | `executable='function'` の launch でクラスノードが動く | ✅ |
+| S-18 | シナリオ `call` ステップと `class` セットアップ (unit + 実ノード) | 文面の検査 (必須・形式・使えないキー、相対名は絶対名に、YAML の往復)、`MovingAverage` で平均 → reset → 平均が最初から、reset を呼ばない版は失敗、存在しないノード・メソッドと、操作メソッドが例外になる場合は平易な説明で止まる。サンプル `class_moving_average.yaml` | ✅ |
+| S-19 | 画面のロジック (vitest) | クラス名からノード名 (`MovingAverage` → `moving_average`)・最初のメソッドの仮決め・出力トピックの追従、パラメータの値の検査 (種類ごと、必須、既定値と同じなら保存しない)、dict 出力のキー、メソッドの使い方の切り替え、編集時の復元と往復、平易なエラー文、右クリックの「<メソッド> を呼ぶ」(止まっていれば無効と理由)、シナリオの `call` | ✅ |
+| S-20 | E2E: MovingAverage をクラスノードとして作る | 「クラス」→ モジュール → クラス (シグネチャ付き) → `window` は既定値 5 を 3 に → `process` は「トピックにつなぐ」、`reset` は「操作メソッド」→ 作成 → 地図の役割 function、`classes:` に保存 → 数を送ると平均 → 右クリック「reset を呼ぶ」→ 次の値が単独の平均になる → 右ペインのボタンと「最後の呼び出し」。スクリーンショット [`class-node-dialog.png`](../images/class-node-dialog.png) | ✅ |
+| S-21 | E2E: 作り直しの通知 | `Counter` のパラメータを変えると右ペインに「状態をリセットしました」、現在値が更新される | ✅ |
+| S-22 | Lyrical での実行 | 上の単体・実ノードのテストが Lyrical (rclpy 10、Python 3.14、pydantic 2) でも通る。`LifecycleNode` の API (`create_lifecycle_publisher`、`on_configure` ほか) は Jazzy と同じ | ✅ |

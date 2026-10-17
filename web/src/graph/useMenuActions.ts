@@ -34,7 +34,7 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
     else if (node) await api.setParameter(node.id, { name: 'paused', type: 'bool', value: paused });
   };
 
-  const handlers: Partial<Record<MenuAction, () => unknown>> = {
+  const handlers: Partial<Record<Exclude<MenuAction, `call:${string}`>, () => unknown>> = {
     logs: () => owner && app.openLogs(owner.id),
     editTarget: () => owner && app.openLauncher({ kind: 'edit', targetId: owner.id }),
     buildRestart: async () => {
@@ -51,6 +51,7 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
     editDummy: () => owner && app.openDialog({ kind: 'createInput', dummyId: owner.id }),
     editTransform: () => owner && app.openDialog({ kind: 'createTransform', transformId: owner.id }),
     editFunction: () => owner && app.openDialog({ kind: 'createFunction', functionId: owner.id }),
+    editClass: () => owner && app.openDialog({ kind: 'createFunction', functionId: owner.id }),
     exportLaunch: () => owner && app.openDialog({ kind: 'exportLaunch', dummyId: owner.id }),
     view: () => app.select({ kind: 'topic', id: topic }),
     tryInject: () => app.openInject(topic),
@@ -70,6 +71,10 @@ export function useMenuActions(target: MenuTarget, commands: MapCommands): (acti
   };
 
   return async (action: MenuAction) => {
-    await handlers[action]?.();
+    if (action.startsWith('call:')) {
+      if (owner) await api.callClassMethod(owner.id, action.slice('call:'.length));
+      return;
+    }
+    await handlers[action as keyof typeof handlers]?.();
   };
 }

@@ -44,12 +44,13 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await expect(page.getByTestId('nodes-import-hint')).toBeVisible();
   await page.getByTestId('node-check-/listener').check();
   // Keyboard: ↓ moves to the next row's checkbox, Space selects it. Rows sort by launch-list
-  // id: listener, state_machine (a stopped sample node of the demo project), talker.
+  // id: listener, message_counter, moving_average (the demo project's stopped class nodes),
+  // state_machine (a stopped sample node), talker.
   await page.getByTestId('node-check-/listener').focus();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('node-check-target:state_machine')).toBeFocused();
-  await page.keyboard.press('ArrowDown');
-  await expect(page.getByTestId('node-check-/talker')).toBeFocused();
+  for (const next of ['target:message_counter', 'target:moving_average', 'target:state_machine', '/talker']) {
+    await page.keyboard.press('ArrowDown');
+    await expect(page.getByTestId(`node-check-${next}`)).toBeFocused();
+  }
   await page.keyboard.press('Space');
   await expect(page.getByTestId('node-check-/talker')).toBeChecked();
   await expect(page.getByTestId('nodes-selected')).toContainText('2 個選択');

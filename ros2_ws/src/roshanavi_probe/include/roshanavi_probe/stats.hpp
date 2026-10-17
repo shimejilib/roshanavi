@@ -10,7 +10,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
+#include <memory>
 #include <optional>
 #include <vector>
 
@@ -76,20 +76,86 @@ struct EndpointResult
   WindowResult result;
 };
 
-Rates compute_stats(const std::vector<Sample> & samples);
+/// Read-only view of samples ordered by receive time (non-decreasing ``t``): either a
+/// contiguous run (``idx == nullptr``) or the samples ``base[idx[i]]`` (one publisher's
+/// share of a run). Never copies a Sample; a view dies with the storage it points into.
+class SampleSeq
+{
+public:
+  SampleSeq() = default;
+  SampleSeq(const std::vector<Sample> & v)  // NOLINT: a vector is a contiguous view
+  : base_(v.data()), n_(v.size()) {}
+  SampleSeq(const Sample * base, std::size_t n)
+  : base_(base), n_(n) {}
+  SampleSeq(const Sample * base, const uint32_t * idx, std::size_t n)
+  : base_(base), idx_(idx), n_(n) {}
+
+  std::size_t size() const {return n_;}
+  /// True for a run of consecutive Samples (data() is then usable).
+  bool contiguous() const {return idx_ == nullptr;}
+  const Sample * data() const {return base_;}
+  bool empty() const {return n_ == 0;}
+  const Sample & operator[](std::size_t i) const {return idx_ ? base_[idx_[i]] : base_[i];}
+  const Sample & front() const {return (*this)[0];}
+  const Sample & back() const {return (*this)[n_ - 1];}
+  /// The view without its first ``from`` samples.
+  SampleSeq tail(std::size_t from) const
+  {
+    return idx_ ? SampleSeq(base_, idx_ + from, n_ - from) : SampleSeq(base_ + from, n_ - from);
+  }
+  /// Index of the first sample with ``t >= cutoff`` (size() when none).
+  std::size_t first_at_or_after(double cutoff) const;
+
+private:
+  const Sample * base_ = nullptr;
+  const uint32_t * idx_ = nullptr;
+  std::size_t n_ = 0;
+};
+
+/// Everything reported for one window of one topic: the topic-level rates and one entry per
+/// publisher (first-seen order).
+struct WindowStats
+{
+  WindowResult topic;
+  std::vector<EndpointResult> endpoints;
+};
+
+/// Computes the statistics of a topic for all its windows from one pass over the samples:
+/// the samples are grouped by publisher gid once (hash map, indices only) and every window
+/// reuses that grouping. Keep one instance per probe: it recycles its buffers across ticks.
+class TopicCalculator
+{
+public:
+  TopicCalculator();
+  ~TopicCalculator();
+  struct Impl;  // defined in stats.cpp
+
+  TopicCalculator(const TopicCalculator &) = delete;
+  TopicCalculator & operator=(const TopicCalculator &) = delete;
+
+  /// ``retained``: contiguous samples in the longest window, oldest first (throws
+  /// std::invalid_argument otherwise). One entry per element of ``windows``, in order.
+  std::vector<WindowStats> compute(
+    SampleSeq retained, double now, const std::vector<double> & windows,
+    double max_window = kMaxWindowSec);
+
+private:
+  std::unique_ptr<Impl> impl_;
+};
+
+/// Rates over a set of samples (grouped by publisher internally).
+Rates compute_stats(SampleSeq samples);
 
 /// True when nothing arrived for max(3 x mean receive interval, 1 s).
-bool is_silent(const std::vector<Sample> & retained, double now);
+bool is_silent(SampleSeq retained, double now);
 
 /// Topic-level rates over ``window`` (falls back to ``max_window`` for slow topics).
 WindowResult compute_window(
-  const std::vector<Sample> & retained, double now, double window,
-  double max_window = kMaxWindowSec);
+  SampleSeq retained, double now, double window, double max_window = kMaxWindowSec);
 
 /// Per-publisher rates: compute_window on each gid's own samples (first-seen order).
 std::vector<EndpointResult> compute_endpoints(
-  const std::vector<Sample> & retained, double now, double window,
-  double max_window = kMaxWindowSec);
+  SampleSeq retained, double now, double window, double max_window = kMaxWindowSec);
 
 /// Ring buffer of the samples of one topic (the longest window, at most ``max_samples``).
 class SampleBuffer
@@ -98,15 +164,17 @@ public:
   explicit SampleBuffer(double retain_sec = kMaxWindowSec, std::size_t max_samples = kMaxSamples);
 
   void record(const Sample & sample);
-  /// Drops samples older than the retention; returns what is left (oldest first).
-  std::vector<Sample> retained(double now);
+  /// Drops samples older than the retention; returns a view of what is left (oldest first).
+  /// The view is valid until the next record() / retained().
+  SampleSeq retained(double now);
   uint64_t total() const {return total_;}
   void set_retain(double retain_sec) {retain_sec_ = retain_sec;}
 
 private:
   double retain_sec_;
   std::size_t max_samples_;
-  std::deque<Sample> samples_;
+  std::vector<Sample> samples_;  // live samples are samples_[head_..]
+  std::size_t head_ = 0;
   uint64_t total_ = 0;
 };
 

@@ -19,8 +19,8 @@ from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Type, Un
 
 import yaml
 
-from ..launcher.schema import (DummySpec, FunctionSpec, ID_PATTERN, KindName, ParamValue,
-                               QosSpec, TransformSpec)
+from ..launcher.schema import (ClassSpec, DummySpec, FunctionSpec, ID_PATTERN, KindName,
+                               METHOD_PATTERN, ParamValue, QosSpec, TransformSpec)
 from ..media.options import MediaOptions
 from ..pydantic_compat import (BaseModel, Field, StrictAliasModel, StrictBool, StrictFloat,
                                StrictInt, StrictStr, ValidationError, checked_type, confloat,
@@ -373,13 +373,27 @@ class MemGrowthStep(_Strict):
         return value
 
 
+class CallStep(_Strict):
+    """``call: {node, method}``: call an action method of a class node (docs/design/nodes.md).
+
+    Publishes ``std_msgs/Empty`` on ``<node>/<method>`` and waits until the node reports the
+    call (its status), so the next step sees the effect."""
+
+    node: str
+    method: constr(regex=METHOD_PATTERN)
+    timeout: Seconds = 5.0  # type: ignore[valid-type]
+    label: Optional[constr(max_length=200)] = None
+
+    _node = validator('node', allow_reuse=True)(check_node)
+
+
 STEP_MODELS: Dict[str, Type[BaseModel]] = {
     'send': SendStep, 'start': StartStep, 'stop': StopStep, 'play': PlayStep, 'wait': WaitStep,
     'expect': ExpectStep, 'always': AlwaysStep, 'never': NeverStep, 'rate': RateStep,
     'throughput': ThroughputStep, 'latency': LatencyStep, 'resources': ResourcesStep,
-    'mem_growth': MemGrowthStep,
+    'mem_growth': MemGrowthStep, 'call': CallStep,
 }
-INPUT_STEPS = ('send', 'start', 'stop', 'play')
+INPUT_STEPS = ('send', 'start', 'stop', 'play', 'call')
 CHECK_STEPS = ('expect', 'always', 'never', 'rate', 'throughput', 'latency', 'resources',
                'mem_growth')
 RESOURCE_STEPS = ('resources', 'mem_growth')  # read a node's process, not topics
@@ -416,7 +430,11 @@ class LaunchSetup(_Strict):
     args: Dict[constr(max_length=100), Scalar] = Field(default_factory=dict)
 
 
-SETUP_KINDS = ('run', 'launch', 'cmd', 'target', 'function', 'transform', 'dummy')
+SETUP_KINDS = ('run', 'launch', 'cmd', 'target', 'function', 'class', 'transform', 'dummy')
+
+
+def setup_field(kind: str) -> str:
+    return 'class_' if kind == 'class' else kind   # ``class`` is a Python keyword
 
 
 class SetupItem(_Strict):
@@ -425,6 +443,7 @@ class SetupItem(_Strict):
     cmd: Optional[List[constr(max_length=4096)]] = Field(None, max_items=100)
     target: Optional[constr(regex=ID_PATTERN)] = None
     function: Optional[Dict[str, Any]] = None
+    class_: Optional[Dict[str, Any]] = Field(None, alias='class')
     transform: Optional[Dict[str, Any]] = None
     dummy: Optional[Dict[str, Any]] = None
     wait_for_node: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
@@ -438,7 +457,7 @@ class SetupItem(_Strict):
 
     @root_validator(skip_on_failure=True)
     def _one_kind(cls, values: Dict[str, Any]) -> Dict[str, Any]:
-        kinds = [k for k in SETUP_KINDS if values.get(k) is not None]
+        kinds = [k for k in SETUP_KINDS if values.get(setup_field(k)) is not None]
         if len(kinds) != 1:
             raise ValueError(f'setup の各項目には {", ".join(SETUP_KINDS)} のどれか 1 つを書いてください'
                              f' (今: {", ".join(kinds) or "なし"})')
@@ -446,10 +465,11 @@ class SetupItem(_Strict):
 
     @property
     def kind(self) -> str:
-        return next(k for k in SETUP_KINDS if getattr(self, k) is not None)
+        return next(k for k in SETUP_KINDS if getattr(self, setup_field(k)) is not None)
 
 
-NODE_SPECS: Dict[str, Type[BaseModel]] = {'function': FunctionSpec, 'transform': TransformSpec,
+NODE_SPECS: Dict[str, Type[BaseModel]] = {'function': FunctionSpec, 'class': ClassSpec,
+                                          'transform': TransformSpec,
                                           'dummy': DummySpec}
 
 
@@ -666,7 +686,7 @@ def _parse_setup(col: _Collector, items: List[Any]) -> List[SetupEntry]:
             continue
         node_spec = None
         if setup.kind in NODE_SPECS:
-            body = dict(getattr(setup, setup.kind))
+            body = dict(getattr(setup, setup_field(setup.kind)))
             body.setdefault('name', f'scenario_{setup.kind}_{i}')
             body.pop('autostart', None)
             try:
@@ -774,7 +794,7 @@ def to_raw(scenario: Scenario) -> Dict[str, Any]:
     if scenario.description:
         out['description'] = scenario.description
     if scenario.setup:
-        out['setup'] = [e.item.model_dump(exclude_none=True, exclude_defaults=True)
+        out['setup'] = [e.item.model_dump(by_alias=True, exclude_none=True, exclude_defaults=True)
                         for e in scenario.setup]
     if scenario.guards:
         out['guards'] = [{g.kind: _clean(g.spec)} for g in scenario.guards]

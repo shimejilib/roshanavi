@@ -18,6 +18,7 @@ import type { PreviewResult, ProjectList, TransformSpec } from './transformTypes
 import { t, tDynamic } from '../i18n';
 import { topicPath } from '../lib/topics';
 import type { KindCatalog, TypeGroup } from '../datakind/kinds';
+import type { ActionRecord, ClassSpec } from './classTypes';
 import type { FunctionSpec, ModuleEntry, ModuleInfo } from './functionTypes';
 import type {
   BuildStatus,
@@ -145,6 +146,12 @@ export const api = {
   updateFunction: (spec: FunctionSpec) => request<Target>('PUT', `/api/functions/${enc(spec.id)}`, spec),
   exportFunctionCode: (id: string, directory: string) =>
     request<{ file: string; command: string }>('POST', `/api/functions/${enc(id)}/export-code`, { directory }),
+  addClass: (spec: ClassSpec, start = true) => request<Target>('POST', `/api/classes${start ? '?start=true' : ''}`, spec),
+  updateClass: (spec: ClassSpec) => request<Target>('PUT', `/api/classes/${enc(spec.id)}`, spec),
+  callClassMethod: (id: string, method: string) =>
+    request<{ method: string; topic: string; record: ActionRecord | null }>('POST', `/api/classes/${enc(id)}/call`, { method }),
+  exportClassCode: (id: string, directory: string, lifecycle: boolean) =>
+    request<{ file: string; command: string }>('POST', `/api/classes/${enc(id)}/export-code`, { directory, lifecycle }),
   previewTransform: (spec: TransformSpec, samples: Record<string, Record<string, unknown>>) =>
     request<PreviewResult>('POST', '/api/transforms/preview', { spec, samples }),
   projects: () => request<ProjectList>('GET', '/api/projects'),

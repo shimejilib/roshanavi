@@ -15,7 +15,7 @@ from typing import Any, Callable, Dict, List, Optional, Sequence
 
 from ..launcher.errors import LauncherError
 from ..launcher.manager import ProcessManager
-from ..launcher.schema import DummySpec, FunctionSpec, TargetSpec, TransformSpec
+from ..launcher.schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec
 from .schema import SetupEntry
 
 LOG = logging.getLogger(__name__)
@@ -105,7 +105,7 @@ def spec_for(index: int, entry: SetupEntry) -> Any:
 
 def node_names(spec: Any) -> List[str]:
     """Nodes a spec will create when its name is known (implicit wait_for_node)."""
-    if isinstance(spec, (FunctionSpec, TransformSpec, DummySpec)) or (
+    if isinstance(spec, (FunctionSpec, ClassSpec, TransformSpec, DummySpec)) or (
             isinstance(spec, TargetSpec) and spec.kind == 'run'):
         if spec.name:
             return [full_node_name(spec.name, spec.namespace)]
@@ -185,6 +185,9 @@ class TargetController:
     def status(self, target_id: str) -> str:
         return self._manager.target(target_id).status()
 
+    def action_record(self, node: str, method: str) -> Optional[Dict[str, Any]]:
+        return self._manager.action_record(node, method)
+
     def log_tail(self, target_id: str) -> List[str]:
         try:
             return self._manager.logs(target_id).tail(LOG_TAIL_LINES)
@@ -231,6 +234,9 @@ class SetupProcesses:
 
     def status(self, target_id: str) -> str:
         return self._manager.target(target_id).status()
+
+    def action_record(self, node: str, method: str) -> Optional[Dict[str, Any]]:
+        return self._manager.action_record(node, method)
 
     def log_tail(self, target_id: str) -> List[str]:
         try:

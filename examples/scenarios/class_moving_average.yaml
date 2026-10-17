@@ -1,0 +1,38 @@
+# クラスノード: 状態を持つ普通の Python クラス roshanavi_examples.stateful.MovingAverage を
+# /number → /average のノードとして起動し、平均が積み上がること、reset を呼ぶと
+# 状態が初期化されて平均がやり直しになることを確かめる (call ステップ)。
+version: 1
+name: class_moving_average
+description: MovingAverage(window=3) の平均を確かめ、reset を呼んだあとは最初からになる
+setup:
+  - class:
+      name: scenario_average
+      module: roshanavi_examples.stateful
+      class_name: MovingAverage
+      params: {window: 3}
+      methods:
+        - method: process
+          inputs: [{topic: /number, kind: float}]
+          outputs: [{topic: /average, kind: float}]
+      actions: [reset]
+steps:
+  - send: {topic: /number, kind: float, value: 10}
+  - send: {topic: /number, kind: float, value: 20}
+  - expect:        # (10 + 20) / 2
+      topic: /average
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: 15.0}
+  - send: {topic: /number, kind: float, value: 30}
+  - expect:        # (10 + 20 + 30) / 3
+      topic: /average
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: 20.0}
+  - call: {node: /scenario_average, method: reset}
+  - send: {topic: /number, kind: float, value: 100}
+  - expect:        # reset のあと: 古い値は忘れているので 100 だけの平均 (忘れていなければ 50)
+      topic: /average
+      within: 2.0
+      where:
+        - {field: data, op: eq, value: 100.0}

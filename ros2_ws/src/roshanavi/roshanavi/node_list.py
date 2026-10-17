@@ -25,6 +25,10 @@ def _origin(target: Optional[Mapping[str, Any]]) -> Dict[str, Any]:
     if target.get('kind') in ('transform', 'function'):
         output = spec.get('output') or {}
         origin.update(package='roshanavi', executable=target['kind'], topic=output.get('topic'))
+    if target.get('kind') == 'class':
+        outputs = [o.get('topic') for m in spec.get('methods') or [] for o in m.get('outputs') or []]
+        origin.update(package='roshanavi', executable='function',
+                      topic=next((t for t in outputs if t), None))
     return {k: v for k, v in origin.items() if v is not None}
 
 

@@ -38,7 +38,7 @@ const char * note_name(RateNote note)
 }
 
 roshanavi_msgs::msg::EndpointStats endpoint_msg(
-  const EndpointResult & ep, const std::map<Gid, EndpointName> & names)
+  const EndpointResult & ep, const PublisherDirectory::Names & names)
 {
   roshanavi_msgs::msg::EndpointStats out;
   out.publisher_gid = ep.gid;
@@ -65,7 +65,7 @@ roshanavi_msgs::msg::EndpointStats endpoint_msg(
 
 void fill_topic_stats(
   const WindowResult & topic, const std::vector<EndpointResult> & endpoints,
-  const std::map<Gid, EndpointName> & names, roshanavi_msgs::msg::TopicStats & out)
+  const PublisherDirectory::Names & names, roshanavi_msgs::msg::TopicStats & out)
 {
   const Rates & r = topic.rates;
   out.window_sec = topic.window_sec;

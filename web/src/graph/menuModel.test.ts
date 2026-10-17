@@ -125,3 +125,25 @@ describe('lifecycle item', () => {
     expect(plain.map((i) => i.action)).not.toContain('lifecycle');
   });
 });
+
+describe('class nodes in the map menu', () => {
+  const classTarget = (status: Target['status']): Target => ({
+    ...target('ma', 'run'), kind: 'class', role: 'function', status,
+    spec: { id: 'ma', name: 'ma', module: 'm', class_name: 'C', params: {}, methods: [], actions: ['reset', 'tick'] },
+  });
+  it('shares the function role and offers a button per action method', () => {
+    const n = node('/ma', { target_id: 'ma' });
+    expect(menuRole(n, [classTarget('running')])).toBe('function');
+    const items = menuItems({ kind: 'node', nodeId: '/ma' }, ctx({ node: n, targets: [classTarget('running')] }));
+    expect(actions(items)).toEqual(['stop', 'restart', 'call:reset', 'call:tick', 'editClass', 'exportLaunch', 'logs', 'params', 'isolate']);
+    expect(items.find((i) => i.action === 'call:reset')?.label).toBe('reset を呼ぶ');
+    expect(items.find((i) => i.action === 'editClass')?.label).toBe('クラスノードの設定を変更');
+    expect(items.filter((i) => String(i.action).startsWith('call:')).every((i) => i.enabled)).toBe(true);
+  });
+  it('disables the buttons while the node is stopped, with the reason', () => {
+    const items = menuItems({ kind: 'node', nodeId: '/ma' }, ctx({ node: node('/ma', { target_id: 'ma' }), targets: [classTarget('stopped')] }));
+    const call = items.find((i) => i.action === 'call:reset');
+    expect(call?.enabled).toBe(false);
+    expect(call?.reason).toContain('動いていません');
+  });
+});

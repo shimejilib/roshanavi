@@ -107,7 +107,7 @@ export const tourJa = {
   'tour.qosFix.finish.body': 'QoS (通信の約束事) が送る側と受ける側で食い違うと、データは届きません。赤い破線が出たら、診断の理由を読みましょう。学習用のノードは片づけます。',
 
   'tour.functionNode.open.title': '関数ノードを作る',
-  'tour.functionNode.open.body': '「＋ 関数ノードを作る」を押してください。',
+  'tour.functionNode.open.body': '「＋ 関数・クラスノードを作る」を押してください。',
   'tour.functionNode.module.title': 'モジュールを選ぶ',
   'tour.functionNode.module.body': 'モジュールで `roshanavi_examples.logic` を選んでください。',
   'tour.functionNode.function.title': '関数を選ぶ',

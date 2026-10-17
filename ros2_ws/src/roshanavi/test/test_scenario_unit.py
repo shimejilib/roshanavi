@@ -376,3 +376,41 @@ def test_junit_is_valid_xml():
     assert root.tag == 'testsuites' and root.get('tests') == '2' and root.get('failures') == '1'
     case = root.find('testsuite/testcase[2]/failure')
     assert case is not None and 'だめ' in case.get('message')
+
+
+# ---- class nodes: the call step and the class setup item (docs/design/nodes.md) --------------------
+def test_call_step_and_class_setup_parse_and_round_trip():
+    setup = [{'class': {'name': 'avg', 'module': 'roshanavi_examples.stateful',
+                        'class_name': 'MovingAverage', 'actions': ['reset'],
+                        'methods': [{'method': 'process', 'inputs': [{'topic': '/in'}]}]}}]
+    sc = scenario([{'call': {'node': 'avg', 'method': 'reset', 'timeout': 2}},
+                   {'call': {'node': '/ns/avg', 'method': 'reset'}}], setup=setup)
+    first, second = (s.spec for s in sc.steps)
+    assert (first.node, first.method, first.timeout) == ('/avg', 'reset', 2.0)   # relative -> absolute
+    assert second.node == '/ns/avg' and second.timeout == 5.0
+    node = sc.setup[0].node_spec
+    assert sc.setup[0].item.kind == 'class'
+    assert (node.name, node.class_name, node.actions) == ('avg', 'MovingAverage', ['reset'])
+    text = dump(sc)
+    assert 'class:' in text and 'class_' not in text.replace('class_name', '')
+    again = parse_text(text)
+    assert again.steps == sc.steps and again.setup[0].node_spec == node
+
+
+@pytest.mark.parametrize('step,message', [
+    ({'call': {'node': '/avg'}}, '必須'),
+    ({'call': {'node': '/avg', 'method': '_private'}}, '形式'),
+    ({'call': {'node': 'bad node', 'method': 'reset'}}, 'ノード名'),
+    ({'call': {'node': '/avg', 'method': 'reset', 'extra': 1}}, '使えないキー'),
+])
+def test_call_step_errors_are_plain(step, message):
+    with pytest.raises(ScenarioSchemaError) as info:
+        scenario([step])
+    assert message in str(info.value)
+
+
+def test_class_setup_errors_are_located():
+    with pytest.raises(ScenarioSchemaError) as info:
+        scenario([{'wait': 1}], setup=[{'class': {'module': 'roshanavi_examples.stateful',
+                                                  'class_name': 'MovingAverage'}}])
+    assert 'setup.0.class' in str(info.value)

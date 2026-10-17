@@ -27,7 +27,8 @@ def _project_lookup(path: Optional[str]) -> Callable[[str], Any]:
         if not path:
             return None
         spec = ProjectStore(path).load()
-        for item in (*spec.targets, *spec.dummies, *spec.transforms, *spec.functions):
+        for item in (*spec.targets, *spec.dummies, *spec.transforms, *spec.functions,
+                     *spec.classes):
             if item.id == target_id:
                 return item
         return None

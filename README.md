@@ -22,7 +22,7 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | ランチャー | 自分のノードと依存ノードの起動・停止・ログ・ビルド。既存の launch ファイルを分解して取り込み、ノード一覧で一括 ON/OFF |
 | 入力ノード | 文字列・数値・画像・動画・音声・ブラウザのマイク/カメラを、常駐するダミーノードとして送る |
 | 変換ノード | 「トピック A を受けて B に出す」ノードを、式を書くだけで作る (未完成のノードの代役にも) |
-| 関数ノード | 普通の Python 関数を、そのまま ROS ノードとして動かす |
+| 関数・クラスノード | 普通の Python の関数やクラス (状態・パラメータ・リセット付き) を、そのまま ROS ノードとして動かす |
 | 録画・再生 | bag に録って、次から同じ入力で再現 |
 | シナリオ | 「入力したら、○秒以内にこう出る」を記録して、UI と CLI で自動判定 |
 | リソース監視 | ノードごとの CPU・メモリ (地図にバッジ)、PC 全体の CPU・メモリ・ディスク・ネットワーク・GPU、外部との接続先、メモリリークの疑いと UDP 受信バッファ溢れの診断 (この PC のみ) |
@@ -60,7 +60,7 @@ cd roshanavi && docker compose up -d --build lab demo
 | [docs/design/map-and-traffic.md](docs/design/map-and-traffic.md) | 通信マップ、トラフィック、診断 |
 | [docs/design/measurement.md](docs/design/measurement.md) | C++ 計測ノード、詳細計測 (トレース)、ベンチマーク結果 |
 | [docs/design/input-and-media.md](docs/design/input-and-media.md) | お試し送信、メディア注入、ブラウザ取り込み、録画 |
-| [docs/design/nodes.md](docs/design/nodes.md) | 入力ノード、変換ノード、関数ノード、データの種類 |
+| [docs/design/nodes.md](docs/design/nodes.md) | 入力ノード、変換ノード、関数ノード、クラスノード、データの種類 |
 | [docs/design/launcher.md](docs/design/launcher.md) | ランチャー、プロジェクトファイル、パラメータ、lifecycle、launch の取り込み |
 | [docs/design/ui.md](docs/design/ui.md) | 画面構成、右クリックメニュー、ノード一覧 |
 | [docs/design/api.md](docs/design/api.md) | REST / WebSocket API |

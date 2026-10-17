@@ -5,7 +5,7 @@ import logging
 import os
 import threading
 import time
-from typing import Any, List, Optional
+from typing import Any, Callable, List, Optional
 
 from .. import msgutil
 from ..launcher.dummy_config import write_atomic
@@ -18,6 +18,17 @@ LOG = logging.getLogger('roshanavi.function')
 
 # Inputs are read best effort: it matches reliable and best-effort publishers alike.
 INPUT_QOS = {'reliability': 'best_effort', 'durability': 'volatile', 'depth': 10}
+
+
+def periodic_loop(stop: threading.Event, rate_hz: float, tick: Callable[[], None]) -> None:
+    """Call ``tick`` at ``rate_hz`` until ``stop`` is set (skips ahead when it falls behind)."""
+    period = 1.0 / rate_hz
+    due = time.monotonic() + period
+    while not stop.wait(max(0.0, due - time.monotonic())):
+        tick()
+        due += period
+        if due < time.monotonic() - period:  # fell far behind (slow function): skip ahead
+            due = time.monotonic() + period
 
 
 class FunctionRunner:
@@ -47,13 +58,7 @@ class FunctionRunner:
         self._publisher.publish(msg)
 
     def _periodic(self) -> None:
-        period = 1.0 / float(self.spec.rate_hz or 1.0)
-        due = time.monotonic() + period
-        while not self._stop.wait(max(0.0, due - time.monotonic())):
-            self.core.tick()
-            due += period
-            if due < time.monotonic() - period:  # fell far behind (slow function): skip ahead
-                due = time.monotonic() + period
+        periodic_loop(self._stop, float(self.spec.rate_hz or 1.0), self.core.tick)
 
     def close(self) -> None:
         self._stop.set()

@@ -275,6 +275,7 @@ export class OpConverter {
       this.ids.delete(op.job_id);
       return [{ stop: id }];
     }
+    if (op.kind === 'class_call') return [{ call: { node: op.node, method: op.method } }];
     if (op.kind === 'target_start') return [{ start: { target: op.target_id } }];
     if (op.kind === 'target_stop') return [{ stop: { target: op.target_id } }];
     return [{ stop: { target: op.target_id } }, { start: { target: op.target_id } }];

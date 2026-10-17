@@ -45,7 +45,8 @@ POLL_SEC = 0.5
 class Problem:
     """An error in the user's code: what happened and where (``logic.py:12``)."""
 
-    kind: str          # 'import' | 'call' | 'convert'
+    kind: str          # 'import' | 'call' | 'convert' | 'publish' (class nodes: 'init' | 'state' |
+    #                    'param' | 'action' | 'close')
     message: str
     location: Optional[str]
 
@@ -85,6 +86,8 @@ def describe(exc: BaseException) -> str:
 
 
 class FunctionLoader:
+    member_label = 'function'   # what is looked up in the module (class nodes: 'class')
+
     def __init__(self, workspace: str, module: str, function: str):
         self.workspace = os.path.realpath(workspace)
         self.module = module
@@ -121,10 +124,14 @@ class FunctionLoader:
                               f'not {resolved.file}')
         function = getattr(module, self.function_name, None)
         if function is None:
-            raise AttributeError(f'{resolved.module} has no function {self.function_name!r}')
-        if not inspect.isfunction(function):
-            raise TypeError(f'{resolved.module}.{self.function_name} is not a function')
+            raise AttributeError(f'{resolved.module} has no {self.member_label} '
+                                 f'{self.function_name!r}')
+        self._check_member(function, resolved.module)
         return function
+
+    def _check_member(self, member: Any, module: str) -> None:
+        if not inspect.isfunction(member):
+            raise TypeError(f'{module}.{self.function_name} is not a function')
 
     def load(self) -> Callable[..., Any]:
         """(Re)import; on failure the previous function and modules stay (raises LoadError)."""
@@ -221,8 +228,11 @@ class Watcher:
     """Polls the loader's files and reloads after a change (debounced: the file is stable)."""
 
     def __init__(self, loader: FunctionLoader, on_reload: Callable[[Optional[Problem]], None],
-                 poll_sec: float = POLL_SEC):
+                 poll_sec: float = POLL_SEC, reload_fn: Optional[Callable[[], Any]] = None):
         self._loader = loader
+        # How a changed file is reloaded; raises LoadError (class nodes reload on their own
+        # worker thread so that user code only ever runs there).
+        self._reload = reload_fn or loader.load
         self._on_reload = on_reload
         self._poll = poll_sec
         self._stop = threading.Event()
@@ -242,7 +252,7 @@ class Watcher:
             if [_stamp(p) for p in self._loader.watched_files] != before:
                 continue
             try:
-                self._loader.load()
+                self._reload()
                 self._on_reload(None)
             except LoadError as exc:
                 self._on_reload(exc.problem)

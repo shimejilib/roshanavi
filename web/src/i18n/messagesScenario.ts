@@ -58,6 +58,7 @@ export const scenarioJa = {
   'scn.kind.throughput': '件数の比 (throughput)',
   'scn.kind.latency': '処理時間 (latency)',
   'scn.kind.resources': 'CPU・メモリ (resources)',
+  'scn.kind.call': 'クラスのメソッドを呼ぶ (call)',
   'scn.kind.mem_growth': 'メモリの増え方 (mem_growth)',
 
   'scn.op.eq': '=',
@@ -89,6 +90,7 @@ export const scenarioJa = {
   'scn.field.p95_ms': 'p95 上限 (ms)',
   'scn.field.max_ms': '最大の上限 (ms)',
   'scn.field.node': 'ノード',
+  'scn.field.method': 'メソッド',
   'scn.field.cpu_max': 'CPU 平均の上限 (%、1 コア = 100)',
   'scn.field.mem_max_mb': 'メモリの上限 (MB)',
   'scn.field.max_mb_per_min': '増え方の上限 (MB/分)',
@@ -139,6 +141,7 @@ export const scenarioJa = {
   'scn.rec.empty': 'まだ何も届いていません',
   'scn.rec.opInject': '{mode}: {topic}',
   'scn.rec.opInjectStop': '送信を停止',
+  'scn.rec.op.class_call': '{node} の {method} を呼ぶ',
   'scn.rec.op.target_start': '{id} を起動',
   'scn.rec.op.target_stop': '{id} を停止',
   'scn.rec.op.target_restart': '{id} を再起動',

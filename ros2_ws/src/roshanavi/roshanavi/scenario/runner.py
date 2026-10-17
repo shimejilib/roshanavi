@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .. import data_kinds, msgutil
+from ..function import class_call
 from ..graph import collect, fq_name
 from ..injector import Injector
 from ..jobs import InjectError, InjectSpec
@@ -391,6 +392,8 @@ class ScenarioRunner:
             return Verdict(True, f'{spec.seconds:g} 秒待ちました')
         if kind == 'send':
             return self._send(spec)
+        if kind == 'call':
+            return self._call(spec)
         if kind == 'start':
             return self._start(spec)
         if kind == 'stop':
@@ -505,6 +508,28 @@ class ScenarioRunner:
         if job['state'] == 'error':
             raise StepError(f'{spec.topic} への送信がすぐに止まりました: {job.get("error")}')
         return Verdict(True, f'{spec.topic} に {what} で送り始めました', {'job': job_id})
+
+    def _call(self, spec: Any) -> Verdict:
+        topic = f'{spec.node}/{spec.method}'
+        runtime = self.ctx.runtime
+        try:
+            record = class_call.call_action(
+                self.injector, lambda t: bool(runtime.subscriptions_info(t)), topic,
+                lambda: self.ctx.setup.action_record(spec.node, spec.method)
+                or self.ctx.targets.action_record(spec.node, spec.method),
+                spec.timeout, tick=self._tick)
+        except class_call.ActionCallError as exc:
+            raise StepError(str(exc)) from exc
+        name = f'{spec.node} の {spec.method}()'
+        if record is None:
+            return Verdict(True, f'{name} を呼びました (ノードの状態を読めないので、実行までは確かめていません)')
+        if not record.get('ok'):
+            error = (record.get('error') or {})
+            raise StepError(f'{name} がエラーになりました: {error.get("message", "原因不明")}'
+                            + (f' ({error["location"]})' if error.get('location') else ''))
+        result = record.get('result')
+        return Verdict(True, f'{name} を呼びました' + (f' (戻り値: {result})' if result else ''),
+                       {'topic': topic})
 
     def _stop_target(self, target_id: str) -> Verdict:
         try:

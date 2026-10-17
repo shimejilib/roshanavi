@@ -11,6 +11,7 @@ import { tracingJa } from './messagesTracing';
 import { uxJa2 } from './messagesUx2';
 import { transformJa } from './messagesTransform';
 import { kindsJa } from './messagesKinds';
+import { classJa } from './messagesClass';
 import { functionJa } from './messagesFunction';
 import { scenarioJa } from './messagesScenario';
 import { tourJa } from './messagesTour';
@@ -28,6 +29,7 @@ export const ja = {
   ...transformJa,
   ...kindsJa,
   ...functionJa,
+  ...classJa,
   ...scenarioJa,
   ...tourJa,
   ...resourcesJa,

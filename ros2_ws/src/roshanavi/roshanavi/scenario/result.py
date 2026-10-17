@@ -82,7 +82,7 @@ def summarize_setup(entry: SetupEntry) -> str:
         return ' '.join(item.cmd)
     if kind == 'target':
         return f'起動設定 {item.target}'
-    label = {'function': '関数ノード', 'transform': '変換ノード', 'dummy': '入力ノード'}[kind]
+    label = {'function': '関数ノード', 'class': 'クラスノード', 'transform': '変換ノード', 'dummy': '入力ノード'}[kind]
     return f'{label} {entry.node_spec.name}'
 
 

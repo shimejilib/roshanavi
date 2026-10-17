@@ -11,6 +11,7 @@
 | `send` | 1 件送る | `topic`、`data` (メッセージのフィールド、`${}` 式可) または `kind` + `value` (データの種類の値)、`type` / `qos` (任意) |
 | `start` / `stop` | 周期送信・ファイル・メディアを裏で開始 / 停止する | `start: {id, topic, rate_hz, data\|value, count?}`、`stream: <data_dir のファイル>`、`media: {source, ...MediaOptions}`。`id` の既定はトピック名。`stop: <id>` |
 | `start: {target}` / `stop: {target}` | プロジェクトの起動設定 (入力ノード・関数ノードなど) を起動 / 停止する | `target: <起動設定の ID>` |
+| `call` | クラスノードの操作メソッド (引数なし) を呼ぶ ([nodes.md#クラスノード](nodes.md#クラスノード-状態を持つ処理をそのままノードにする)) | `call: {node, method, timeout?}`。`node` は `/ns/name` か `name`、`timeout` の既定は 5 秒 |
 | `play` | bag を再生する | `bag` (data_dir の中)、`topics`、`rate`、`loop`、`wait: true` で終わるまで待つ (`timeout`) |
 | `wait` | 指定秒待つ | `wait: 1.0` |
 | `expect` | `within` 秒以内に、`where` を満たすメッセージが `count` 件届く | `topic`、`within`、`count` (1)、`where` |
@@ -36,9 +37,9 @@
 | `launch: {package, file, args: {name: value}}` | `ros2 launch` |
 | `cmd: [ros2, run\|launch, ...]` | 上の 2 つの別の書き方 (`--ros-args` の `-p` / `-r` と `__node:=` / `__ns:=` だけ解釈)。ほかのコマンドは起動しない |
 | `target: <id>` | プロジェクトの起動設定 |
-| `function` / `transform` / `dummy: {...}` | 関数ノード・変換ノード・入力ノードの仕様 ([nodes.md](nodes.md))。`id` は自動、`name` の既定は `scenario_<種類>_<番号>` |
+| `function` / `class` / `transform` / `dummy: {...}` | 関数ノード・クラスノード (`ClassSpec`)・変換ノード・入力ノードの仕様 ([nodes.md](nodes.md))。`id` は自動、`name` の既定は `scenario_<種類>_<番号>` |
 
-ノード名が分かるもの (`run` の `name`、関数・変換・入力ノード、名前付きの起動設定) は、`wait_for_node` が無くてもそのノードがグラフに現れるまで待つ。プロセスが途中で終わったり、時間内にノードが現れなければセットアップの失敗 (ログの最後 20 行を付ける)。
+ノード名が分かるもの (`run` の `name`、関数・クラス・変換・入力ノード、名前付きの起動設定) は、`wait_for_node` が無くてもそのノードがグラフに現れるまで待つ。プロセスが途中で終わったり、時間内にノードが現れなければセットアップの失敗 (ログの最後 20 行を付ける)。
 
 ## 例
 

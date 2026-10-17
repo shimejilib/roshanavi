@@ -55,3 +55,8 @@ export function formatDuration(seconds: number): string {
   const s = String(total % 60).padStart(2, '0');
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${s}` : `${m}:${s}`;
 }
+
+/** Clock time (HH:MM:SS) of an epoch-seconds timestamp, in the browser's locale. */
+export function formatClock(epochSec: number): string {
+  return new Date(epochSec * 1000).toLocaleTimeString('ja-JP', { hour12: false });
+}

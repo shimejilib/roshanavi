@@ -279,12 +279,118 @@ class FunctionSpec(_Strict):
         return values
 
 
+# ---- class nodes (docs/design/nodes.md) -----------------------------------------------------
+CLASS_PATTERN = r'^[A-Za-z_][A-Za-z0-9_]{0,63}\Z'
+METHOD_PATTERN = r'^[A-Za-z][A-Za-z0-9_]{0,63}\Z'   # public methods only (no leading _)
+KEY_PATTERN = r'^[A-Za-z_][A-Za-z0-9_]{0,63}\Z'      # a key of the returned dict
+MAX_CLASS_METHODS = 16
+MAX_CLASS_OUTPUTS = 8
+# Methods roshanavi calls itself: they cannot be bound to topics or used as actions.
+HOOK_METHODS = ('close', 'shutdown', 'get_state', 'set_state', 'on_param_change')
+InitValue = Union[StrictBool, StrictInt, StrictFloat, StrictStr,
+                  List[Union[StrictInt, StrictFloat]]]
+
+
+class ClassOutput(FunctionOutput):
+    # A method that returns a dict sends each ``key`` to its own topic; no key = the whole
+    # return value goes to this one topic.
+    key: Optional[constr(regex=KEY_PATTERN)] = None
+
+
+class ClassMethodSpec(_Strict):
+    """One processing method bound to topics (same call modes as a function node)."""
+
+    method: constr(regex=METHOD_PATTERN)
+    call: Literal['on_message', 'periodic', 'multi_input'] = 'on_message'
+    inputs: List[FunctionInput] = Field(default_factory=list, max_items=MAX_FUNCTION_INPUTS)
+    outputs: List[ClassOutput] = Field(default_factory=list, max_items=MAX_CLASS_OUTPUTS)
+    rate_hz: Optional[confloat(gt=0, le=1000)] = None
+    trigger: constr(max_length=256) = 'any'
+
+    @root_validator(skip_on_failure=True)
+    def _consistent(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        call, inputs, outputs = values['call'], values['inputs'], values['outputs']
+        if values['method'] in HOOK_METHODS:
+            raise ValueError(f'{values["method"]} is called by roshanavi itself; it cannot be '
+                             'bound to topics')
+        if call == 'on_message' and len(inputs) != 1:
+            raise ValueError('call "on_message" takes exactly one input')
+        if call == 'multi_input' and len(inputs) < 2:
+            raise ValueError('call "multi_input" takes 2 or more inputs')
+        if call == 'periodic':
+            if inputs:
+                raise ValueError('call "periodic" takes no inputs')
+            if values.get('rate_hz') is None:
+                raise ValueError('call "periodic" needs "rate_hz"')
+        topics = [i.topic for i in inputs]
+        if len(set(topics)) != len(topics):
+            raise ValueError(f'input topics must be unique: {topics}')
+        if values['trigger'] != 'any' and values['trigger'] not in topics:
+            raise ValueError('trigger must be "any" or one of the input topics')
+        keys = [o.key for o in outputs]
+        if any(k is not None for k in keys):
+            if any(k is None for k in keys):
+                raise ValueError('outputs: give every output a key, or only one output without')
+            if len(set(keys)) != len(keys):
+                raise ValueError(f'output keys must be unique: {keys}')
+        elif len(outputs) > 1:
+            raise ValueError('several outputs need a key each (the method returns a dict)')
+        for port in [*inputs, *outputs]:
+            if port.kind == 'message' and not port.type:
+                raise ValueError(f'{port.topic}: kind "message" needs a "type"')
+            if port.type:
+                _check_kind(port.kind, port.type)
+        return values
+
+
+class ClassSpec(_Strict):
+    """A class node (``ros2 run roshanavi function`` with a class): a plain Python class as a
+    node. ``__init__`` arguments are ROS parameters (``params`` = their start values)."""
+
+    id: constr(regex=ID_PATTERN)
+    name: constr(min_length=1, max_length=256)
+    namespace: Optional[constr(max_length=256)] = None
+    module: constr(regex=MODULE_PATTERN)
+    class_name: constr(regex=CLASS_PATTERN)
+    params: Dict[constr(regex=CLASS_PATTERN), InitValue] = Field(default_factory=dict,
+                                                                 max_items=64)
+    methods: List[ClassMethodSpec] = Field(default_factory=list, max_items=MAX_CLASS_METHODS)
+    actions: List[constr(regex=METHOD_PATTERN)] = Field(default_factory=list,
+                                                        max_items=MAX_CLASS_METHODS)
+    autostart: bool = False
+    auto_restart: bool = False
+
+    @root_validator(skip_on_failure=True)
+    def _consistent(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        if values['module'].split('.')[0] in RESERVED_MODULE_TOPS:
+            raise ValueError('module must be one of your workspace packages, not roshanavi')
+        methods, actions = values['methods'], values['actions']
+        if not methods and not actions:
+            raise ValueError('bind at least one method to topics, or mark an action method')
+        names = [m.method for m in methods] + list(actions)
+        if len(set(names)) != len(names):
+            raise ValueError(f'a method can be bound once, or be an action, not both: {names}')
+        for action in actions:
+            if action in HOOK_METHODS:
+                raise ValueError(f'{action} is called by roshanavi itself; it cannot be an action')
+        inputs = [i.topic for m in methods for i in m.inputs]
+        outputs = [o.topic for m in methods for o in m.outputs]
+        if len(set(outputs)) != len(outputs):
+            raise ValueError(f'output topics must be unique across methods: {outputs}')
+        loops = sorted(set(inputs) & set(outputs))
+        if loops:
+            raise ValueError(f'{loops[0]} is both an input and an output (the node would '
+                             'receive its own output)')
+        return values
+
+
 class ProjectSpec(_Strict):
     version: Literal[1] = PROJECT_VERSION
     targets: List[TargetSpec] = Field(default_factory=list, max_items=100)
     dummies: List[DummySpec] = Field(default_factory=list, max_items=100)
     transforms: List[TransformSpec] = Field(default_factory=list, max_items=100)
     functions: List[FunctionSpec] = Field(default_factory=list, max_items=100)
+    classes: List[ClassSpec] = Field(default_factory=list, max_items=100)
     watch_topics: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
                                                                      max_items=200)
 
@@ -292,10 +398,11 @@ class ProjectSpec(_Strict):
     def _unique_ids(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         seen = set()
         for item in [*values.get('targets', []), *values.get('dummies', []),
-                     *values.get('transforms', []), *values.get('functions', [])]:
+                     *values.get('transforms', []), *values.get('functions', []),
+                     *values.get('classes', [])]:
             if item.id in seen:
                 raise ValueError(f'duplicate id {item.id!r} (ids must be unique across '
-                                 'targets, dummies, transforms and functions)')
+                                 'targets, dummies, transforms, functions and classes)')
             seen.add(item.id)
         return values
 

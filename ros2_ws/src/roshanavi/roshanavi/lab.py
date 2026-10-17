@@ -113,7 +113,8 @@ class Lab:
             raw = graph.collect(self.runtime)
             node_info = self.launcher.observe(graph.node_ids(raw))
             self._node_pids = {n: info.get('pid') for n, info in node_info.items()}
-            self.graph.update(raw, self.injector.list(), node_info)
+            self.graph.update(raw, self.injector.list(), node_info,
+                              self.launcher.manager.action_topics())
             self.traffic.sync(raw)
             self.traffic.tick()
             self.tracing.poll()

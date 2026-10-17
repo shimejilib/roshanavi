@@ -79,6 +79,31 @@ def test_two_publishers_on_one_topic_are_measured_per_node(probe_lab, helper):
     other.destroy_node()
 
 
+def test_late_and_replaced_publishers_resolve_to_their_node(probe_lab, helper):
+    # The probe asks the graph who a gid is only on graph changes / unknown gids (#18): a
+    # publisher that joins later, or replaces another one, must still get its node name.
+    helper.periodic_publisher(String, '/tl_late', 5.0, lambda i: String(data='a'))
+    first = '/' + helper.node.get_name()
+    wait_for(lambda: first in publishers_of(probe_lab, '/tl_late') or None, timeout=30.0)
+
+    def start_publisher(name):
+        node = second_node(helper, name)
+        pub = node.create_publisher(String, '/tl_late', 10)
+        node.create_timer(0.2, lambda: pub.publish(String(data=name)))
+        return node
+    late = start_publisher('tl_late_pub')
+    wait_for(lambda: '/tl_late_pub' in publishers_of(probe_lab, '/tl_late') or None,
+             timeout=30.0)
+    late.destroy_node()
+    replacement = start_publisher('tl_replacement_pub')
+    pubs = wait_for(lambda: publishers_of(probe_lab, '/tl_late')
+                    if '/tl_replacement_pub' in publishers_of(probe_lab, '/tl_late') else None,
+                    timeout=30.0)
+    assert pubs['/tl_replacement_pub']['basis'] == 'measured'
+    assert first in pubs
+    replacement.destroy_node()
+
+
 def test_probe_topics_are_hidden(probe_lab, helper):
     helper.periodic_publisher(String, '/tl_seen', 5.0, lambda i: String(data='x'))
     wait_for(lambda: probe_lab.traffic.status()['receiving'], timeout=15.0)

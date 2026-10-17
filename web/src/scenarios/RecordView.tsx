@@ -39,6 +39,7 @@ function opText(ev: Extract<RecordEvent, { kind: 'op' }>): string {
     return t('scn.rec.opInject', { mode: tDynamic(`scn.rec.mode.${String(req.mode)}`, 'scn.rec.mode.once'), topic: String(req.topic ?? req.source ?? '') });
   }
   if (op.kind === 'inject_stop') return t('scn.rec.opInjectStop');
+  if (op.kind === 'class_call') return t('scn.rec.op.class_call', { node: op.node, method: op.method });
   return tDynamic(`scn.rec.op.${op.kind}`, 'scn.rec.op.target_start', { id: op.target_id });
 }
 

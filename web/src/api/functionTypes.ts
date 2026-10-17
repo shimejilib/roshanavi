@@ -1,6 +1,7 @@
 // Function nodes (関数ノード, docs/design/nodes.md): a plain Python function run as a ROS node.
 
 import type { PortKind } from '../datakind/kinds';
+import type { ClassInfo } from './classTypes';
 import type { Qos } from './types';
 
 export type CallMode = 'on_message' | 'periodic' | 'multi_input';
@@ -76,4 +77,6 @@ export interface ModuleInfo {
   ros_package: string;
   file: string;
   functions: FunctionInfo[];
+  /** Top-level public classes (static parse); class nodes, docs/design/nodes.md. */
+  classes?: ClassInfo[];
 }

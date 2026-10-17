@@ -18,7 +18,8 @@ x-ros: &ros
     args:
       ROS_DISTRO: ${ROS_DISTRO:-jazzy}
   # One image per distro, so a lyrical run never replaces the jazzy image the lab uses.
-  image: roshanavi:dev-${ROS_DISTRO:-jazzy}
+  # ROSHANAVI_IMAGE overrides the tag (a git worktree builds its own image next to the lab's).
+  image: ${ROSHANAVI_IMAGE:-roshanavi:dev-${ROS_DISTRO:-jazzy}}
   init: true
   # LTTng's per-CPU ring buffers (詳細計測モード) and Fast DDS's shared-memory transport both
   # live in /dev/shm; Docker's default 64 MB is too small for 4 MiB x many CPUs.

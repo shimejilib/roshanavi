@@ -14,15 +14,15 @@ import tempfile
 import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
-from ..function.core import adopt_topic_types
+from ..function.core import adopt_class_topic_types, adopt_topic_types
 from . import command
 from .discovery import Workspace
-from .dummy_config import (config_text, function_config_text, transform_config_text,
-                           write_atomic)
+from .dummy_config import (class_config_text, config_text, function_config_text,
+                           transform_config_text, write_atomic)
 from .env import child_env
 from .errors import LauncherError
 from .process import SIGINT_TIMEOUT_SEC, SIGTERM_TIMEOUT_SEC
-from .schema import DummySpec, FunctionSpec, TargetSpec, TransformSpec
+from .schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec
 from .target import Spec, Target, kind_of, role_of
 
 LOG = logging.getLogger(__name__)
@@ -66,6 +66,18 @@ class ProcessManager:
             path = self._write_config(spec.id, function_config_text(spec, self.workspace.root,
                                                                     status))
             return command.function_command(spec, path, self.workspace.root)
+        if isinstance(spec, ClassSpec):
+            command.validate_class(spec, self.workspace.root)
+            if self.topic_types is not None:
+                spec = adopt_class_topic_types(spec, self.topic_types)
+            status = self.status_path(spec.id)
+            try:
+                os.unlink(status)
+            except FileNotFoundError:
+                pass
+            path = self._write_config(spec.id, class_config_text(spec, self.workspace.root,
+                                                                 status))
+            return command.class_command(spec, path, self.workspace.root)
         return command.target_command(spec, self._ctx)
 
     def status_path(self, spec_id: str) -> str:
@@ -98,6 +110,8 @@ class ProcessManager:
             command.validate_transform(spec)
         elif isinstance(spec, FunctionSpec):
             command.validate_function(spec, self.workspace.root)
+        elif isinstance(spec, ClassSpec):
+            command.validate_class(spec, self.workspace.root)
         else:
             command.target_command(spec, self._ctx)
 
@@ -127,7 +141,7 @@ class ProcessManager:
         target = self._get(target_id)
         if spec.id != target_id:
             raise LauncherError('invalid_request', 'the id of a target cannot be changed')
-        managed = ('dummy', 'transform', 'function')
+        managed = ('dummy', 'transform', 'function', 'class')
         if kind_of(spec) != kind_of(target.spec) and (kind_of(spec) in managed
                                                       or kind_of(target.spec) in managed):
             raise LauncherError('invalid_request', f'cannot turn a {kind_of(target.spec)} '
@@ -206,7 +220,7 @@ class ProcessManager:
 
     def _describe(self, target: Target) -> Dict[str, Any]:
         info = target.to_dict()
-        if isinstance(target.spec, FunctionSpec):
+        if isinstance(target.spec, (FunctionSpec, ClassSpec)):
             status = self.function_status(target.id) if target.alive() else None
             info['function_status'] = status
         return info
@@ -230,6 +244,28 @@ class ProcessManager:
 
     def functions(self) -> List[FunctionSpec]:
         return [t.spec for t in self._all() if isinstance(t.spec, FunctionSpec)]
+
+    def classes(self) -> List[ClassSpec]:
+        return [t.spec for t in self._all() if isinstance(t.spec, ClassSpec)]
+
+    def action_topics(self) -> List[str]:
+        """``/<node>/<method>`` of every action method of every class node."""
+        from ..function.class_call import action_topic
+        return [action_topic(t.spec.name, t.spec.namespace, method)
+                for t in self._all() if isinstance(t.spec, ClassSpec) for method in t.spec.actions]
+
+    def action_record(self, full_node: str, method: str) -> Optional[Dict[str, Any]]:
+        """The status record (count, last_at, ok, result, error) of an action method of a running
+        class node called ``full_node`` (``/name`` or ``/ns/name``); None when unknown."""
+        from ..function.class_call import full_node_name  # keeps rclpy out of the launcher import
+        for target in self._all():
+            spec = target.spec
+            if isinstance(spec, ClassSpec) and target.alive() \
+                    and full_node_name(spec.name, spec.namespace) == full_node:
+                actions = (self.function_status(target.id) or {}).get('actions') or {}
+                record = actions.get(method)
+                return record if isinstance(record, dict) else None
+        return None
 
     def roles(self) -> Dict[str, str]:
         return {t.id: role_of(t.spec) for t in self._all()}

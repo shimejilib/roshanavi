@@ -109,6 +109,8 @@ ProbeNode::ProbeNode(const rclcpp::NodeOptions & options)
   pub_options.use_default_callbacks = false;
   stats_pub_ = create_publisher<roshanavi_msgs::msg::ProbeStats>(
     kStatsTopic, rclcpp::QoS(2).reliable().durability_volatile(), pub_options);
+  // Created before the first tick, so a change made between ticks is never missed.
+  graph_event_ = get_graph_event();
   timer_ = create_wall_timer(
     std::chrono::duration<double>(period > 0.0 ? period : kDefaultPeriodSec),
     [this]() {on_timer();});
@@ -186,9 +188,19 @@ void ProbeNode::subscribe(const std::string & topic, MonitoredTopic & entry)
   }
 }
 
-void ProbeNode::resolve_publishers(const std::string & topic, MonitoredTopic & entry)
+void ProbeNode::refresh_publishers(
+  const std::string & topic, MonitoredTopic & entry, const std::vector<EndpointResult> & seen)
 {
-  std::map<Gid, EndpointName> names;
+  std::vector<Gid> gids;
+  gids.reserve(seen.size());
+  for (const EndpointResult & ep : seen) {
+    gids.push_back(ep.gid);
+  }
+  const double now = steady_seconds();
+  if (!entry.publishers.needs_refresh(now, gids)) {
+    return;
+  }
+  PublisherDirectory::Names names;
   try {
     for (const auto & info : get_publishers_info_by_topic(topic)) {
       Gid gid{};
@@ -199,9 +211,9 @@ void ProbeNode::resolve_publishers(const std::string & topic, MonitoredTopic & e
   } catch (const std::exception & exc) {
     RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 10000, "graph query for %s failed: %s",
       topic.c_str(), exc.what());
-    return;  // keep the previous mapping
+    return;  // keep the previous mapping; asked again on the next tick
   }
-  entry.publishers = std::move(names);
+  entry.publishers.update(std::move(names), gids, now);
 }
 
 void ProbeNode::update_cpu(roshanavi_msgs::msg::ProbeStats & msg)
@@ -224,18 +236,24 @@ void ProbeNode::on_timer()
   }
   const double now = steady_seconds();
   const double max_window = *std::max_element(windows_sec_.begin(), windows_sec_.end());
+  const bool graph_changed = graph_event_->check_and_clear();
   roshanavi_msgs::msg::ProbeStats msg;
   msg.header.stamp = get_clock()->now();
   msg.instance = instance_;
   msg.rmw_implementation = rmw_get_implementation_identifier();
   update_cpu(msg);
   for (auto & [topic, entry] : topics_) {
-    std::vector<Sample> retained;
+    std::vector<WindowStats> computed;
     if (entry.status == "ok") {
-      resolve_publishers(topic, entry);
-      retained = entry.state->samples.retained(now);
+      // One pass over the samples serves every window.
+      computed = calculator_.compute(
+        entry.state->samples.retained(now), now, windows_sec_, max_window);
+      if (graph_changed) {
+        entry.publishers.mark_dirty();
+      }
+      refresh_publishers(topic, entry, computed.front().endpoints);
     }
-    for (double window : windows_sec_) {
+    for (std::size_t w = 0; w < windows_sec_.size(); ++w) {
       roshanavi_msgs::msg::TopicStats ts;
       ts.topic = topic;
       ts.type = entry.type;
@@ -246,10 +264,9 @@ void ProbeNode::on_timer()
       ts.last_seen.nanosec = static_cast<uint32_t>(entry.state->last_seen_ns % 1000000000);
       if (entry.status == "ok") {
         fill_topic_stats(
-          compute_window(retained, now, window, max_window),
-          compute_endpoints(retained, now, window, max_window), entry.publishers, ts);
+          computed[w].topic, computed[w].endpoints, entry.publishers.names(), ts);
       } else {
-        fill_unmeasured(ts, window);
+        fill_unmeasured(ts, windows_sec_[w]);
       }
       msg.topics.push_back(std::move(ts));
     }

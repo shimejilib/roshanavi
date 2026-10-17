@@ -6,7 +6,7 @@ import { t, type MessageKey } from '../i18n';
 
 export type TermName =
   | 'launch' | 'remap' | 'namespace' | 'parameter' | 'paramsFile' | 'node' | 'topic'
-  | 'msgType' | 'workspace' | 'rate' | 'qos' | 'package' | 'executable';
+  | 'msgType' | 'workspace' | 'rate' | 'qos' | 'package' | 'executable' | 'lifecycle';
 
 export function termHelp(term: TermName): string {
   return t(`term.${term}` as MessageKey);

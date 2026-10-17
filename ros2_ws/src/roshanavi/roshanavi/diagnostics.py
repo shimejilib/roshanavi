@@ -13,7 +13,7 @@ Hidden topics (a segment starting with ``_``), ``/rosout``, ``/parameter_events`
 rosbag2's own ``/events/write_split`` never produce one-sided warnings.
 """
 
-from typing import Any, Dict, Iterable, List, Mapping, Set, Tuple
+from typing import Any, Collection, Dict, Iterable, List, Mapping, Set, Tuple
 
 from .qos_compat import incompatible_pairs
 
@@ -84,11 +84,11 @@ def _qos_diags(snapshot: Mapping[str, Any]) -> List[Dict[str, Any]]:
             for p in incompatible_pairs(snapshot.get('edges', []))]
 
 
-def _one_sided(sides: Mapping[str, Tuple[Set[str], Set[str]]]
+def _one_sided(sides: Mapping[str, Tuple[Set[str], Set[str]]], quiet: Collection[str] = ()
                ) -> Tuple[List[str], List[str]]:
     pub_only, sub_only = [], []
     for topic, (pubs, subs) in sorted(sides.items()):
-        if is_hidden_topic(topic) or (not pubs and not subs):
+        if is_hidden_topic(topic) or topic in quiet or (not pubs and not subs):
             continue
         if pubs and not subs:
             pub_only.append(topic)
@@ -97,8 +97,9 @@ def _one_sided(sides: Mapping[str, Tuple[Set[str], Set[str]]]
     return pub_only, sub_only
 
 
-def _side_diags(sides: Mapping[str, Tuple[Set[str], Set[str]]]) -> List[Dict[str, Any]]:
-    pub_only, sub_only = _one_sided(sides)
+def _side_diags(sides: Mapping[str, Tuple[Set[str], Set[str]]],
+                quiet: Collection[str] = ()) -> List[Dict[str, Any]]:
+    pub_only, sub_only = _one_sided(sides, quiet)
     result = [_diag('no_subscriber', 'warning', t, sides[t][0], {}) for t in pub_only]
     result += [_diag('no_publisher', 'warning', t, sides[t][1], {}) for t in sub_only]
     for pub_topic in pub_only:
@@ -115,10 +116,13 @@ def _type_diags(snapshot: Mapping[str, Any]) -> List[Dict[str, Any]]:
             for t in snapshot.get('topics', []) if len(set(t.get('types', []))) > 1]
 
 
-def diagnose(snapshot: Mapping[str, Any]) -> List[Dict[str, Any]]:
-    """All diagnostics for a snapshot, most severe first, deterministic order."""
+def diagnose(snapshot: Mapping[str, Any], quiet_topics: Collection[str] = ()) -> List[Dict[str, Any]]:
+    """All diagnostics for a snapshot, most severe first, deterministic order.
+
+    ``quiet_topics`` are one-sided on purpose (a class node's action topics: nobody publishes
+    until a button is pressed) and are not reported as ``no_publisher`` / ``no_subscriber``."""
     sides = _sides(snapshot)
-    items = _qos_diags(snapshot) + _type_diags(snapshot) + _side_diags(sides)
+    items = _qos_diags(snapshot) + _type_diags(snapshot) + _side_diags(sides, quiet_topics)
     items.sort(key=lambda d: (SEVERITY_ORDER[d['severity']], d['code'], d['topic'],
                               d['nodes']))
     return items

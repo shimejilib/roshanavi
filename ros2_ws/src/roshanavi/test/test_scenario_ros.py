@@ -101,6 +101,17 @@ def test_function_node_example(runtime, data_dir):
     assert_passed(run(raw('function_shout.yaml'), runtime, data_dir))
 
 
+def test_class_node_example_and_a_variant_without_the_reset(runtime, data_dir):
+    result = run(raw('class_moving_average.yaml'), runtime, data_dir)
+    assert_passed(result)
+    assert result.steps[5].kind == 'call'
+    broken = raw('class_moving_average.yaml')
+    broken['steps'][5] = {'wait': 0.2}       # no reset: the old 20 and 30 are still in the window
+    result = run(broken, runtime, data_dir)
+    assert result.status == FAILED and result.steps[7].status == FAILED
+    assert children() == []
+
+
 def test_perception_examples(runtime, samples):
     result = run(raw('perception.yaml'), runtime, samples)
     assert_passed(result)

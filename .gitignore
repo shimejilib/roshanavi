@@ -11,3 +11,6 @@ data/*
 !data/.gitkeep
 web/test-results/
 web/playwright-report/
+
+# Claude Code worktrees and local state
+.claude/worktrees/

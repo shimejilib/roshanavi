@@ -8,6 +8,9 @@ set -u
 cd "$(dirname "$0")/.."
 export UID GID="$(id -g)"
 export ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+# Passed through to compose so a second checkout / git worktree can run its own isolated stack
+# next to the lab: ROSHANAVI_IMAGE (image tag), COMPOSE_PROJECT_NAME, E2E_ROS_DOMAIN_ID.
+export ROSHANAVI_IMAGE="${ROSHANAVI_IMAGE:-roshanavi:dev-${ROS_DISTRO}}"
 echo "E2E on ROS 2 ${ROS_DISTRO}" >&2
 DC=(docker compose --profile e2e)
 proj_hash() { docker compose exec -T lab sha256sum /data/roshanavi.yaml 2>/dev/null | cut -d' ' -f1; }

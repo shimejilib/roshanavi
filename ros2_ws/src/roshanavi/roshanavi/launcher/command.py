@@ -12,7 +12,7 @@ from typing import List, Sequence
 from . import validate
 from .discovery import Workspace
 from .errors import LauncherError
-from .schema import DummySpec, FunctionSpec, TargetSpec, TransformSpec, param_text
+from .schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec, param_text
 
 PARAMS_FILE_EXTS = ('.yaml', '.yml')
 
@@ -111,6 +111,23 @@ def validate_function(spec: FunctionSpec, workspace_root: str) -> None:
         raise LauncherError('invalid_topic', f'output topic {spec.output.topic} is also an '
                             'input (the node would receive its own output)')
     resolve_module(workspace_root, spec.module)
+
+
+def validate_class(spec: ClassSpec, workspace_root: str) -> None:
+    """Names / topics like a function node, and the module must resolve inside the workspace."""
+    from ..function.modules import resolve_module
+    validate.target_id(spec.id)
+    validate.node_name(spec.name)
+    validate.namespace(spec.namespace)
+    for method in spec.methods:
+        for port in [*method.inputs, *method.outputs]:
+            _absolute_topic(port.topic)
+    resolve_module(workspace_root, spec.module)
+
+
+def class_command(spec: ClassSpec, config_path: str, workspace_root: str) -> List[str]:
+    validate_class(spec, workspace_root)
+    return node_command('function', spec.name, spec.namespace, config_path)
 
 
 def function_command(spec: FunctionSpec, config_path: str, workspace_root: str) -> List[str]:

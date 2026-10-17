@@ -11,7 +11,7 @@ import json
 import logging
 import threading
 from dataclasses import dataclass, field
-from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
+from typing import Any, Collection, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from rclpy.exceptions import InvalidTopicNameException
 
@@ -128,8 +128,10 @@ def node_ids(raw: RawGraph) -> List[str]:
 
 def build_snapshot(raw: RawGraph, show_self: bool = False,
                    jobs: Iterable[Mapping[str, Any]] = (),
-                   node_info: Optional[Mapping[str, Mapping[str, Any]]] = None) -> Dict[str, Any]:
-    """``node_info``: per node id ``{role, target_id, confidence}`` from the launcher."""
+                   node_info: Optional[Mapping[str, Mapping[str, Any]]] = None,
+                   quiet_topics: Collection[str] = ()) -> Dict[str, Any]:
+    """``node_info``: per node id ``{role, target_id, confidence}`` from the launcher.
+    ``quiet_topics``: topics that are one-sided on purpose (class nodes' action topics)."""
     nodes, seen = [], set()
     for name, namespace in sorted(raw.nodes, key=lambda n: fq_name(n[0], n[1])):
         node_id = fq_name(name, namespace)
@@ -160,7 +162,7 @@ def build_snapshot(raw: RawGraph, show_self: bool = False,
     edges += [e for e in extra_edges if e['topic'] in known_topics]
     edges.sort(key=lambda e: (e['node'], e['topic'], e['dir']))
     snapshot = {'nodes': nodes, 'topics': topics, 'edges': edges}
-    snapshot['diagnostics'] = diagnose(snapshot)
+    snapshot['diagnostics'] = diagnose(snapshot, quiet_topics)
     return snapshot
 
 
@@ -179,9 +181,10 @@ class GraphMonitor:
         self._hash = snapshot_hash(self._snapshot)
 
     def update(self, raw: RawGraph, jobs: Iterable[Mapping[str, Any]] = (),
-               node_info: Optional[Mapping[str, Mapping[str, Any]]] = None) -> bool:
+               node_info: Optional[Mapping[str, Mapping[str, Any]]] = None,
+               quiet_topics: Collection[str] = ()) -> bool:
         """Store a new raw graph (+ running inject jobs, node roles). True when changed."""
-        snapshot = build_snapshot(raw, self._show_self, jobs, node_info)
+        snapshot = build_snapshot(raw, self._show_self, jobs, node_info, quiet_topics)
         digest = snapshot_hash(snapshot)
         with self._lock:
             changed = digest != self._hash

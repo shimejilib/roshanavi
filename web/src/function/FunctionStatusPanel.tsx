@@ -4,7 +4,8 @@ import type { Target } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 
 export function FunctionStatusPanel({ target }: { target: Target }) {
-  const status = target.function_status;
+  const raw = target.function_status;
+  const status = raw && !('kind' in raw) ? raw : null; // class nodes have their own panel
   if (!status) {
     return (
       <section className="function-status" data-testid="function-status" data-state="none">

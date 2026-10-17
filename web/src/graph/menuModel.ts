@@ -3,6 +3,7 @@
 // Only what roshanavi started can be stopped or rebuilt; nodes it did not start
 // ("external") get read-only items. Disabled items carry a plain-language reason.
 
+import type { ClassSpec } from '../api/classTypes';
 import type { GraphNode, Job, Target, TargetSpec, TrafficEntry } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import { nodeControl, type ControlAction } from './nodeControl';
@@ -16,7 +17,8 @@ export type MenuTarget =
 export type MenuAction =
   | ControlAction
   | 'logs' | 'editTarget' | 'buildRestart' | 'params' | 'isolate'
-  | 'pause' | 'resume' | 'editDummy' | 'editTransform' | 'editFunction' | 'exportLaunch' | 'details' | 'lifecycle'
+  | 'pause' | 'resume' | 'editDummy' | 'editTransform' | 'editFunction' | 'editClass' | 'exportLaunch' | 'details' | 'lifecycle'
+  | `call:${string}`
   | 'view' | 'tryInject' | 'createInput' | 'createTransform' | 'record' | 'monitorOn' | 'monitorOff' | 'typeDef' | 'flowOnly'
   | 'qosDetails' | 'whyNotDelivered'
   | 'addTopic' | 'launchNode' | 'relayout' | 'fit';
@@ -50,6 +52,7 @@ export function menuRole(node: GraphNode | undefined, targets: readonly Target[]
   const target = node.target_id ? targets.find((tg) => tg.id === node.target_id) : undefined;
   if (!target) return 'external';
   if (target.kind === 'dummy' || target.kind === 'transform' || target.kind === 'function') return target.kind;
+  if (target.kind === 'class') return 'function'; // same family and colour as function nodes
   return 'owned';
 }
 
@@ -66,6 +69,18 @@ function controlItems(node: GraphNode | undefined, targets: readonly Target[]): 
   if (control.kind === 'none') return [item('stop', false, control.reason)];
   if (control.actions.length === 0) return [item('start', false, t('menu.reason.invalid'))];
   return control.actions.map((action) => item(action));
+}
+
+/** 「<method> を呼ぶ」 for each action method of a class node (enabled while it runs). */
+function callItems(target: Target | undefined): MenuItem[] {
+  if (target?.kind !== 'class') return [];
+  const running = target.status === 'running';
+  return (target.spec as ClassSpec).actions.map((method) => ({
+    action: `call:${method}` as const,
+    label: t('menu.call', { method }),
+    enabled: running,
+    reason: running ? undefined : t('class.notRunning'),
+  }));
 }
 
 function buildItem(target: Target | undefined, buildable: ReadonlySet<string>): MenuItem {
@@ -98,7 +113,7 @@ function baseNodeItems(ctx: MenuContext): MenuItem[] {
     return [...controls, item('editTransform'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
   }
   if (role === 'function') {
-    return [...controls, item('editFunction'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
+    return [...controls, ...callItems(target), item(target?.kind === 'class' ? 'editClass' : 'editFunction'), item('exportLaunch'), item('logs'), item('params'), item('isolate')];
   }
   if (role === 'job') {
     const job = ctx.jobs.find((j) => j.id === node?.job_id);

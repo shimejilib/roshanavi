@@ -59,3 +59,29 @@ functions:
   function: shout
   inputs: [{topic: /chatter, kind: string}]
   output: {topic: /shouted, kind: string}
+# Class nodes (クラスノード, docs/design/nodes.md): plain Python classes of roshanavi_examples/stateful.py
+# that keep state between messages. Not started automatically.
+#  - moving_average: /number -> /average (average of the last `window` numbers). `window` is a
+#    ROS parameter; the action `reset` forgets the numbers (map menu, or: ros2 topic pub --once
+#    /moving_average/reset std_msgs/msg/Empty). Send numbers with an input node (入力ノード).
+#  - message_counter: counts the /chatter messages (/message_count); `reset` sets it to 0.
+classes:
+- id: moving_average
+  name: moving_average
+  module: roshanavi_examples.stateful
+  class_name: MovingAverage
+  params: {window: 5}
+  methods:
+  - method: process
+    inputs: [{topic: /number, kind: float}]
+    outputs: [{topic: /average, kind: float}]
+  actions: [reset]
+- id: message_counter
+  name: message_counter
+  module: roshanavi_examples.stateful
+  class_name: Counter
+  methods:
+  - method: process
+    inputs: [{topic: /chatter, kind: string}]
+    outputs: [{topic: /message_count, kind: int}]
+  actions: [reset]

@@ -1,4 +1,7 @@
-"""``ros2 run roshanavi function --config <yaml>``: a function node (関数ノード, docs/design/nodes.md).
+"""``ros2 run roshanavi function --config <yaml>``: a function or class node (docs/design/nodes.md).
+
+A config with a ``class`` key runs a class node (``run_class``, below); a ``function`` key is the
+function node described here.
 
 Imports a plain Python function from a workspace package (``function.module``),
 calls it with the value of each received message (or periodically), and
@@ -20,8 +23,11 @@ import threading
 from typing import List, Optional
 
 from . import data_kinds
+from .function.class_loader import ClassLoader
+from .function.class_runner import ClassRunner
 from .function.loader import FunctionLoader, LoadError, Watcher
 from .function.runner import FunctionRunner, StatusFile
+from .launcher.schema import ClassSpec
 from .launcher.dummy_config import load_function_config
 from .launcher.errors import LauncherError
 from .msgutil import MsgUtilError
@@ -57,6 +63,8 @@ def run(config_path: str, stop: threading.Event) -> int:
     except LauncherError as exc:
         LOG.error('%s', exc)
         return EXIT_CONFIG_ERROR
+    if isinstance(config['spec'], ClassSpec):
+        return run_class(config, stop)
     spec, status = config['spec'], StatusFile(config.get('status_file'))
     loader = FunctionLoader(config['workspace'], spec.module, spec.function)
     try:
@@ -92,6 +100,48 @@ def run(config_path: str, stop: threading.Event) -> int:
         if runner is not None:
             status.write({**runner.core.snapshot(), 'state': 'stopped'})
             runner.close()
+        runtime.stop()
+
+
+def run_class(config: dict, stop: threading.Event) -> int:
+    """A class node: one instance of the user's class, methods bound to topics (class_core)."""
+    spec, status = config['spec'], StatusFile(config.get('status_file'))
+    loader = ClassLoader(config['workspace'], spec.module, spec.class_name)
+    try:
+        loader.load()
+        LOG.info('loaded %s.%s%s from %s', spec.module, spec.class_name, loader.signature,
+                 loader.location_of_function())
+    except LoadError as exc:
+        LOG.error('クラスを読み込めません / cannot import the class: %s '
+                  '(waiting for the file to be fixed)', exc)
+    runtime = RosRuntime(spec.name, require_self_name=False)
+    runtime.start()
+    runner: Optional[ClassRunner] = None
+    watcher: Optional[Watcher] = None
+    try:
+        runner = ClassRunner(spec, runtime, loader)
+        core = runner.core
+        core.on_change = lambda: status.write(core.snapshot())
+        if loader.problem is not None:
+            core.report(loader.problem)
+        watcher = Watcher(loader, core.on_reload, reload_fn=core.reload)
+        watcher.start()
+        LOG.info('class %s: %d method(s), %d action(s)', spec.class_name, len(spec.methods),
+                 len(spec.actions))
+        status.write(core.snapshot())
+        while not stop.wait(STATUS_PERIOD_SEC):
+            status.write(core.snapshot())
+        return 0
+    except (MsgUtilError, data_kinds.KindError) as exc:
+        LOG.error('cannot start: %s', exc)
+        return EXIT_START_ERROR
+    finally:
+        if watcher is not None:
+            watcher.close()
+        if runner is not None:
+            runner.core.on_change = None
+            runner.close()
+            status.write({**runner.core.snapshot(), 'state': 'stopped'})
         runtime.stop()
 
 

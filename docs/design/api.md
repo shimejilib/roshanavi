@@ -42,6 +42,12 @@
 | POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
 | POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` (P5: 変換ノードも) |
 | POST / PUT | `/api/transforms[?start=true]`, `/api/transforms/{id}` | 変換ノードの登録 / 更新 (`TransformSpec`, [nodes.md#変換ノード](nodes.md#変換ノード-p5)) |
+| GET | `/api/functions/modules`, `/api/functions/module?name=` | 関数・クラスノード用: ワークスペースの Python モジュール一覧 / 1 つのモジュールの関数 (`functions[]`) とクラス (`classes[]`) を `ast` の静的解析だけで返す (利用者のコードは import しない。[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)、[nodes.md#クラスノード](nodes.md#クラスノード-状態を持つ処理をそのままノードにする)) |
+| POST / PUT | `/api/functions[?start=true]`, `/api/functions/{id}` | 関数ノードの登録 / 更新 (`FunctionSpec`)。404 `unknown_module` |
+| POST | `/api/functions/{id}/export-code` | 関数を包む rclpy ノードのコードを書き出す `{directory}` → `{file, command}` |
+| POST / PUT | `/api/classes[?start=true]`, `/api/classes/{id}` | クラスノードの登録 / 更新 (`ClassSpec`) |
+| POST | `/api/classes/{id}/call` | 操作メソッドを呼ぶ `{method}`: `std_msgs/Empty` を `/<ノード名>/<メソッド名>` に送り、ノードが記録するのを待って `{method, topic, record{count, last_at, ok, result, error}}`。動いていない 409 `not_running`、操作メソッドでない 404 `unknown_action`、5 秒待っても呼ばれない 504 `call_failed`。記録モード中は `call` ステップになる |
+| POST | `/api/classes/{id}/export-code` | クラスを包む rclpy ノード (`lifecycle: true` なら LifecycleNode) のコードを書き出す `{directory, lifecycle?}` → `{file, command}` |
 | POST | `/api/transforms/preview` | 変換の試算 `{spec, samples}` → `{ok, passed, output, errors[]}` (常に 200) |
 | GET / POST | `/api/projects`, `/api/projects/open` | 切り替えられるプロジェクトの一覧 / 一覧の `id` を開く (開いた `id` は再起動後も記憶する。[launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3)) |
 | WS | `/ws/logs/{id}` | ログのストリーム (`{log_id, lines:[{seq, ts, stream, text}]}`、0.2 秒ごと) |

@@ -1,4 +1,5 @@
 import type { GraphNode } from '../api/types';
+import { ClassStatusPanel } from '../function/ClassStatusPanel';
 import { FunctionStatusPanel } from '../function/FunctionStatusPanel';
 import { t, type MessageKey } from '../i18n';
 import { statusClass, statusLabel } from '../launcher/status';
@@ -17,6 +18,8 @@ function editDialogFor(target: { id: string; kind: string }): { label: MessageKe
       return { label: 'menu.editTransform', dialog: { kind: 'createTransform', transformId: target.id } };
     case 'function':
       return { label: 'menu.editFunction', dialog: { kind: 'createFunction', functionId: target.id } };
+    case 'class':
+      return { label: 'menu.editClass', dialog: { kind: 'createFunction', functionId: target.id } };
     default:
       return null;
   }
@@ -64,6 +67,7 @@ export function NodeLauncher({ node }: { node: GraphNode | undefined }) {
         )}
       </div>
       {target.kind === 'function' && <FunctionStatusPanel target={target} />}
+      {target.kind === 'class' && <ClassStatusPanel target={target} />}
     </section>
   );
 }
