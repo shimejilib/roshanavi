@@ -29,7 +29,7 @@ setup(
     maintainer='aoki',
     maintainer_email='yuya.aoki.0928@gmail.com',
     description='Topic visualization, dummy input injection and scenario checks for ROS 2',
-    license='Apache-2.0',
+    license='MIT',
     tests_require=['pytest'],
     entry_points={
         'console_scripts': [
