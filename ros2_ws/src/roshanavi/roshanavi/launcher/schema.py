@@ -1,4 +1,4 @@
-"""Pydantic (v1) models shared by the REST API and the ``roshanavi.yaml`` project file.
+"""Pydantic models (via pydantic_compat) shared by the REST API and the project file.
 
 These check *shape* (types, unknown keys, id format). Values that need the
 workspace (package/executable exist, paths contained) are checked by
@@ -7,12 +7,11 @@ workspace (package/executable exist, paths contained) are checked by
 
 from typing import Any, Dict, List, Literal, Optional, Union
 
-from pydantic import (BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr,
-                      confloat, conint, constr, root_validator)
-
 from .. import data_kinds
 from ..heavy_types import is_heavy
 from ..media.options import MediaOptions
+from ..pydantic_compat import (BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictModel,
+                               StrictStr, confloat, conint, constr, root_validator)
 from . import validate
 
 ParamValue = Union[StrictBool, StrictInt, StrictFloat, StrictStr]
@@ -22,9 +21,8 @@ ID_PATTERN = validate.TARGET_ID_RE.pattern
 PROJECT_VERSION = 1
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class QosSpec(_Strict):
@@ -167,7 +165,8 @@ class TransformSpec(_Strict):
     def _consistent(cls, values: Dict[str, Any]) -> Dict[str, Any]:
         inputs = values['inputs']
         single = len(inputs) == 1
-        named = [inp if inp.alias else inp.copy(update={'alias': 'msg' if single else f'msg{n}'})
+        named = [inp if inp.alias
+                 else inp.model_copy(update={'alias': 'msg' if single else f'msg{n}'})
                  for n, inp in enumerate(inputs, start=1)]
         aliases = [inp.alias for inp in named]
         if len(set(aliases)) != len(aliases):
@@ -182,12 +181,12 @@ class TransformSpec(_Strict):
         if values['mode'] == 'relay':
             _check_relay(values, named)
             if output.type is None:
-                values['output'] = output.copy(update={'type': named[0].type})
+                values['output'] = output.model_copy(update={'type': named[0].type})
             return values
         if output.type is None:
             if values.get('mapping') is not None or not single:
                 raise ValueError('output.type is required for a mapping')
-            values['output'] = output.copy(update={'type': named[0].type})
+            values['output'] = output.model_copy(update={'type': named[0].type})
         heavy = [t for t in [*(i.type for i in named), values['output'].type] if is_heavy(t)]
         if heavy:
             raise ValueError(f'{heavy[0]} is a large type: use mode "relay" (relay / delay / '
@@ -316,4 +315,4 @@ def clean_dict(model: BaseModel) -> Dict[str, Any]:
         if isinstance(value, list):
             return [strip(v) for v in value]
         return value
-    return strip(model.dict())
+    return strip(model.model_dump())

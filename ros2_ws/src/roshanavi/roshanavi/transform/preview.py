@@ -11,11 +11,10 @@ import re
 import time
 from typing import Any, Dict, List, Mapping, Optional
 
-from pydantic import ValidationError
-
 from .. import msgutil
 from ..launcher.schema import TransformSpec
 from ..msg_view import MsgView
+from ..pydantic_compat import ValidationError, validation_errors
 from .compute import Computer, FieldError, aliases
 
 MAX_SAMPLE_DEPTH = 32
@@ -24,7 +23,7 @@ _MSG_PATH_RE = re.compile(r'^([A-Za-z0-9_.]+): ')
 
 def _spec_errors(exc: ValidationError) -> List[FieldError]:
     errors = []
-    for err in exc.errors():
+    for err in validation_errors(exc):
         path = '.'.join(str(p) for p in err['loc'] if p != '__root__') or '(spec)'
         errors.append(FieldError(path, 'spec_invalid', err['msg']))
     return errors
@@ -74,7 +73,7 @@ def _result(ok: bool, errors: List[FieldError], **extra: Any) -> Dict[str, Any]:
 def preview(raw_spec: Mapping[str, Any], samples: Optional[Mapping[str, Any]] = None
             ) -> Dict[str, Any]:
     try:
-        spec = TransformSpec.parse_obj(dict(raw_spec))
+        spec = TransformSpec.model_validate(dict(raw_spec))
     except ValidationError as exc:
         return _result(False, _spec_errors(exc), passed=False, output=None)
     unknown = sorted(set(samples or {}) - set(aliases(spec)))

@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { clickElement } from './helpers';
+import { CHATTER_KIND_LABEL, clickElement } from './helpers';
 
 // In-app tours (#41): every tour is followed the way a learner would, by its own instructions and
 // through the `data-tour` marks, so a UI change that breaks a tour fails here. Each tour must also
@@ -223,7 +223,7 @@ test('シナリオを記録する: record → save → run → passed → clean 
   await mark(page, 'tab-inject').click();
   await onStep(page, '送り先');
   await mark(page, 'inject-topic').fill('/tour_in');
-  await expect(page.getByTestId('inject-type-detected')).toContainText('文字列 (std_msgs/String)');
+  await expect(page.getByTestId('inject-type-detected')).toContainText(CHATTER_KIND_LABEL);
   await onStep(page, '送る内容');
   await mark(page, 'inject-yaml').fill('data: "hello scenario"');
   await onStep(page, '送る');

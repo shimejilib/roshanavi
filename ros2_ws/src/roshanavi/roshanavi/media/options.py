@@ -3,8 +3,8 @@
 import os
 from typing import Any, Dict, List, Literal, Optional, Sequence
 
-from pydantic import BaseModel, ValidationError, confloat, conint, constr
-
+from ..pydantic_compat import (StrictModel, ValidationError, confloat, conint, constr,
+                               validation_errors)
 from ..ros_runtime import RosRuntime
 from .adapters.base import MediaSettings
 from .camera_info import Calibration, load_calibration
@@ -14,7 +14,7 @@ DEFAULT_IMAGE_RATE_HZ = 1.0
 DEFAULT_VIDEO_FPS = 30.0
 
 
-class MediaOptions(BaseModel):
+class MediaOptions(StrictModel):
     """Conversion settings. Topic, type, rate_hz, count and loop live on the job itself."""
 
     kind: Literal['auto', 'image', 'video', 'audio'] = 'auto'
@@ -42,9 +42,6 @@ class MediaOptions(BaseModel):
     audio_info: bool = True
     audio_info_topic: Optional[constr(max_length=256)] = None
 
-    class Config:
-        extra = 'forbid'
-
 
 def check_section(opts: MediaOptions) -> None:
     if opts.end_sec is not None and opts.end_sec <= opts.start_sec:
@@ -70,9 +67,10 @@ def resolve_calibration(opts: MediaOptions, roots: Sequence[str]) -> Optional[Ca
 
 def parse_options(raw: Optional[Dict[str, Any]]) -> MediaOptions:
     try:
-        opts = MediaOptions.parse_obj(raw or {})
+        opts = MediaOptions.model_validate(raw or {})
     except ValidationError as exc:
-        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg'] for e in exc.errors()]
+        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg']
+                 for e in validation_errors(exc)]
         raise MediaError('invalid_request', 'media: ' + '; '.join(parts)) from exc
     check_section(opts)
     return opts

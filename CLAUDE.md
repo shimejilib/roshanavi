@@ -1,6 +1,6 @@
 # roshanavi — project instructions
 
-ROS 2 Jazzy dev tool for developers new to ROS: live topic/node map, traffic per node × topic, input / transform / function nodes, launcher, media injection, tracing-based measurement, scenario tests with record mode. Web UI (React + Vite) + FastAPI/rclpy backend + C++ probe. Default port **6871**. License MIT.
+ROS 2 (Jazzy / Lyrical) dev tool for developers new to ROS: live topic/node map, traffic per node × topic, input / transform / function nodes, launcher, media injection, tracing-based measurement, scenario tests with record mode. Web UI (React + Vite) + FastAPI/rclpy backend + C++ probe. Default port **6871**. License MIT.
 
 User-facing replies are in **Japanese**, plain language, no unexplained jargon (the user is the product owner; target users are developers new to ROS).
 
@@ -20,6 +20,7 @@ User-facing replies are in **Japanese**, plain language, no unexplained jargon (
 - Web unit tests: `cd web && npm ci && npx vitest run [file]`; typecheck `npx tsc --noEmit`
 - E2E (isolated stack, never against the user's lab): `scripts/e2e.sh`
 - Run the app: `docker compose up -d --build lab demo` → http://localhost:6871
+- ROS distro: every compose command takes `ROS_DISTRO=jazzy|lyrical|kilted` (default jazzy; image `roshanavi:dev-<distro>`), e.g. `ROS_DISTRO=lyrical docker compose --profile test run --rm test`, `ROS_DISTRO=lyrical scripts/e2e.sh`. Jazzy + Lyrical are official (run both for backend changes that touch ROS / pydantic / FastAPI); Kilted is best-effort. Import pydantic names from `roshanavi.pydantic_compat`, never from `pydantic`.
 
 ## Test policy
 - The machine may be busy; many tests are real-time (Hz, pacing, latency). While iterating, run only the tests relevant to the change. Run the full backend suite once and `scripts/e2e.sh` once at the end.

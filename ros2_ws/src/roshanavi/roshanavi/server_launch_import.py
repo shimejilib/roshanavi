@@ -8,15 +8,14 @@ registers the chosen ones (autosaved like every launcher change).
 from typing import Any, Dict, List, Literal
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field, conint, constr
 
 from .lab import Lab
 from .launch_import.importer import Source
+from .pydantic_compat import Field, StrictModel, conint, constr
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class PreviewRequest(_Strict):

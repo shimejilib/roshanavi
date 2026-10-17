@@ -16,7 +16,6 @@ from collections import OrderedDict
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Union
 
 import yaml
-from pydantic import BaseModel, ValidationError, constr
 
 from ..launcher import validate
 from ..launcher.discovery import MAX_LAUNCH_DEPTH
@@ -25,6 +24,7 @@ from ..launcher.env import child_env
 from ..launcher.errors import LauncherError
 from ..launcher.schema import TargetSpec
 from ..launcher.service import Launcher, id_from_name
+from ..pydantic_compat import StrictModel, ValidationError, constr
 from .params_merge import unflatten
 from .plan import build_plan, parse_result
 from .runner import DEFAULT_TIMEOUT_SEC, run_child
@@ -35,9 +35,8 @@ PARAMS_DIR = 'imported_params'
 PATH_EXTS = ('.py', '.xml', '.yaml', '.yml')
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class PackageSource(_Strict):

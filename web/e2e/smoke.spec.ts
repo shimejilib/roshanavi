@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { CHATTER_KIND_LABEL } from './helpers';
 
 // Requires `docker compose up -d lab demo`: lab starts the demo project's talker / listener
 // (/chatter, roshanavi-owned); the demo container adds external_talker on /external/chatter.
@@ -48,7 +49,7 @@ test('map shows the demo, inject once, echo receives it', async ({ page }) => {
   await page.getByTestId('detail-inject').click();
   await expect(page.getByTestId('inject-topic')).toHaveValue('/chatter');
   // An existing topic: no type to choose, the detected kind and ROS type are shown.
-  await expect(page.getByTestId('inject-type-detected')).toContainText('文字列 (std_msgs/String)');
+  await expect(page.getByTestId('inject-type-detected')).toContainText(CHATTER_KIND_LABEL);
   await expect(page.getByTestId('inject-yaml')).toHaveValue(/data:/);
   await page.getByTestId('inject-yaml').fill(`data: "${MESSAGE}"`);
   await page.getByTestId('inject-start').click();

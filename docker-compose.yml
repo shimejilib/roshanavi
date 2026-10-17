@@ -8,12 +8,17 @@
 #   lab-e2e / demo-e2e / e2e (profile e2e): an isolated copy of the stack for Playwright, on its
 #          own ROS_DOMAIN_ID with a fresh tmpfs /data (nothing mounted from ./data), not published.
 #          Run it all with scripts/e2e.sh
+# ROS_DISTRO (host env, default jazzy) selects the ROS 2 distro: jazzy / lyrical (official),
+# kilted (verified once). e.g. `ROS_DISTRO=lyrical docker compose --profile test run --rm test`.
 
 x-ros: &ros
   build:
     context: .
     dockerfile: docker/Dockerfile
-  image: roshanavi:dev
+    args:
+      ROS_DISTRO: ${ROS_DISTRO:-jazzy}
+  # One image per distro, so a lyrical run never replaces the jazzy image the lab uses.
+  image: roshanavi:dev-${ROS_DISTRO:-jazzy}
   init: true
   # LTTng's per-CPU ring buffers (詳細計測モード) and Fast DDS's shared-memory transport both
   # live in /dev/shm; Docker's default 64 MB is too small for 4 MiB x many CPUs.

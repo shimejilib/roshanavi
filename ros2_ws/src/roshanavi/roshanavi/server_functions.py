@@ -13,18 +13,17 @@
 from typing import Any, Dict
 
 from fastapi import FastAPI
-from pydantic import BaseModel, constr
 
 from .function import codegen, modules
 from .lab import Lab
 from .launcher import validate
 from .launcher.errors import LauncherError
 from .launcher.schema import FunctionSpec, MODULE_PATTERN
+from .pydantic_compat import StrictModel, constr
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class ExportCodeRequest(_Strict):

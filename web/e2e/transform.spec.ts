@@ -1,7 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { rightClickNode } from './helpers';
+import { CHATTER_KIND_LABEL, rightClickNode } from './helpers';
 
 // P5 transform nodes: topic menu -> editor with live preview -> node on the map -> echo.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
@@ -28,7 +28,7 @@ test('topic menu -> transform /chatter to upper case -> it runs and echoes upper
 
   const dialog = page.getByTestId('create-transform-dialog');
   await expect(dialog.getByTestId('transform-input-topic-0')).toHaveValue('/chatter');
-  await expect(dialog.getByTestId('transform-input-type-0-detected')).toContainText('文字列 (std_msgs/String)');
+  await expect(dialog.getByTestId('transform-input-type-0-detected')).toContainText(CHATTER_KIND_LABEL);
   await dialog.getByTestId('transform-name').fill(NAME);
   await dialog.getByTestId('transform-output-topic').fill('/chatter_upper');
   // The starting mapping copies the field; then write the expression.

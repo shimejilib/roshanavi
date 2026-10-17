@@ -17,10 +17,9 @@ import threading
 import time
 from typing import Any, Dict, Iterable, List, Optional, Sequence, Union
 
-from pydantic import ValidationError
-
 from ..jobs import InjectSpec
 from ..process_map import NodeProcessMapper
+from ..pydantic_compat import ValidationError
 from . import validate
 from .build import BuildRunner
 from .discovery import Workspace

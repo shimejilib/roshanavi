@@ -10,18 +10,16 @@ importable. The child's JSON is treated as untrusted shape-wise (pydantic).
 
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
-from pydantic import BaseModel, Field, ValidationError
-
 from ..launcher.errors import LauncherError
 from ..launcher.service import id_from_name
+from ..pydantic_compat import CompatModel, Field, ValidationError
 from .params_merge import merge_sources, split_params
 
 Validator = Callable[[Dict[str, Any]], Optional[Tuple[str, str]]]
 
 
-class _Loose(BaseModel):
-    class Config:
-        extra = 'ignore'
+class _Loose(CompatModel):
+    pass
 
 
 class ChildNode(_Loose):
@@ -58,7 +56,7 @@ class ChildResult(_Loose):
 
 def parse_result(payload: Mapping[str, Any]) -> ChildResult:
     try:
-        return ChildResult.parse_obj(payload)
+        return ChildResult.model_validate(payload)
     except ValidationError as exc:
         raise LauncherError('launch_eval_failed', f'unexpected evaluation result: {exc}',
                             422) from exc
@@ -106,6 +104,6 @@ def build_plan(result: ChildResult, origin: str, existing: List[Mapping[str, Any
              for i, node in enumerate(result.nodes)]
     return {'file': result.file, 'arguments': result.arguments,
             'missing_args': result.missing_args, 'nodes': nodes,
-            'blocked': [e.dict(exclude_none=True) for e in result.blocked],
-            'skipped': [e.dict(exclude_none=True) for e in result.skipped],
+            'blocked': [e.model_dump(exclude_none=True) for e in result.blocked],
+            'skipped': [e.model_dump(exclude_none=True) for e in result.skipped],
             'warnings': result.warnings}

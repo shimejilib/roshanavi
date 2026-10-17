@@ -6,8 +6,9 @@ graph's ``endpoint_gid``), so each publisher node gets its own ``measured``
 rate. Our own inject jobs keep their counted send rate (``exact``).
 
 Without per-publisher data (Python fallback: rclpy Jazzy's ``MessageInfo`` has
-no publisher gid; or an RMW whose gids do not match the graph, e.g. Cyclone
-DDS) the topic total is split from what roshanavi knows:
+no publisher gid, and Lyrical's is not used for splitting yet; or an RMW whose
+gids do not match the graph, e.g. Cyclone DDS) the topic total is split from
+what roshanavi knows:
 
 * known (dummy) publishers get their own rate (basis ``exact`` / ``configured``);
 * if exactly one other publisher remains it gets ``max(0, total - known)``

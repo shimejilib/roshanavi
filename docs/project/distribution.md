@@ -2,6 +2,17 @@
 
 P7 (公開準備) で実施し、実装後に `docs/design/` へ統合する。
 
+## 0. 対応ディストロ
+
+| ディストロ | Ubuntu / Python | 扱い |
+|---|---|---|
+| **Jazzy Jalisco** (LTS) | 24.04 / 3.12 | 正式対応 (既定) |
+| **Lyrical Luth** (LTS、2031 年ごろまで) | 26.04 / 3.14 | 正式対応 (#36) |
+| Kilted Kaiju | 24.04 / 3.12 | 動作確認のみ (#37)。サポート期限が 2026 年末ごろと近いため継続的には確認しない。2026-10-18 にバックエンドのテスト全体を確認した (gtest 12 + 11 passed、pytest 1089 passed / 1 failed: 0.3 秒のタイミングのテストで、単独では通る)。E2E は Kilted では未実施 |
+
+- 1 つのソースで全ディストロを扱う。ディストロで違う所は小さな互換の層に閉じ込める: pydantic 1.10 / 2 は `roshanavi/pydantic_compat.py`、それ以外は実装の中で両方の形を受け付ける ([testing.md の R](testing.md#r-ディストロ対応-36-37))。
+- apt で配るとき (将来) は `ros-jazzy-roshanavi` と `ros-lyrical-roshanavi` を作る。Docker では `ROS_DISTRO=lyrical docker compose ...` (イメージ `roshanavi:dev-<distro>`)。
+
 ## 1. 前提: 「1 ノードとしてつなぐだけ」では足りない
 roshanavi はノード (DDS の参加者) でもあるが、次の機能は **利用者のワークスペースと同じ環境** で動いていないと成り立たない。
 - 独自 msg 型の扱い (エコー・注入・シナリオ): 型の Python モジュールを import する必要がある。
@@ -21,7 +32,7 @@ ros2 run roshanavi app          # ブラウザが開く
 | 形態 | 対象 | 内容 |
 |---|---|---|
 | **ソースから** (当面の本命) | 一般利用者 | ワークスペースの `src/` に clone → `rosdep install` → `colcon build`。Web UI はビルド済みのものを GitHub Releases のソースアーカイブに同梱し、**利用者に npm を要求しない** |
-| **apt** (将来の本命) | 一般利用者 | bloom でリリースし `sudo apt install ros-jazzy-roshanavi`。Web UI はパッケージに同梱 |
+| **apt** (将来の本命) | 一般利用者 | bloom でリリースし `sudo apt install ros-jazzy-roshanavi` (Lyrical は `ros-lyrical-roshanavi`)。Web UI はパッケージに同梱 |
 | **Docker イメージ** | お試し・CI | `docker compose up` でデモ一式が動く。CI ではシナリオの実行に使う。日常の開発用途には推奨しない (利用者のノードと環境が分かれるため) |
 | pip | 対象外 | rclpy が pip で配布されていないため |
 

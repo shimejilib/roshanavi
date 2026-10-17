@@ -22,7 +22,7 @@ def fspec(name, **kw):
     base = {'id': name.replace('_', '-'), 'name': name, 'module': 'fn_pkg.logic',
             'function': 'shout', 'inputs': [{'topic': f'/{name}_in', 'kind': 'string'}],
             'output': {'topic': f'/{name}_out', 'kind': 'string'}}
-    return FunctionSpec.parse_obj({**base, **kw})
+    return FunctionSpec.model_validate({**base, **kw})
 
 
 def text_publisher(helper, topic, rate_hz, make=lambda i: f'm{i}'):
@@ -56,7 +56,7 @@ def test_executable_hot_reload_errors_and_status(tmp_path, helper):
     try:
         wait_for(lambda: out and out[-1].data.endswith('!'), timeout=30)
         assert out[-1].data.startswith('X')
-        assert publisher_nodes(helper, '/rn_fn_exe_out') == {'rn_fn_exe'}
+        wait_for(lambda: publisher_nodes(helper, '/rn_fn_exe_out') == {'rn_fn_exe'}, timeout=10)
         wait_for(lambda: read_status(status).get('state') == 'running', timeout=10)
 
         # Save a change: the running node picks it up without a restart.
@@ -129,7 +129,7 @@ def test_function_api_role_status_project_and_code_export(client, helper):
 
     out = helper.collector(String, '/rn_fn_api_out')
     text_publisher(helper, '/rn_fn_api_in', 10, lambda i: f'api{i}')
-    body = fspec('rn_fn_api', module='roshanavi_examples.logic').dict()
+    body = fspec('rn_fn_api', module='roshanavi_examples.logic').model_dump()
     resp = client.post('/api/functions?start=true', json=body)
     assert resp.status_code == 201, resp.text
     assert resp.json()['kind'] == 'function' and resp.json()['role'] == 'function'
@@ -168,7 +168,10 @@ def test_function_api_role_status_project_and_code_export(client, helper):
         try:
             wait_for(lambda: out and out[-1].data.startswith('API') and out[-1].data.endswith('!'),
                      timeout=30)
-            assert publisher_nodes(helper, '/rn_fn_api_out') == {'rn_fn_api'}
+            # a just-discovered publisher can be listed under _NODE_NAME_UNKNOWN_ for a moment
+            # (Fast DDS discovery order; seen on Lyrical)
+            wait_for(lambda: publisher_nodes(helper, '/rn_fn_api_out') == {'rn_fn_api'},
+                     timeout=10)
         finally:
             stop_group(proc)
     finally:

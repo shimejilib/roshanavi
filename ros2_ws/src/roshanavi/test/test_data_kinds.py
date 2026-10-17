@@ -36,7 +36,10 @@ def test_unknown_kind_is_rejected():
     ('std_msgs/msg/Float32', 'float'), ('std_msgs/msg/Int32', 'int'),
     ('std_msgs/msg/UInt8MultiArray', 'bytes'), ('std_msgs/msg/Float32MultiArray', 'numbers'),
     ('sensor_msgs/msg/Image', 'image'), ('geometry_msgs/msg/Twist', None),
-    ('sensor_msgs/msg/CompressedImage', None)])
+    ('sensor_msgs/msg/CompressedImage', None),
+    # Lyrical's demo talker / listener use example_interfaces on /chatter
+    ('example_interfaces/msg/String', 'string'), ('example_interfaces/msg/Int32', 'int'),
+    ('example_interfaces/msg/Float64', 'float'), ('example_interfaces/msg/Bool', 'bool')])
 def test_kind_of_type(type_name, kind):
     assert dk.kind_of_type(type_name) == kind
 
@@ -104,6 +107,9 @@ def test_compatible_types_keep_their_own_type():
     assert list(msg.data) == [1, 2, 3]
     f32 = msgutil.build('std_msgs/msg/Float32', {'data': 0.25})
     assert dk.to_python('float', f32) == 0.25
+    text = dk.from_python('string', 'hi', 'example_interfaces/msg/String')
+    assert type(text).__module__.startswith('example_interfaces') and text.data == 'hi'
+    assert dk.to_python('string', text) == 'hi'
 
 
 def test_image_numpy_round_trip_rgb_and_mono():

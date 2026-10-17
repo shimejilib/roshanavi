@@ -10,8 +10,8 @@ import threading
 from typing import Any, Dict, Optional
 
 import yaml
-from pydantic import ValidationError
 
+from ..pydantic_compat import ValidationError
 from .dummy_config import format_errors, write_atomic
 from .errors import LauncherError
 from .schema import ProjectSpec, clean_dict
@@ -65,7 +65,7 @@ def parse_project(text: str, source: str = 'project') -> ProjectSpec:
     if not isinstance(raw, dict):
         raise LauncherError('invalid_project', f'{source}: the top level must be a mapping')
     try:
-        return ProjectSpec.parse_obj(raw)
+        return ProjectSpec.model_validate(raw)
     except ValidationError as exc:
         raise LauncherError('invalid_project', f'{source}: {format_errors(exc)}') from exc
 

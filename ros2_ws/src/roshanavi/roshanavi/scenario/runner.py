@@ -454,7 +454,7 @@ class ScenarioRunner:
     def _send(self, spec: Any) -> Verdict:
         type_name = self._type_for(spec)
         payload = self._payload(spec, type_name)
-        qos = spec.qos.dict() if spec.qos else {}
+        qos = spec.qos.model_dump() if spec.qos else {}
         job_id = self._inject(InjectSpec(mode='once', topic=spec.topic, type=type_name,
                                          payload=payload, qos=qos))
         self._sent_topics.append(spec.topic)
@@ -479,9 +479,9 @@ class ScenarioRunner:
                 raise StepError(str(exc)) from exc
             self._started[spec.id] = ('target', spec.target)
             return Verdict(True, text)
-        qos = spec.qos.dict() if spec.qos else {}
+        qos = spec.qos.model_dump() if spec.qos else {}
         if spec.media is not None:
-            options = spec.media.dict(exclude={'source'})
+            options = spec.media.model_dump(exclude={'source'})
             inject = InjectSpec(mode='media', topic=spec.topic, type=spec.type,
                                 source=spec.media.source, rate_hz=spec.rate_hz, loop=spec.loop,
                                 qos=qos, media=options)

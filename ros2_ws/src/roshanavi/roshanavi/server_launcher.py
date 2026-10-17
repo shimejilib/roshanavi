@@ -10,13 +10,13 @@ import logging
 from typing import Any, Dict, List, Optional
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
-from pydantic import BaseModel, Field, constr
 
 from .lab import Lab
 from .launcher.build import BUILD_LOG_ID
 from .launcher.errors import LauncherError
 from .launcher.logbuf import LogBuffer
 from .launcher.schema import DummySpec, ProjectSpec, TargetSpec
+from .pydantic_compat import Field, StrictModel, constr
 
 LOG = logging.getLogger(__name__)
 
@@ -24,9 +24,8 @@ LOG_WS_PERIOD_SEC = 0.2
 LOG_WS_BATCH = 1000
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class BuildRequest(_Strict):

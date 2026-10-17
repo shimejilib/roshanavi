@@ -12,6 +12,9 @@ export const SHOUT_IN = '/tour_in';
 export const SHOUT_OUT = '/tour_out';
 export const SHOUT_NODE = 'tour_shout';
 export const CHATTER_SOURCE = 'tour_chatter_src';
+const STRING_TYPE = 'std_msgs/msg/String';
+const SUB_TYPE_WAIT_MS = 10_000;
+const SUB_TYPE_POLL_MS = 250;
 
 const target = (id: string): Fixture => ({ kind: 'target', id });
 
@@ -54,24 +57,37 @@ export async function ensurePublisher(graph: GraphSnapshot | null, topic: string
   if (graph?.edges.some((e) => e.topic === topic && e.dir === 'pub')) return [];
   await removeQuietly(id);
   const spec: DummySpec = {
-    id, name: id, topic, type: 'std_msgs/msg/String', kind: 'string', mode: 'periodic',
+    id, name: id, topic, type: STRING_TYPE, kind: 'string', mode: 'periodic',
     payload: { data: text }, rate_hz: 1, qos: { reliability: 'reliable', durability: 'volatile', depth: 10 }, autostart: true,
   };
   await api.addDummy(spec, true);
   return [target(id)];
 }
 
-/** A sender that gives up when the receiver wants delivery guarantees (BEST_EFFORT vs RELIABLE). */
+/** The type the receiver subscribes `topic` with, once it is on the graph (else std_msgs). */
+export async function waitForTopicType(topic: string, timeoutMs = SUB_TYPE_WAIT_MS, pollMs = SUB_TYPE_POLL_MS): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const types = (await api.graph()).topics.find((t) => t.name === topic)?.types ?? [];
+      if (types[0]) return types[0];
+    } catch {
+      // the next poll tries again
+    }
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
+  }
+  return STRING_TYPE;
+}
+
+/**
+ * A sender that gives up when the receiver wants delivery guarantees (BEST_EFFORT vs RELIABLE).
+ * The receiver starts first and the sender takes its type: demo_nodes_cpp's listener uses
+ * std_msgs/msg/String on Jazzy and example_interfaces/msg/String on Lyrical.
+ */
 export async function prepareQosPair(): Promise<Fixture[]> {
   const created: Fixture[] = [];
   try {
     await Promise.all([removeQuietly(QOS_PUB), removeQuietly(QOS_SUB)]);
-    const pub: DummySpec = {
-      id: QOS_PUB, name: QOS_PUB, topic: QOS_TOPIC, type: 'std_msgs/msg/String', kind: 'string', mode: 'periodic',
-      payload: { data: 'hello' }, rate_hz: 2, qos: { reliability: 'best_effort', durability: 'volatile', depth: 10 }, autostart: true,
-    };
-    await api.addDummy(pub, true);
-    created.push(target(QOS_PUB));
     // demo_nodes_cpp's listener subscribes with the ROS default (RELIABLE) to `chatter`.
     const sub: TargetSpec = {
       id: QOS_SUB, kind: 'run', package: 'demo_nodes_cpp', executable: 'listener', name: QOS_SUB,
@@ -79,6 +95,12 @@ export async function prepareQosPair(): Promise<Fixture[]> {
     };
     await api.addTarget(sub, true);
     created.push(target(QOS_SUB));
+    const pub: DummySpec = {
+      id: QOS_PUB, name: QOS_PUB, topic: QOS_TOPIC, type: await waitForTopicType(QOS_TOPIC), kind: 'string', mode: 'periodic',
+      payload: { data: 'hello' }, rate_hz: 2, qos: { reliability: 'best_effort', durability: 'volatile', depth: 10 }, autostart: true,
+    };
+    await api.addDummy(pub, true);
+    created.push(target(QOS_PUB));
     return created;
   } catch (err) {
     await removeFixtures(created);

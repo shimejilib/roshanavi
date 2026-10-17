@@ -42,6 +42,9 @@ def sample_from_info(now: float, size: int, info: Optional[Mapping[str, Any]]) -
     if not info:
         return Sample(now, size)
     gid = info.get('publisher_gid')
+    if isinstance(gid, Mapping):
+        # rclpy 10 (Lyrical): {'implementation_identifier': ..., 'data': b'...'}; Jazzy has none
+        gid = gid.get('data')
     return Sample(now, size, int(info.get('source_timestamp') or 0),
                   int(info.get('received_timestamp') or 0),
                   bytes(gid) if gid else None, int(info.get('publication_sequence_number') or 0))

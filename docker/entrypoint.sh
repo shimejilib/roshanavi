@@ -1,11 +1,11 @@
 #!/bin/bash
 # Shared entrypoint for all compose services.
-#  - sources ROS 2 Jazzy
+#  - sources ROS 2 (${ROS_DISTRO}, set by the ros:<distro>-ros-base image)
 #  - if ROSHANAVI_BUILD=1, builds the workspace (/ws/src -> /ws/install) first
 #  - sources the workspace overlay when present, then execs the command
 set -e
 # shellcheck disable=SC1091
-source /opt/ros/jazzy/setup.bash
+source "/opt/ros/${ROS_DISTRO:?ROS_DISTRO is not set}/setup.bash"
 
 if [ "${ROSHANAVI_BUILD:-0}" = "1" ]; then
     cd /ws

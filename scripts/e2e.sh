@@ -2,9 +2,13 @@
 # Run the whole Playwright E2E against an isolated stack (lab-e2e + demo-e2e on their own
 # ROS_DOMAIN_ID, fresh tmpfs /data, no published port), then tear everything down.
 # The user's `lab` / `demo` and ./data are never touched; the script verifies that.
+# ROS_DISTRO (default jazzy) picks the distro of lab-e2e / demo-e2e (image roshanavi:dev-<distro>),
+# e.g. `ROS_DISTRO=lyrical scripts/e2e.sh`. The user's lab keeps running whatever it runs.
 set -u
 cd "$(dirname "$0")/.."
 export UID GID="$(id -g)"
+export ROS_DISTRO="${ROS_DISTRO:-jazzy}"
+echo "E2E on ROS 2 ${ROS_DISTRO}" >&2
 DC=(docker compose --profile e2e)
 proj_hash() { docker compose exec -T lab sha256sum /data/roshanavi.yaml 2>/dev/null | cut -d' ' -f1; }
 

@@ -79,6 +79,13 @@ _COMPAT: Dict[str, str] = {
     'sensor_msgs/msg/Image': 'image',
     'audio_common_msgs/msg/AudioDataStamped': 'audio',
     'audio_common_msgs/msg/AudioData': 'audio',
+    # Same one-field ``data`` layout as std_msgs. Lyrical's demo_nodes (talker / listener on
+    # /chatter) use example_interfaces/msg/String instead of std_msgs/msg/String.
+    'example_interfaces/msg/String': 'string',
+    'example_interfaces/msg/Float64': 'float', 'example_interfaces/msg/Float32': 'float',
+    **{f'example_interfaces/msg/{n}': 'int' for n in ('Int64', 'Int32', 'Int16', 'Int8',
+                                                      'UInt64', 'UInt32', 'UInt16')},
+    'example_interfaces/msg/Bool': 'bool',
 }
 
 # 詳細設定モード: "よく使う型" first, in this order (docs/design/nodes.md).

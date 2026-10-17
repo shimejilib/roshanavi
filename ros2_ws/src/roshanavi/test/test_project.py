@@ -96,7 +96,7 @@ def test_rest_project_flow(client, lab, tmp_path):
     on_disk = yaml.safe_load(open(saved['path']))
     assert on_disk['targets'] == [target | {'autostart': False, 'auto_restart': False}]
 
-    body = parse_project(EXAMPLE).dict()
+    body = parse_project(EXAMPLE).model_dump()
     put = client.put('/api/project', json=body)
     assert put.status_code == 200, put.text
     ids = [t['id'] for t in client.get('/api/targets').json()['targets']]

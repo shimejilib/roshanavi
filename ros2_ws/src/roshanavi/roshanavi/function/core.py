@@ -32,6 +32,23 @@ class Port:
     type: str
 
 
+def adopt_topic_types(spec: FunctionSpec,
+                      topic_types: Callable[[str], Sequence[str]]) -> FunctionSpec:
+    """Inputs given only a kind take the type of the existing topic when exactly one of its
+    types carries that kind (Lyrical's /chatter is example_interfaces/msg/String, not the
+    std_msgs/msg/String the kind ``string`` would pick). Otherwise the spec is unchanged."""
+    inputs = []
+    for port in spec.inputs:
+        if port.type is None and port.kind not in (None, data_kinds.MESSAGE_KIND):
+            fitting = [t for t in topic_types(port.topic) if data_kinds.fits(port.kind, t)]
+            if len(fitting) == 1:
+                port = port.model_copy(update={'type': fitting[0]})
+        inputs.append(port)
+    if all(a is b for a, b in zip(inputs, spec.inputs)):
+        return spec
+    return spec.model_copy(update={'inputs': inputs})
+
+
 def resolve_ports(spec: FunctionSpec) -> Tuple[List[Port], Port]:
     """Input / output ports with the ROS type each kind resolves to (data_kinds)."""
     inputs = [Port(i.topic, *data_kinds.resolve(i.kind, i.type)) for i in spec.inputs]

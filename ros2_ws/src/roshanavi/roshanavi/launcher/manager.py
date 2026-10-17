@@ -12,8 +12,9 @@ import os
 import shutil
 import tempfile
 import threading
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from ..function.core import adopt_topic_types
 from . import command
 from .discovery import Workspace
 from .dummy_config import (config_text, function_config_text, transform_config_text,
@@ -40,6 +41,8 @@ class ProcessManager:
         self._lock = threading.Lock()
         self._targets: Dict[str, Target] = {}
         self._closed = False
+        # topic -> its current types (the server's graph); function inputs adopt them
+        self.topic_types: Optional[Callable[[str], Sequence[str]]] = None
 
     # ---- argv / env --------------------------------------------------------
     def _argv(self, spec: Spec) -> List[str]:
@@ -53,6 +56,8 @@ class ProcessManager:
             return command.transform_command(spec, path)
         if isinstance(spec, FunctionSpec):
             command.validate_function(spec, self.workspace.root)
+            if self.topic_types is not None:
+                spec = adopt_topic_types(spec, self.topic_types)
             status = self.status_path(spec.id)
             try:
                 os.unlink(status)  # a stale status of the previous run must not show

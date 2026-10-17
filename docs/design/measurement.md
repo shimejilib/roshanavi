@@ -54,7 +54,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 ## 詳細計測モード (トレース計測, P4.7)
 受信側のノードの **中で** 実際に受け取った数・処理した数・1 回の処理にかかった時間を、ROS 2 に組み込まれたトレースポイント (ros2_tracing / LTTng) で測る。既定はオフで、トラフィックタブの「詳細計測モード」で有効にした間だけ記録する。
 
-**ファイル記述子 (fd) の扱い**: チャンクの解析 (bt2) は worker の中ではなく、**使い捨ての子プロセス** (`tracing/chunk_parser.py`、worker の子) で行う。worker は子にチャンクのパスを 1 行ずつ渡し、子はイベントを長さ付きの `marshal` フレームで返す (fd 1 は stderr に付け替え、bt2 の出力がフレームに混ざらない)。子はチャンクごとに bt2 のイテレータ (グラフが自分自身を参照する循環) を `gc.collect()` で解放してストリームファイルを閉じる。babeltrace2 2.0.x が閉じない `metadata` の fd は **閉じずに残し、子を 32 チャンクごとに入れ替える** ことで子と一緒に消す (以前はパスを見て fd を手動で閉じていたが、bt2 が後で同じ番号を閉じると再利用された別の fd を閉じる危険があった。issue #17)。子が落ちた・30 秒応答がない・途中で読むのをやめた場合は kill して次のチャンクで作り直し、そのチャンクは `parse_errors` に数える。worker の CPU 使用率には動いている子の CPU 時間 (`/proc/<pid>/stat`) を足す。bt2 のハンドルを解放しないと 5 秒ごとに 1 チャンクぶん (CPU 数+1 本) の fd が漏れ、約 3 分で `RLIMIT_NOFILE` (1024) に達して worker が `Too many open files` で落ちる。`lttng` CLI の `OSError` は `LttngError` に変換し、worker の再起動時は終了途中の `lttng-sessiond` を待って 2 つ目を作らない。サーバー自身の fd が `RLIMIT_NOFILE` の 70% を超えると警告ログを出す (`fd_guard.py`)。サーバー (ROS ノードとして LTTng-UST に登録される) 側の `(deleted)` な `shm-ust-consumer-*` などは CPU 数に比例する LTTng-UST 自身の固定分で、増え続けない。回帰テストは `test_tracing_fds.py` (子を 4 チャンクごとに入れ替えて fd が有界) と `test_tracing_parser.py` (偽の解析器で、フレーム・エラー・クラッシュ・ハング・入れ替え時の fd)。
+**ファイル記述子 (fd) の扱い**: チャンクの解析 (bt2) は worker の中ではなく、**使い捨ての子プロセス** (`tracing/chunk_parser.py`、worker の子) で行う。worker は子にチャンクのパスを 1 行ずつ渡し、子はイベントを長さ付きの `marshal` フレームで返す (fd 1 は stderr に付け替え、bt2 の出力がフレームに混ざらない)。子はチャンクごとに bt2 のイテレータ (グラフが自分自身を参照する循環) を `gc.collect()` で解放してストリームファイルを閉じる。babeltrace2 2.0.x が閉じない `metadata` の fd は **閉じずに残し、子を 32 チャンクごとに入れ替える** ことで子と一緒に消す (babeltrace2 2.1.2 (Lyrical) ではこの漏れが直っていることを確認した: 入れ替えなしで 11 チャンク解析しても子の fd は 4 本のまま、2.0.5 では 1 チャンクごとに `metadata` が 1 本増える。2.0.x の Jazzy / Kilted のために入れ替えはそのまま残す) (以前はパスを見て fd を手動で閉じていたが、bt2 が後で同じ番号を閉じると再利用された別の fd を閉じる危険があった。issue #17)。子が落ちた・30 秒応答がない・途中で読むのをやめた場合は kill して次のチャンクで作り直し、そのチャンクは `parse_errors` に数える。worker の CPU 使用率には動いている子の CPU 時間 (`/proc/<pid>/stat`) を足す。bt2 のハンドルを解放しないと 5 秒ごとに 1 チャンクぶん (CPU 数+1 本) の fd が漏れ、約 3 分で `RLIMIT_NOFILE` (1024) に達して worker が `Too many open files` で落ちる。`lttng` CLI の `OSError` は `LttngError` に変換し、worker の再起動時は終了途中の `lttng-sessiond` を待って 2 つ目を作らない。サーバー自身の fd が `RLIMIT_NOFILE` の 70% を超えると警告ログを出す (`fd_guard.py`)。サーバー (ROS ノードとして LTTng-UST に登録される) 側の `(deleted)` な `shm-ust-consumer-*` などは CPU 数に比例する LTTng-UST 自身の固定分で、増え続けない。回帰テストは `test_tracing_fds.py` (子を 4 チャンクごとに入れ替えて fd が有界) と `test_tracing_parser.py` (偽の解析器で、フレーム・エラー・クラッシュ・ハング・入れ替え時の fd)。
 
 **構成 (どの層のツールか)**
 ```
@@ -72,13 +72,13 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 [roshanavi]   解析プロセス (tracing/worker.py) が 1 秒ごとに区切って babeltrace2 で読み、集計してサーバーに送る
 ```
 - 使うのは **ユーザー空間用 (LTTng-UST) のみ**。セッションデーモンは `--no-kernel` で起動し、root 権限・カーネルモジュール・Docker の特権は要らない (確認済み: `ros:jazzy` ベースのイメージで、`--privileged` なし)。
-- 必要なパッケージ: `lttng-tools` と `liblttng-ust1t64` (どちらも `ros-jazzy-tracetools` の依存で入る)、`python3-bt2` (Ubuntu 24.04 では 2.0.5)。`ros2trace` / `tracetools_trace` は使わない (`lttng` コマンドを直接使う)。Jazzy の公式バイナリはトレースポイント入り (`ros2 run tracetools status` → `Tracing enabled`)。
+- 必要なパッケージ: `lttng-tools` と `liblttng-ust1t64` (どちらも `ros-<distro>-tracetools` の依存で入る)、`python3-bt2` (Ubuntu 24.04 では 2.0.5、26.04 (Lyrical) では 2.1.2)。`ros2trace` / `tracetools_trace` は使わない (`lttng` コマンドを直接使う)。Jazzy・Lyrical の公式バイナリはトレースポイント入り (`ros2 run tracetools status` → `Tracing enabled`)。使うトレースポイントの名前とフィールドは Lyrical (tracetools 8.10) でも同じ (`test_tracing_ros.py` が両方で通る)。
 
 **実装時の確認結果**
 | 項目 | 結果 |
 |---|---|
 | rclcpp のイベント | `rcl_node_init`、`rcl_subscription_init`、`rclcpp_subscription_init`、`rclcpp_subscription_callback_added`、`rclcpp_callback_register` (処理関数の名前)、`rcl_publisher_init`、`rmw_take` (`taken` 付き、空振りも出る)、`callback_start` / `callback_end` (`is_intra_process` 付き)、`rmw_publish` など |
-| rclpy のイベント | `rcl_*_init`・`rmw_take`・`rmw_publish` だけ。`callback_start/end` も `rclpy_*` も無い (Jazzy) → Python のノードは **受信数だけ** 測れる |
+| rclpy のイベント | `rcl_*_init`・`rmw_take`・`rmw_publish` だけ。`callback_start/end` も `rclpy_*` も無い (Jazzy・Lyrical とも。rclpy はトレースポイントを持たない) → Python のノードは **受信数だけ** 測れる |
 | セッションデーモンより前から動いているプロセス | 記録される (LTTng-UST がデーモンの登場を待っていて自動で登録する)。ただし init 系のイベントは起動時に 1 回しか出ないので、後から来たデーモンには届かない。`lttng regenerate statedump` は LTTng 自身のもの (ライブラリの配置) だけで、ROS の init は出し直さない → 対応づけには「ノードの起動より前から init を記録している」必要がある |
 | rclcpp の take と処理 | rclcpp の executor は、コールバックを実行する直前に 1 通だけ take する。処理が遅くても take ≒ 処理数で、追いつかない分は take される前に DDS のキュー (QoS の depth) から溢れる。**受信 > 処理 の差は rclcpp ではほぼ出ない** → 下の「処理が追いついていない」の判定で送信側の実測と比べる |
 | /dev/shm | per-UID のリングバッファは /dev/shm に置かれる。Docker の既定 64 MB では 4 MiB × 24 CPU が入らず、**エラーも出さずに何も記録されない** (セッションデーモンが落ちることもある) → compose に `shm_size: 512m`、さらに空きの半分に収まるようバッファを自動で縮める |

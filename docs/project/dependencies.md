@@ -1,11 +1,31 @@
 # roshanavi — 依存関係
 
-対象: ROS 2 Jazzy / Ubuntu 24.04。最終確認: 2026-10-17。
+対象: ROS 2 **Jazzy** (Ubuntu 24.04) と **Lyrical** (Ubuntu 26.04) が正式対応、Kilted (Ubuntu 24.04) は動作確認のみ ([distribution.md の 対応ディストロ](distribution.md#0-対応ディストロ))。最終確認: 2026-10-18。
+
+以下のパッケージ名の `<distro>` は `jazzy` / `lyrical` / `kilted` (例: `ros-<distro>-vision-msgs`)。
 
 方針 ([distribution.md の パッケージ構成](distribution.md#3-パッケージ構成-予定)):
 - 実行時の依存は、**すべて rosdep キーで解決できるもの** に限る。pip での追加インストールは要求しない。
 - 依存を追加したら、`package.xml` とこの文書を同時に更新する。Docker イメージにだけ入っていて `package.xml` に無い、という状態を作らない (ソースからインストールした場合に壊れるため)。
 - 任意の依存が無い場合は、該当機能だけを無効にし、UI で導入方法を案内する。
+
+## 0. ディストロごとの主な版
+
+Docker イメージ (`roshanavi:dev-<distro>`) で 2026-10-18 に確認した版。どれも apt (rosdep キー) から入るもので、pip は使わない。
+
+| | Jazzy | Lyrical | Kilted (確認のみ) |
+|---|---|---|---|
+| Ubuntu / Python | 24.04 / 3.12.3 | 26.04 / 3.14.4 (GIL あり) | 24.04 / 3.12.3 |
+| rclpy / rclcpp | 7.1.12 / 28.1.22 | 10.0.11 / 32.0.3 | 9.1.7 / 29.5.11 |
+| launch / rosbag2_py | 3.4.11 / 0.26.11 | 3.9.8 / 0.33.4 | 3.8.8 / 0.32.0 |
+| rmw_fastrtps_cpp / tracetools | 8.4.4 / 8.2.6 | 9.4.10 / 8.10.2 | 9.3.5 / 8.6.0 |
+| pydantic / FastAPI / Starlette / uvicorn | 1.10.14 / 0.101.0 / 0.31.1 / 0.27.1 | 2.12.5 / 0.118.0 / 0.50.0 / 0.38.0 | Jazzy と同じ |
+| httpx / websockets | 0.26.0 / 10.4 | 0.28.1 / 15.0.1 | Jazzy と同じ |
+| numpy / Pillow / psutil / PyYAML | 1.26.4 / 10.2.0 / 5.9.8 / 6.0.1 | 2.3.5 / 12.1.1 / 7.1.0 / 6.0.3 | Jazzy と同じ |
+| python3-bt2 (babeltrace2) / lttng-tools | 2.0.5 / 2.13.11 | 2.1.2 / 2.14.1 | Jazzy と同じ |
+| ffmpeg | 6.1.1 | 8.0.1 | Jazzy と同じ |
+
+ディストロで違いが出た所と対処は [testing.md の R. ディストロ対応](testing.md#r-ディストロ対応-36-37) にまとめた。
 
 ## 1. 実行時の依存 (必須)
 
@@ -30,7 +50,7 @@
 | `rclcpp`, `rmw`, `builtin_interfaces`, `std_msgs` | 計測ノード本体 |
 | `ament_cmake_gtest` (テストのみ) | C++ の単体テスト |
 
-いずれも `ros:jazzy-ros-base` と ROS 2 の標準インストールに含まれる。C++ コンパイラ (build-essential) が必要。
+いずれも `ros:<distro>-ros-base` と ROS 2 の標準インストールに含まれる。C++ コンパイラ (build-essential) が必要。
 
 ### システム・Python (apt / rosdep キー)
 | rosdep キー | 用途 | ライセンス |
@@ -38,7 +58,7 @@
 | `python3-fastapi` | Web API サーバー | MIT |
 | `python3-uvicorn` | ASGI サーバー | BSD-3-Clause |
 | `python3-websockets` | WebSocket (画面のリアルタイム更新) | BSD-3-Clause |
-| `python3-pydantic` | API 入力とプロジェクトファイルの検証 (Ubuntu 24.04 の 1.10 系) | MIT |
+| `python3-pydantic` | API 入力とプロジェクトファイルの検証。Ubuntu 24.04 は 1.10 系、26.04 は 2 系で、両方で動く (違いは `roshanavi/pydantic_compat.py` が吸収し、エラーの文面も 1.10 系にそろえる) | MIT |
 | `python3-yaml` | プロジェクトファイル、シナリオ、テンプレート | MIT |
 | `python3-psutil` | プロセス管理、ノードとプロセスの対応づけ、リソース監視 (PC 全体の CPU・メモリ・ディスク・NIC。プロセスごとの値は `/proc` を直接読む) | BSD-3-Clause |
 | `python3-numpy` | 音声の PCM 変換 | BSD-3-Clause |
@@ -50,10 +70,10 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 ## 2. 実行時の依存 (任意)
 | 依存 | 無い場合 | 導入 |
 |---|---|---|
-| `audio_common_msgs` | 音声の注入先として AudioData 系の型が選べなくなる (std_msgs の配列型は使える) | `sudo apt install ros-jazzy-audio-common-msgs` |
+| `audio_common_msgs` | 音声の注入先として AudioData 系の型が選べなくなる (std_msgs の配列型は使える) | `sudo apt install ros-<distro>-audio-common-msgs` |
 | `colcon` (`python3-colcon-common-extensions`) | ビルドボタンが無効になる | `sudo apt install python3-colcon-common-extensions` |
 | `python3-pynvml` (pynvml、BSD-3-Clause。rosdep キー `python3-pynvml` は debian / ubuntu にあり、Ubuntu 24.04 は 12.535.133) | GPU の監視が無効になる (リソースタブに理由と導入方法を出す。他の機能は動く)。NVIDIA のドライバ (NVML) も必要。任意のため `package.xml` と Docker イメージには入れていない (Docker では `--gpus` も要る) | `sudo apt install python3-pynvml` |
-| `lttng-tools`, `liblttng-ust1t64` (`ros-jazzy-tracetools` の依存で通常は導入済み), `python3-bt2` | 詳細計測モード (トレース) が無効になる。トグルに導入方法を表示する | `sudo apt install lttng-tools python3-bt2` |
+| `lttng-tools`, `liblttng-ust1t64` (`ros-<distro>-tracetools` の依存で通常は導入済み。26.04 では `liblttng-ust1t64` 2.14), `python3-bt2` | 詳細計測モード (トレース) が無効になる。トグルに導入方法を表示する | `sudo apt install lttng-tools python3-bt2` |
 
 ## 3. 開発・テスト用 (利用者には不要)
 
@@ -62,11 +82,11 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 |---|---|
 | `python3-pytest` | テスト |
 | `python3-httpx` | FastAPI の TestClient |
-| `launch_pytest` (`ros-jazzy-launch-pytest`) | シナリオを launch_pytest から使う例 (`examples/launch_pytest/`) とそのテスト。`package.xml` は `test_depend` |
-| `ros-jazzy-demo-nodes-cpp`, `ros-jazzy-demo-nodes-py`, `ros-jazzy-example-interfaces` | テストとデモの相手役ノード |
-| `ros-jazzy-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
+| `launch_pytest` (`ros-<distro>-launch-pytest`) | シナリオを launch_pytest から使う例 (`examples/launch_pytest/`) とそのテスト。`package.xml` は `test_depend` |
+| `ros-<distro>-demo-nodes-cpp`, `ros-<distro>-demo-nodes-py`, `ros-<distro>-example-interfaces` | テストとデモの相手役ノード |
+| `ros-<distro>-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
 | `roshanavi_test_nodes` (同梱の ament パッケージ。rclcpp, std_msgs, sensor_msgs) | トレース計測のテスト用ノード (遅いコールバックなど) |
-| `ros-jazzy-rmw-cyclonedds-cpp` (任意、未導入) | Cyclone DDS での計測の自動テスト (現在は手動確認のみ) |
+| `ros-<distro>-rmw-cyclonedds-cpp` (任意、未導入) | Cyclone DDS での計測の自動テスト (現在は手動確認のみ) |
 
 ### Web UI (ビルド時のみ。配布物にはビルド済みの静的ファイルを同梱し、利用者に npm を要求しない)
 バージョンは `web/package.json` で固定。ホストの npm 設定により、公開から約 2 週間未満のバージョンは使わない。
@@ -103,7 +123,7 @@ Node.js: 開発は v24.14 (ホスト)。jsdom は Node 24.15 以上が必要な�
 
 | イメージ | 用途 |
 |---|---|
-| `ros:jazzy-ros-base` | lab / demo / test のベース |
+| `ros:<distro>-ros-base` (既定 `ros:jazzy-ros-base`) | lab / demo / test のベース。`ROS_DISTRO` で切り替え、イメージ名は `roshanavi:dev-<distro>` |
 | `node:24.14.0-bookworm-slim` | Web UI のビルドステージ |
 | `mcr.microsoft.com/playwright:v1.63.0-noble` | E2E テスト |
 

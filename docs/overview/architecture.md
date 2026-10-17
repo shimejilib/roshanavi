@@ -4,16 +4,16 @@
 
 | 層 | 採用 | 理由 |
 |---|---|---|
-| ROS | rclpy (Jazzy, Python 3.12) | 動的型解決 (`rosidl_runtime_py`) で任意 msg を扱える |
-| サーバー | FastAPI + uvicorn (Ubuntu 24.04 apt の python3-fastapi / python3-uvicorn) | REST + WebSocket。pip を使わず apt で揃える |
+| ROS | rclpy (Jazzy / Python 3.12、Lyrical / Python 3.14。Kilted は動作確認のみ) | 動的型解決 (`rosidl_runtime_py`) で任意 msg を扱える |
+| サーバー | FastAPI + uvicorn (Ubuntu の apt の python3-fastapi / python3-uvicorn。pydantic 1.10 / 2 の差は `pydantic_compat.py`) | REST + WebSocket。pip を使わず apt で揃える |
 | フロント | Vite + React + TypeScript, Cytoscape.js (グラフ), uPlot (スパークライン) | ビルド成果物を FastAPI が静的配信 |
-| 実行環境 | Docker (`ros:jazzy-ros-base` ベース) + docker compose | ホストを汚さない。CI 流用 |
+| 実行環境 | Docker (`ros:<distro>-ros-base` ベース、`ROS_DISTRO` で切り替え。既定 jazzy) + docker compose | ホストを汚さない。CI 流用 |
 
 ## リポジトリ構成
 
 ```
 roshanavi/
-  docker/Dockerfile            # ros:jazzy-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
+  docker/Dockerfile            # ros:${ROS_DISTRO}-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
                                # (C++ の計測ノードのビルドに要る ament_cmake / rosidl / rclcpp / gtest は ros-base に含まれる)
   docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
   examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, docs/design/launcher.md)

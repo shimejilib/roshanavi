@@ -28,7 +28,7 @@ class FunctionRunner:
         self.core = FunctionCore(spec, loader, self._send)
         self._publisher = runtime.create_publisher(
             msgutil.resolve_type(self.core.output.type), spec.output.topic,
-            make_qos(**spec.output.qos.dict()))
+            make_qos(**spec.output.qos.model_dump()))
         self._subscriptions: List[Any] = []
         qos = make_qos(**INPUT_QOS)
         for index, port in enumerate(self.core.inputs):

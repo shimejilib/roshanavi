@@ -24,7 +24,7 @@ def tspec(name, **kw):
             'inputs': [{'topic': f'/{name}_in', 'type': STRING}],
             'output': {'topic': f'/{name}_out', 'type': STRING},
             'mapping': {'data': '${upper(msg.data)}'}}
-    return TransformSpec.parse_obj({**base, **kw})
+    return TransformSpec.model_validate({**base, **kw})
 
 
 @pytest.fixture
@@ -148,7 +148,7 @@ def test_transform_executable(tmp_path, helper):
     try:
         wait_for(lambda: len(out) >= 3, timeout=30)
         assert out[-1].data.startswith('X')
-        assert publisher_nodes(helper, '/rn_tf_exe_out') == {'rn_tf_exe'}
+        wait_for(lambda: publisher_nodes(helper, '/rn_tf_exe_out') == {'rn_tf_exe'}, timeout=10)
     finally:
         assert stop_group(proc) == 0, proc.stdout.read()
 
@@ -186,7 +186,7 @@ def test_transform_api_graph_role_and_autosave(client, helper):
     """``＋ 変換ノードを作る``: POST /api/transforms?start=true -> role transform on the map."""
     out = helper.collector(String, '/rn_tf_api_out')
     text_publisher(helper, '/rn_tf_api_in', 10, lambda i: f'api{i}')
-    body = tspec('rn_tf_api').dict()
+    body = tspec('rn_tf_api').model_dump()
     body['autostart'] = True
     resp = client.post('/api/transforms?start=true', json=body)
     assert resp.status_code == 201, resp.text

@@ -13,11 +13,11 @@ import logging
 import time
 from typing import Any, Callable, Dict, List, Literal, Optional, Tuple
 
-from pydantic import BaseModel, confloat, conint, constr
 from rclpy.duration import Duration
 
 from .. import msgutil
 from ..jobs import InjectSpec, Job
+from ..pydantic_compat import StrictModel, confloat, conint, constr
 from ..ros_runtime import RosRuntime, make_qos
 from .adapters.base import (KIND_AUDIO, KIND_IMAGE, AudioChunk, Companion, ImageFrame,
                             MediaAdapter, MediaSettings)
@@ -36,7 +36,7 @@ WARMUP_POLL_SEC = 0.05
 LINGER_SEC = 1.0            # at stop, wait this long for readers to ack the last frames
 
 
-class CaptureStart(BaseModel):
+class CaptureStart(StrictModel):
     """First (text) message on ``/ws/capture``."""
 
     kind: Literal['audio', 'camera']
@@ -55,9 +55,6 @@ class CaptureStart(BaseModel):
     camera_info: bool = True
     camera_info_topic: Optional[constr(max_length=256)] = None
     reliability: Literal['reliable', 'best_effort'] = 'reliable'
-
-    class Config:
-        extra = 'forbid'
 
     def settings(self) -> MediaSettings:
         return MediaSettings(frame_id=self.frame_id, encoding=self.encoding, format='jpeg',

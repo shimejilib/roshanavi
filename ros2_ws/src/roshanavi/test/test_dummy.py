@@ -51,7 +51,8 @@ def test_dummy_executable_publishes_under_its_own_name(tmp_path, helper):
     try:
         wait_for(lambda: len(received) >= 3, timeout=20)
         assert received[0].data.startswith('frame ')
-        assert publisher_nodes(helper, '/rn_dummy_topic') == {'rn_dummy_cam'}
+        wait_for(lambda: publisher_nodes(helper, '/rn_dummy_topic') == {'rn_dummy_cam'},
+                 timeout=10)
     finally:
         assert stop_group(proc) == 0, proc.stdout.read()
 
@@ -105,7 +106,8 @@ def test_export_runs_with_plain_ros2_launch(tmp_path, data_dir, helper):
                             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     try:
         wait_for(lambda: len(received) >= 3, timeout=30)
-        assert publisher_nodes(helper, '/rn_dummy_topic') == {'rn_dummy_cam'}
+        wait_for(lambda: publisher_nodes(helper, '/rn_dummy_topic') == {'rn_dummy_cam'},
+                 timeout=10)
     finally:
         stop_group(proc)
 

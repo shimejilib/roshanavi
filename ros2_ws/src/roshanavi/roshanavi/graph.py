@@ -13,10 +13,13 @@ import threading
 from dataclasses import dataclass, field
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from rclpy.exceptions import InvalidTopicNameException
+
 from .diagnostics import diagnose
 from .ros_runtime import RosRuntime, is_self_node, is_self_topic, qos_to_dict
 
 LOG = logging.getLogger(__name__)
+_REPORTED_BAD_TOPICS: set = set()
 
 
 @dataclass(frozen=True)
@@ -44,9 +47,17 @@ def collect(runtime: RosRuntime) -> RawGraph:
     topics = dict(runtime.topic_names_and_types())
     pubs: Dict[str, List[Endpoint]] = {}
     subs: Dict[str, List[Endpoint]] = {}
-    for topic in topics:
-        pubs[topic] = [_endpoint(i) for i in runtime.publishers_info(topic)]
-        subs[topic] = [_endpoint(i) for i in runtime.subscriptions_info(topic)]
+    for topic in list(topics):
+        try:
+            pubs[topic] = [_endpoint(i) for i in runtime.publishers_info(topic)]
+            subs[topic] = [_endpoint(i) for i in runtime.subscriptions_info(topic)]
+        except InvalidTopicNameException as exc:
+            # One unqueryable name (DDS can carry names rclpy rejects) must not stop the graph.
+            if topic not in _REPORTED_BAD_TOPICS and len(_REPORTED_BAD_TOPICS) < 100:
+                _REPORTED_BAD_TOPICS.add(topic)
+                LOG.warning('graph: skipping topic rclpy cannot query: %s', exc)
+            topics.pop(topic)
+            pubs.pop(topic, None)
     return RawGraph(nodes=list(runtime.node_names_and_namespaces()), topics=topics,
                     publishers=pubs, subscribers=subs,
                     lifecycle=tuple(lifecycle_nodes(runtime.service_names_and_types())))

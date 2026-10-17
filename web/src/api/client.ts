@@ -25,6 +25,7 @@ import type {
   DummySpec,
   EchoSample,
   ExportResult,
+  GraphSnapshot,
   InjectRequest,
   Job,
   LogLine,
@@ -100,6 +101,7 @@ export const api = {
   types: () => request<{ types: string[] }>('GET', '/api/types').then((r) => r.types),
   typeCatalog: () => request<{ types: string[]; groups: TypeGroup[] }>('GET', '/api/types'),
   dataKinds: () => request<KindCatalog>('GET', '/api/data-kinds'),
+  graph: () => request<GraphSnapshot>('GET', '/api/graph'),
   template: (path: string) => request<{ type: string; template: Record<string, unknown> }>('GET', path),
   files: () => request<{ data_dir: string; files: DataFile[] }>('GET', '/api/files'),
   /** Latest message of an echoed topic, untruncated up to the server's size cap (transform preview). */

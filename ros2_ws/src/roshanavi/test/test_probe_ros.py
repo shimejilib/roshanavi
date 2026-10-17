@@ -1,5 +1,7 @@
 """The C++ probe end to end: per-node rates, fallback, restart, hidden self topics."""
 
+import time
+
 import pytest
 from rclpy.node import Node
 from std_msgs.msg import String
@@ -10,6 +12,7 @@ from roshanavi.probe_process import find_probe_executable
 pytestmark = pytest.mark.skipif(find_probe_executable() is None,
                                 reason='roshanavi_probe is not built')
 
+COMPANION_WATCH_SEC = 6.0
 WINDOW = 10.0  # long window: rates within +-5 % even for the 2 Hz publisher
 
 
@@ -120,3 +123,21 @@ def test_api_reports_the_measurement(probe_lab):
         body = client.get('/api/traffic').json()
     assert body['measurement']['mode'] == 'probe'
     assert body['measurement']['reason'] is None
+
+
+
+def test_rmw_companion_topics_do_not_multiply(probe_lab, helper):
+    """Lyrical's rmw_fastrtps adds ``<topic>/_buf_cpu`` next to the probe's subscription of a
+    type with byte arrays. Subscribing to that companion made /a/_buf_cpu/_buf_cpu ..., one
+    level per probe update, until rclpy rejected the name and the graph stopped updating."""
+    from audio_common_msgs.msg import AudioDataStamped
+    helper.periodic_publisher(AudioDataStamped, '/tl_companion_audio', 10.0,
+                              lambda i: AudioDataStamped())
+    wait_for(lambda: (entry_of(probe_lab, '/tl_companion_audio') or {}).get('measurement') == 'probe',
+             timeout=20)
+    time.sleep(COMPANION_WATCH_SEC)  # several probe config updates (one per second)
+    raw = [name for name, _ in probe_lab.runtime.node.get_topic_names_and_types()]
+    assert not [t for t in raw if t.count('/_buf_') > 1], raw  # never a chain
+    assert not [t for t, _ in probe_lab.runtime.topic_names_and_types() if '/_buf_' in t]
+    snapshot, _ = probe_lab.graph.snapshot()
+    assert not [t['name'] for t in snapshot['topics'] if '/_buf_' in t['name']]

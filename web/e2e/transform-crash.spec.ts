@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { clickElement } from './helpers';
+import { chatterType, clickElement } from './helpers';
 
 // Regression: a multi-input transform (lifecycle TransitionEvent + String, condition, delay,
 // empty mapping) blanked the whole UI as soon as it, its output topic or an edge was clicked.
@@ -9,7 +9,7 @@ const SPEC = {
   name: ID,
   inputs: [
     { topic: '/lc_talker/transition_event', type: 'lifecycle_msgs/msg/TransitionEvent', alias: 'msg1' },
-    { topic: '/chatter', type: 'std_msgs/msg/String', alias: 'msg2' },
+    { topic: '/chatter', type: 'std_msgs/msg/String', alias: 'msg2' }, // replaced by the live type
   ],
   output: { topic: '/output_test', type: 'std_msgs/msg/String', qos: { reliability: 'reliable', durability: 'volatile', depth: 10 } },
   mode: 'map',
@@ -53,7 +53,10 @@ test('clicking a multi-input transform, its output topic and its edges never bla
     if (msg.type() === 'error') errors.push(`console: ${msg.text()}`);
   });
 
-  const created = await page.request.post('/api/transforms?start=true', { data: SPEC });
+  // /chatter is std_msgs/msg/String on Jazzy, example_interfaces/msg/String on Lyrical
+  const chatter = await chatterType(page.request);
+  const spec = { ...SPEC, inputs: [SPEC.inputs[0], { ...SPEC.inputs[1], type: chatter }] };
+  const created = await page.request.post('/api/transforms?start=true', { data: spec });
   expect(created.ok(), await created.text()).toBeTruthy();
 
   await page.goto('/');

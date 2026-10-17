@@ -71,6 +71,18 @@ def is_self_topic(topic: str) -> bool:
     return topic.startswith(SELF_TOPIC_PREFIX)
 
 
+# rmw_fastrtps_cpp on Lyrical (rosidl_buffer backends) adds a hidden companion topic
+# ``<topic>/_buf_<backend>`` (endpoint node ``_NODE_NAME_UNKNOWN_``) next to a C++ subscription
+# of a type with byte arrays. Subscribing to the companion makes another one
+# (``/a/_buf_cpu/_buf_cpu`` ...), one level per probe update, until the name is too long for
+# rclpy. They are transport internals: never listed, shown or subscribed.
+RMW_COMPANION_TOKEN_PREFIX = '_buf_'
+
+
+def is_rmw_internal_topic(topic: str) -> bool:
+    return any(token.startswith(RMW_COMPANION_TOKEN_PREFIX) for token in topic.split('/'))
+
+
 def make_qos(reliability: str = 'reliable', durability: str = 'volatile',
              depth: int = DEFAULT_DEPTH) -> QoSProfile:
     """Build a QoSProfile from lowercase policy names."""
@@ -232,8 +244,10 @@ class RosRuntime:
             return self.node.get_service_names_and_types()
 
     def topic_names_and_types(self) -> List[Tuple[str, List[str]]]:
+        """All topics except rmw-internal companions (:func:`is_rmw_internal_topic`)."""
         with self._lock:
-            return self.node.get_topic_names_and_types()
+            found = self.node.get_topic_names_and_types()
+        return [(name, types) for name, types in found if not is_rmw_internal_topic(name)]
 
     def publishers_info(self, topic: str) -> List[Any]:
         with self._lock:

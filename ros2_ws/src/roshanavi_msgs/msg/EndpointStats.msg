@@ -1,5 +1,5 @@
 # Statistics of one publisher (publisher_gid) of a topic over one window.
-uint8[16] publisher_gid   # rmw_gid_t data (RMW_GID_STORAGE_SIZE is 16 in Jazzy)
+uint8[16] publisher_gid   # rmw_gid_t data (RMW_GID_STORAGE_SIZE is 16 in Jazzy and Lyrical)
 bool resolved             # publisher_gid matched an endpoint_gid of get_publishers_info_by_topic
 string node_name          # empty when not resolved
 string node_namespace

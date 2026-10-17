@@ -8,16 +8,13 @@ like every other change; the UI explains the cost before sending it.
 from typing import Any, Dict
 
 from fastapi import FastAPI
-from pydantic import BaseModel
 
 from .lab import Lab
+from .pydantic_compat import StrictModel
 
 
-class TracingRequest(BaseModel):
+class TracingRequest(StrictModel):
     enabled: bool
-
-    class Config:
-        extra = 'forbid'
 
 
 def register(app: FastAPI, lab: Lab) -> None:

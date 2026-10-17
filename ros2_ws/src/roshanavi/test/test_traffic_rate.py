@@ -97,6 +97,15 @@ def test_sample_from_info_handles_missing_and_partial_info():
     assert sample_from_info(1.0, 5, {'source_timestamp': None}).src_ns == 0
 
 
+def test_sample_from_info_reads_both_gid_forms():
+    # rclpy 10 (Lyrical) adds the publisher gid as a dict; older forms are a byte sequence
+    lyrical = {'publisher_gid': {'implementation_identifier': 'rmw_fastrtps_cpp',
+                                 'data': b'\x01\x02'}}
+    assert sample_from_info(1.0, 5, lyrical).gid == b'\x01\x02'
+    assert sample_from_info(1.0, 5, {'publisher_gid': [1, 2]}).gid == b'\x01\x02'
+    assert sample_from_info(1.0, 5, {'publisher_gid': {'data': b''}}).gid is None
+
+
 def test_topic_stats_records_info_with_injected_clock():
     now = [100.0]
     stats = TopicStats(clock=lambda: now[0], wall_clock=lambda: 1.7e9)

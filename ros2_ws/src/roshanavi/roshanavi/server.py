@@ -17,13 +17,13 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field, confloat, conint, constr
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (data_kinds, msgutil, security, server_functions, server_launch_import,
                server_launcher, server_media, server_nodes, server_resources, server_scenarios,
                server_tracing, server_transforms)
 from .api_errors import ApiError, parse_window
+from .asyncutil import run_cleanup
 from .echo import MAX_SAMPLE_BYTES, EchoError
 from .files import FileAccessError, list_files
 from .jobs import InjectError, InjectSpec
@@ -31,6 +31,7 @@ from .lab import Lab
 from .launcher.errors import LauncherError
 from .media.errors import MediaError
 from .media.options import MediaOptions
+from .pydantic_compat import Field, StrictModel, confloat, conint, constr, validation_errors
 
 LOG = logging.getLogger(__name__)
 
@@ -38,16 +39,13 @@ LIVE_PERIOD_SEC = 1.0
 ECHO_PERIOD_SEC = 0.1  # echo is throttled to <= 10 Hz
 
 
-class QosModel(BaseModel):
+class QosModel(StrictModel):
     reliability: Literal['reliable', 'best_effort'] = 'reliable'
     durability: Literal['volatile', 'transient_local'] = 'volatile'
     depth: conint(ge=1, le=1000) = 10
 
-    class Config:
-        extra = 'forbid'
 
-
-class InjectRequest(BaseModel):
+class InjectRequest(StrictModel):
     mode: Literal['once', 'periodic', 'stream', 'bag', 'media']
     topic: Optional[constr(max_length=256)] = None
     type: Optional[constr(max_length=256)] = None
@@ -61,22 +59,16 @@ class InjectRequest(BaseModel):
     topics: List[constr(max_length=256)] = Field(default_factory=list, max_items=100)
     media: Optional[MediaOptions] = None
 
-    class Config:
-        extra = 'forbid'
-
     def to_spec(self) -> InjectSpec:
         return InjectSpec(mode=self.mode, topic=self.topic, type=self.type, payload=self.payload,
                           rate_hz=self.rate_hz, count=self.count, source=self.source,
-                          loop=self.loop, qos=self.qos.dict(), bag_rate=self.bag_rate,
+                          loop=self.loop, qos=self.qos.model_dump(), bag_rate=self.bag_rate,
                           bag_topics=tuple(self.topics),
-                          media=self.media.dict() if self.media else None)
+                          media=self.media.model_dump() if self.media else None)
 
 
-class MonitorRequest(BaseModel):
+class MonitorRequest(StrictModel):
     enabled: bool
-
-    class Config:
-        extra = 'forbid'
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -107,7 +99,8 @@ def _install_error_handlers(app: FastAPI) -> None:
 
     @app.exception_handler(RequestValidationError)
     async def _validation_error(_req: Request, exc: RequestValidationError) -> JSONResponse:
-        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg'] for e in exc.errors()]
+        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg']
+                 for e in validation_errors(exc)]
         return _error(422, 'validation_error', '; '.join(parts))
 
 
@@ -164,7 +157,7 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
         job = lab.injector.start(req.to_spec())
         # Record mode: the operation becomes a scenario step (docs/design/scenarios.md).
         lab.scenarios.recorder.note_op({'kind': 'inject', 'job_id': job['id'],
-                                        'request': req.dict(exclude_none=True)})
+                                        'request': req.model_dump(exclude_none=True)})
         return job
 
     @app.get('/api/inject')
@@ -279,7 +272,7 @@ def _register_ws(app: FastAPI, lab: Lab, live_period: float) -> None:
         try:
             await _run_until_disconnect(ws, push, ECHO_PERIOD_SEC)
         finally:
-            await run_in_threadpool(lab.echo.release, topic)
+            await run_cleanup(lab.echo.release, topic)
 
 
 def create_app(lab: Lab, static_dir: Optional[str] = None,

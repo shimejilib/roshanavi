@@ -1,4 +1,4 @@
-"""Scenario file schema (docs/design/scenarios.md): pydantic (v1) models + a loader with line numbers.
+"""Scenario file schema (docs/design/scenarios.md): pydantic models + a loader with line numbers.
 
 A scenario is YAML::
 
@@ -18,12 +18,13 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, List, Literal, Optional, Sequence, Tuple, Type, Union
 
 import yaml
-from pydantic import (BaseModel, Field, StrictBool, StrictFloat, StrictInt, StrictStr,
-                      ValidationError, confloat, conint, constr, root_validator, validator)
 
 from ..launcher.schema import (DummySpec, FunctionSpec, ID_PATTERN, KindName, ParamValue,
                                QosSpec, TransformSpec)
 from ..media.options import MediaOptions
+from ..pydantic_compat import (BaseModel, Field, StrictAliasModel, StrictBool, StrictFloat,
+                               StrictInt, StrictStr, ValidationError, checked_type, confloat,
+                               conint, constr, root_validator, validation_errors, validator)
 
 SCENARIO_VERSION = 1
 MAX_SCENARIO_BYTES = 512 * 1024
@@ -55,10 +56,8 @@ class ScenarioSchemaError(ValueError):
         super().__init__(f'{source}: ' + '; '.join(parts))
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
-        allow_population_by_field_name = True
+class _Strict(StrictAliasModel):
+    pass
 
 
 def check_topic(value: str) -> str:
@@ -73,6 +72,10 @@ def check_topic(value: str) -> str:
     except InvalidTopicNameException as exc:
         raise ValueError(f'トピック名が不正です: {value!r} ({exc})') from exc
     return value
+
+
+# A topic name inside a list (each item checked; the error points at the item)
+TopicName = checked_type(check_topic, 'TopicName')
 
 
 # ---- where conditions --------------------------------------------------------------------
@@ -238,16 +241,12 @@ class StopStep(_Strict):
 class PlayStep(_Strict):
     id: Optional[constr(regex=STEP_ID_RE)] = None
     bag: constr(min_length=1, max_length=1024)
-    topics: List[str] = Field(default_factory=list, max_items=100)
+    topics: List[TopicName] = Field(default_factory=list, max_items=100)
     rate: confloat(gt=0, le=100) = 1.0
     loop: bool = False
     wait: bool = False
     timeout: Seconds = 600.0  # type: ignore[valid-type]
     label: Optional[constr(max_length=200)] = None
-
-    @validator('topics', each_item=True)
-    def _topics(cls, value: str) -> str:
-        return check_topic(value)
 
     @root_validator(skip_on_failure=True)
     def _id(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -583,7 +582,7 @@ class _Collector:
                             'line': _line_of(self.root, path), 'message': message})
 
     def from_validation(self, prefix: Path, exc: ValidationError) -> None:
-        for err in exc.errors():
+        for err in validation_errors(exc):
             loc = tuple(p for p in err['loc'] if p != '__root__')
             self.add(prefix + loc, _message(err))
 
@@ -620,7 +619,7 @@ def _parse_steps(col: _Collector, items: List[Any]) -> List[StepEntry]:
             continue
         kind, body = found
         try:
-            spec = STEP_MODELS[kind].parse_obj(_step_body(kind, body))
+            spec = STEP_MODELS[kind].model_validate(_step_body(kind, body))
         except ValidationError as exc:
             col.from_validation(('steps', i, kind), exc)
             continue
@@ -646,7 +645,7 @@ def _parse_guards(col: _Collector, items: List[Any]) -> List[StepEntry]:
             continue
         kind, body = found
         try:
-            guards.append(StepEntry(kind, GUARD_MODELS[kind].parse_obj(body or {}),
+            guards.append(StepEntry(kind, GUARD_MODELS[kind].model_validate(body or {}),
                                     col.line(('guards', i))))
         except ValidationError as exc:
             col.from_validation(('guards', i, kind), exc)
@@ -661,7 +660,7 @@ def _parse_setup(col: _Collector, items: List[Any]) -> List[SetupEntry]:
                     'executable: ...}}}})')
             continue
         try:
-            setup = SetupItem.parse_obj(item)
+            setup = SetupItem.model_validate(item)
         except ValidationError as exc:
             col.from_validation(('setup', i), exc)
             continue
@@ -671,7 +670,8 @@ def _parse_setup(col: _Collector, items: List[Any]) -> List[SetupEntry]:
             body.setdefault('name', f'scenario_{setup.kind}_{i}')
             body.pop('autostart', None)
             try:
-                node_spec = NODE_SPECS[setup.kind].parse_obj({**body, 'id': f'scn-{setup.kind}-{i}'})
+                node_spec = NODE_SPECS[setup.kind].model_validate(
+                    {**body, 'id': f'scn-{setup.kind}-{i}'})
             except ValidationError as exc:
                 col.from_validation(('setup', i, setup.kind), exc)
                 continue
@@ -687,7 +687,7 @@ def parse_data(raw: Any, source: str = 'scenario',
         col.add((), 'シナリオの一番外側は対応 (name: ... / steps: ...) にしてください')
         raise ScenarioSchemaError(source, col.errors)
     try:
-        top = _Top.parse_obj(raw)
+        top = _Top.model_validate(raw)
     except ValidationError as exc:
         col.from_validation((), exc)
         raise ScenarioSchemaError(source, col.errors) from exc
@@ -736,13 +736,13 @@ def load_file(path: str) -> Scenario:
 # ---- canonical dump (UI saves) ----------------------------------------------------------------
 
 def _clean(model: BaseModel) -> Dict[str, Any]:
-    return model.dict(by_alias=True, exclude_none=True, exclude_defaults=True)
+    return model.model_dump(by_alias=True, exclude_none=True, exclude_defaults=True)
 
 
 def _keep(model: BaseModel, *keys: str) -> Dict[str, Any]:
     """Like :func:`_clean` but always writes ``keys`` (e.g. a default ``for``)."""
     out = _clean(model)
-    full = model.dict(by_alias=True)
+    full = model.model_dump(by_alias=True)
     for key in keys:
         if full.get(key) is not None:
             out[key] = full[key]
@@ -774,7 +774,7 @@ def to_raw(scenario: Scenario) -> Dict[str, Any]:
     if scenario.description:
         out['description'] = scenario.description
     if scenario.setup:
-        out['setup'] = [e.item.dict(exclude_none=True, exclude_defaults=True)
+        out['setup'] = [e.item.model_dump(exclude_none=True, exclude_defaults=True)
                         for e in scenario.setup]
     if scenario.guards:
         out['guards'] = [{g.kind: _clean(g.spec)} for g in scenario.guards]

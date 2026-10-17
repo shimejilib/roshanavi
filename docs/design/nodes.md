@@ -72,7 +72,7 @@
 
 **構成**: `busy_demo_driver` が `/busy_demo/in` に 100 Hz (`rate_hz`) で送り、`executor_busy_demo` が受けて `work_ms` (既定 5 ms) だけ sleep する (軽い処理の代わり。sleep は CPU を使わないので、見える CPU は executor 自身の空回り)。`executor_busy_demo` は 1 秒ごとに `stats_topic` へ次の JSON (std_msgs/String) を送り、同じ内容を 1 行でログに出す: `executor`、`qos_events`、`num_threads`、`work_ms`、`wait_passes_per_sec` (executor の待ちの回数)、`empty_passes_per_sec`、`empty_ratio` (空振りの割合)、`callbacks_per_sec`、`passes_per_callback`、`process_cpu_percent` (プロセス全体の CPU 時間 ÷ 経過時間。100 = 1 コア)。
 
-**数え方** (`PassCounter`、monkeypatch なし): rclpy の `Executor` の公開メソッド 2 つを上書きするだけ。executor の待ちのループは 1 周ごとに `get_nodes()` を 1 回呼び、準備できたコールバックを `wait_for_ready_callbacks()` が 1 つずつ返す。したがって 周 = `get_nodes()` の呼び出し、空振りの周 = その周で `wait_for_ready_callbacks()` が何も返さなかった周。`rclpy.executors` の `WaitSet.wait()` を直接数えた値と照合して合った (65,414 周 vs 65,433 回、差は実行中の 1 周分など)。前提は「1 周で `get_nodes()` を 1 回呼ぶ」(rclpy 7.x = Jazzy で確認)。崩れたら単体・統合テストが気づく。
+**数え方** (`PassCounter`、monkeypatch なし): rclpy の `Executor` の公開メソッド 2 つを上書きするだけ。executor の待ちのループは 1 周ごとに `get_nodes()` を 1 回呼び、準備できたコールバックを `wait_for_ready_callbacks()` が 1 つずつ返す。したがって 周 = `get_nodes()` の呼び出し、空振りの周 = その周で `wait_for_ready_callbacks()` が何も返さなかった周。`rclpy.executors` の `WaitSet.wait()` を直接数えた値と照合して合った (65,414 周 vs 65,433 回、差は実行中の 1 周分など)。前提は「1 周で `get_nodes()` を 1 回呼ぶ」(rclpy 7.x = Jazzy、rclpy 10.x = Lyrical で確認。`test_executor_busy_demo.py` が両方で通る)。崩れたら単体・統合テストが気づく。
 
 **3 つの構成** (`examples/busy_demo/roshanavi.yaml`、autostart なし。⚙ のプロジェクト切り替えから開き、`busy_demo_driver` を起動してから 1 つずつ起動して比べる。同時に動かすと CPU が混ざる):
 
@@ -108,7 +108,7 @@
 | バイト列 (生データ) | `bytes` | `std_msgs/UInt8MultiArray` | `bytes` |
 | 専用の型 (詳細設定モード) | `message` | 指定した任意の型 | メッセージ全体の dict 表現 |
 
-- **対応表は 1 か所** (`roshanavi/data_kinds.py`): 種類 ↔ 型、インストールされている型の選択 (音声の代替)、既存の型 → 種類 (互換の型: `Float32` → 数値 (小数)、`Int8`〜`UInt64` → 整数、各種 `*MultiArray` → 数値の並び、`AudioData` → 音声。型はそのまま使う)、Python の値との変換 (`to_python` / `from_python`、画像・音声はメディアのアダプタ [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4) 経由で変換は型ごとに 1 つ)、詳細設定モードの並び (`type_groups`)。入力ノード・変換ノード・関数ノード・メディアのアダプタ (`/api/media/types` の `data_kind`) が共有する。`GET /api/data-kinds` は `{kinds[{id, type, available, python}], type_kinds, common_types}`。表示名は UI の i18n (`i18n/messagesKinds.ts`)。
+- **対応表は 1 か所** (`roshanavi/data_kinds.py`): 種類 ↔ 型、インストールされている型の選択 (音声の代替)、既存の型 → 種類 (互換の型: `Float32` → 数値 (小数)、`Int8`〜`UInt64` → 整数、各種 `*MultiArray` → 数値の並び、`AudioData` → 音声、`example_interfaces/msg/String` などの example_interfaces の 1 項目の型 → 対応する種類 (Lyrical のデモの talker が使う)。型はそのまま使う)、Python の値との変換 (`to_python` / `from_python`、画像・音声はメディアのアダプタ [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4) 経由で変換は型ごとに 1 つ)、詳細設定モードの並び (`type_groups`)。入力ノード・変換ノード・関数ノード・メディアのアダプタ (`/api/media/types` の `data_kind`) が共有する。`GET /api/data-kinds` は `{kinds[{id, type, available, python}], type_kinds, common_types}`。表示名は UI の i18n (`i18n/messagesKinds.ts`)。
 - 変換は厳密: 数値に `bool` や文字列は渡さない、整数は整数値の float まで、画像は uint8 で 2 次元か 3 チャンネル、音声は int16。合わないときは「出力の種類 int には int が必要ですが、関数は str を返しました」のように型名付きのエラー (`KindError`)。
 - **既存のトピックに送る場合は、型を選ばせない** (相手が決まっているため)。自動で検出し、「このトピックは 文字列 (std_msgs/String) です」のように、データの種類と ROS の型を併記する。上の表に無い型なら「専用の型: geometry_msgs/Twist」と表示し、テンプレートで入力させる。型が複数あるトピックはどれに合わせるかだけを選ぶ。既存の `String` のトピックを JSON として扱う選択は保つ。
 - 新しいトピックでは種類を選ぶ。ROS の型名は画面に出さない (E2E `datakind.spec.ts` で `std_msgs` が見えないことを確認)。
@@ -133,6 +133,7 @@ roshanavi で「＋ 関数ノードを作る」→ モジュール `my_pkg.logic
 | 複数入力 (`multi_input`、`trigger`) | 入力 2〜8 つ。各入力の最新値を入力の順に引数へ渡す (変換ノードと同じ結合ルール `transform/pipeline.Joiner`: 全部の入力が 1 回届くまで呼ばない、`trigger` は `any` か入力のトピック) |
 
 - 戻り値が `None` のときは送らない (条件付きで出したいとき用、`skipped` に数える)。
+- 入力に種類 (`kind`) だけを書いて型 (`type`) を省いたときは、起動の時点で地図にあるそのトピックの型のうち、その種類を運べるものが 1 つだけならその型で購読する (`function/core.adopt_topic_types`。例: Lyrical のデモの `/chatter` は `example_interfaces/msg/String` なので、`kind: string` の `text_shout` もそれを購読する)。トピックがまだ無い・候補が複数なら種類の既定の型 (`std_msgs/msg/String` など)。書かれた型は常にそのまま使う。
 - 例外が起きたら、そのメッセージは送らず、ログと画面に「関数でエラーが起きました」と **ファイル:行番号 (関数名)** 付きで出す (利用者のパッケージ内でいちばん深いフレーム。ログは 5 秒に 1 行まで、抑えた件数を添える)。ノードは止めない。値の変換の失敗 (戻り値の型が合わない、届いた JSON が読めない) も同じ扱い。
 - 値の受け渡しは [nodes.md#データの種類](nodes.md#データの種類-ros-のメッセージ型を意識させないp55) の表 (入力側も同じ)。関数には ROS のメッセージではなく Python の値を渡す。詳細設定モードの「専用の型」では、メッセージ全体を dict で受け取り、dict で返す。画像・音声の出力には、呼び出しのきっかけになった入力の `header.stamp` を引き継ぐ (latency を測れるように。無ければいまの時刻)。
 - 地図上の役割は `function` (変換・ダミーと同じ系統の色で、ピンク。凡例「関数ノード」、ノード一覧の役割「関数」、右クリック「関数ノードの設定を変更」)。プロジェクトの `functions:` に保存し ([launcher.md#プロジェクトファイル](launcher.md#プロジェクトファイル-p3))、自動起動・自動再起動・停止・ログ・launch への書き出し (`executable='function'`) はダミー・変換ノードと同じ。

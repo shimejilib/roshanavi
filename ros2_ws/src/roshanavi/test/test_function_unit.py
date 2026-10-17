@@ -7,7 +7,6 @@ import time
 
 import numpy as np
 import pytest
-from pydantic import ValidationError
 from sensor_msgs.msg import Image
 from std_msgs.msg import Float64, String
 
@@ -18,6 +17,7 @@ from roshanavi.function.loader import FunctionLoader, LoadError, Watcher
 from roshanavi.launcher.dummy_config import function_config_text, load_function_config
 from roshanavi.launcher.errors import LauncherError
 from roshanavi.launcher.schema import FunctionSpec
+from roshanavi.pydantic_compat import ValidationError
 from ws_fixtures import fake_source
 
 LOGIC = '''\
@@ -96,7 +96,7 @@ def spec(**kw):
     base = {'id': 'fn', 'name': 'fn', 'module': 'fn_pkg.logic', 'function': 'shout',
             'inputs': [{'topic': '/in', 'kind': 'string'}],
             'output': {'topic': '/out', 'kind': 'string'}}
-    return FunctionSpec.parse_obj({**base, **kw})
+    return FunctionSpec.model_validate({**base, **kw})
 
 
 # ---- modules (no import) -------------------------------------------------------------------
@@ -402,7 +402,30 @@ def test_export_code_writes_and_protects_user_files(ws):
     assert err.value.code == 'file_exists'
     with pytest.raises(LauncherError):
         codegen.export_code(spec(), str(ws), str(target) + '\nx')
-    bad_name = spec().copy(update={'name': '../../evil'})  # e.g. an invalid spec from a file
+    bad_name = spec().model_copy(update={'name': '../../evil'})  # e.g. an invalid spec from a file
     with pytest.raises(LauncherError):
         codegen.export_code(bad_name, str(ws), str(target))
     assert not (ws / 'evil_node.py').exists()
+
+
+def test_inputs_with_only_a_kind_adopt_the_existing_topic_type():
+    from roshanavi.function.core import adopt_topic_types
+    types = {'/chatter': ['example_interfaces/msg/String'],
+             '/two': ['std_msgs/msg/String', 'example_interfaces/msg/String'],
+             '/num': ['std_msgs/msg/Float32'], '/explicit': ['example_interfaces/msg/String']}
+    base = spec(call='multi_input',
+                inputs=[{'topic': '/chatter', 'kind': 'string'},
+                        {'topic': '/two', 'kind': 'string'},
+                        {'topic': '/num', 'kind': 'string'},
+                        {'topic': '/new', 'kind': 'string'},
+                        {'topic': '/explicit', 'kind': 'string', 'type': 'std_msgs/msg/String'}])
+    adopted = adopt_topic_types(base, lambda topic: types.get(topic, []))
+    assert [i.type for i in adopted.inputs] == [
+        'example_interfaces/msg/String',  # one fitting type: taken (Lyrical's demo talker)
+        None,                             # ambiguous: the kind's default
+        None,                             # does not carry the kind
+        None,                             # no topic yet
+        'std_msgs/msg/String']            # an explicit type always wins
+    assert base.inputs[0].type is None    # the original spec is not changed
+    unchanged = spec()
+    assert adopt_topic_types(unchanged, lambda topic: []) is unchanged

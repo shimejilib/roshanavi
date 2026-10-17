@@ -11,6 +11,8 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 - 1 ファイルだけ: `docker compose --profile test run --rm test python3 -m pytest -p no:cacheprovider -q /ws/src/roshanavi/test/<file>.py -k <expr>`
 - Web の単体テスト: `cd web && npm ci && npx vitest run [file]`、型検査は `npx tsc --noEmit`
 - E2E (隔離したスタック。利用者のラボには向けない): `scripts/e2e.sh` — 隔離の仕組みは [ui.md#実装メモ (P2)](../design/ui.md#実装メモ-p2)。
+- ディストロを選ぶ: どのコマンドも先頭に `ROS_DISTRO=jazzy|lyrical|kilted` を付ける (既定 jazzy、イメージは `roshanavi:dev-<distro>`)。例: `ROS_DISTRO=lyrical docker compose --profile test run --rm test`、`ROS_DISTRO=lyrical scripts/e2e.sh`。利用者のラボ (既定は jazzy) とはイメージもコンテナも別なので止まらない。
+- 正式対応は Jazzy と Lyrical。ROS・pydantic・FastAPI に触れる変更は、バックエンド全体を両方で通す。Kilted は動作確認のみ (下の R)。
 
 反復中は変更に関係するテストだけを動かし、バックエンド全体と `scripts/e2e.sh` は最後に 1 回ずつ動かす。実時間のテスト (Hz・ペース・遅延) は、変更と無関係でそのテスト単独なら通る失敗はタイミングの揺れとして報告し、許容幅を緩めて隠さない。新しい機能には単体 + 統合テスト (UI の流れは E2E) を付ける。
 
@@ -442,3 +444,24 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | Q-18 | メモリリークの疑いが地図・診断パネルに出る (実プロセス) | 5 分以上メモリを増やし続けるノードで「リークの疑い」 | ⬜ (判定は Q-01 の単体テストのみ。実時間で 3 分以上かかるため自動テストなし) |
 | Q-19 | UDP 受信バッファ溢れの案内 (実環境) | 大きな画像を `--monitor-heavy` で監視し、受信バッファを小さくして溢れさせると `net.core.rmem_max` の案内 | ⬜ (判定は Q-06 の単体テストのみ。E2E のコンテナでは RcvbufErrors が実際に増え、リソースタブに橙色で出ることを目視で確認 👀) |
 | Q-20 | 自分以外のユーザーのプロセスを一覧しない (非 root) | 非 root で起動すると他のユーザーのプロセスが一覧に出ない | 🟡 (単体テストの読み取り関数で確認。Docker は root で動くため実機は未確認 👀) |
+
+### R. ディストロ対応 (#36, #37)
+
+Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1 回。継続的には確認しない)。版の一覧は [dependencies.md の 0. ディストロごとの主な版](dependencies.md#0-ディストロごとの主な版)。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| R-01 | ディストロの切り替え | `ROS_DISTRO` でベースイメージ・`ros-<distro>-*` パッケージ・source する setup が変わり、イメージは `roshanavi:dev-<distro>`。既定 (jazzy) の手順は変わらない | ✅ (jazzy / lyrical / kilted でイメージを作り、テストが通る) |
+| R-02 | Jazzy のバックエンド全体 | gtest + pytest がすべて通る | ✅ 2026-10-18: gtest 12 + 11、pytest 1090 passed |
+| R-03 | Lyrical のバックエンド全体 | gtest + pytest がすべて通る | ✅ 2026-10-18: gtest 12 + 11、pytest 1088 passed / 2 failed。失敗した `test_function_ros.py::test_module_that_does_not_import_yet_waits_for_a_fix` (関数ノードが SIGINT で止まらず SIGKILL) と `test_scenario_ros.py::test_function_node_example` (2 秒以内に届かず) はどちらも単独で 2 回通る (タイミングの揺れとして報告。前者は Lyrical で 3 回中 1 回) |
+| R-04 | Kilted のバックエンド全体 (動作確認のみ) | gtest + pytest が通る | ✅ 2026-10-18: gtest 12 + 11、pytest 1089 passed / 1 failed (`test_scenario_ros.py::test_pre_subscription_catches_an_immediate_response`、0.3 秒の判定。単独で 2 回通る)。この日の途中の版でも 1 回 1082 passed |
+| R-05 | E2E (Jazzy / Lyrical) | `scripts/e2e.sh` が両方で通る | ✅ 2026-10-18: Jazzy 39 passed、Lyrical 39 passed (`ROS_DISTRO=lyrical scripts/e2e.sh`。最初は 16 failed: R-12・R-13 で直した) |
+| R-06 | pydantic 1.10 / 2 の両対応 | 同じモデル定義で、エラーの種類・文面・場所 (`loc`) が 1.10 系と同じ (上限の値、Literal の選択肢、Union の中の型名を落とす、None、検証関数の ValueError)。正規表現は両方で Python の re (`$` の意味が同じ)。数値を文字列の項目に入れると文字列になる (1.10 系と同じ) | ✅ (`test_pydantic_compat.py` を両方で実行) |
+| R-07 | rclpy 10 の `MessageInfo.publisher_gid` (dict) | `{'data': bytes}` の形でも bytes の並びでも gid になる。以前は購読のコールバックで例外になり executor のスレッドが止まった | ✅ (`test_traffic_rate.py`) |
+| R-08 | uvicorn 0.29 以降のシグナルの再送 | SIGTERM / SIGINT / SIGHUP でサーバーを止めても Launcher の子が残らない (uvicorn が終了後に同じシグナルを送り直すため、以前は `finally` の前に落ちていた) | ✅ (`test_launcher_shutdown.py` を両方で実行) |
+| R-09 | 取り消された WebSocket の後片付け | タスクが取り消し済みでも、画像・音声ビューアとエコーの購読解除、ブラウザ入力の終了が 1 回だけ走る (Starlette 0.50 の TestClient は閉じた直後に取り消す) | ✅ (`test_asyncutil.py`、`test_media_viewer.py`) |
+| R-10 | babeltrace2 2.1.2 の metadata の fd (#17) | 2.1.2 では解析の子を入れ替えなくても fd が増えない (11 チャンクで 4 本のまま。2.0.5 は 1 チャンクごとに 1 本増える)。入れ替えの仕組みは 2.0.x のために残す | 👀 (2026-10-18 に手動で確認。入れ替えありの回帰テストは `test_tracing_fds.py`) |
+| R-12 | rmw の付属トピック (`<topic>/_buf_cpu`) | Lyrical の rmw_fastrtps は、バイト列を持つ型 (AudioDataStamped など) を C++ で購読すると隠しトピック `<topic>/_buf_cpu` を足す。roshanavi はこれを一覧・地図・計測の対象にしない (以前は計測ノードがそれを購読して `/a/_buf_cpu/_buf_cpu/...` が 1 秒に 1 段ずつ増え、名前が長すぎて rclpy が例外を出し、地図の更新が止まった)。問い合わせで例外になるトピックが 1 つあっても地図の更新は続く | ✅ (`test_probe_ros.py::test_rmw_companion_topics_do_not_multiply` は修正前の Lyrical で失敗を確認、`test_graph_unit.py`) |
+| R-13 | Lyrical のデモ (`/chatter` が `example_interfaces/msg/String`) | Lyrical の demo_nodes_cpp の talker / listener は std_msgs ではなく example_interfaces の String を使う。example_interfaces の String・Bool・整数・小数も「文字列」などのデータの種類として扱う (型はそのまま)。種類だけの関数ノードの入力 (デモの `text_shout`) は既存のトピックの型を使う。チュートリアル「届かない原因を見つけて直す」は受信側を先に起動し、送信側をその型にそろえる。E2E は `/chatter` の型をサーバーに聞いて使う | ✅ (`test_data_kinds.py`、`test_function_unit.py::test_inputs_with_only_a_kind_adopt_the_existing_topic_type`、vitest `tour/fixtures.test.ts`、E2E) |
+| R-11 | Python 3.14 | 式の評価器 (`expr.py`、`msg_view.py`) の許可・拒否のテストが通る (削除された `ast.Num` などは使っていない)。警告なし | ✅ (`test_expr.py`、`test_expr_fields.py`、`test_security.py`) |
+

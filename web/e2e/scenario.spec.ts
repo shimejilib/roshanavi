@@ -1,6 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { CHATTER_KIND_LABEL } from './helpers';
 
 // Scenarios (#31): record a scenario through the UI (send to /chatter, click the function
 // node's output on /shouted, save), run it from the Scenarios tab, break it, see why it fails.
@@ -42,7 +43,7 @@ test('record, run, break: the failure is explained', async ({ page }) => {
   // An operation in another tab becomes a step.
   await page.getByTestId('tab-inject').click();
   await page.getByTestId('inject-topic').fill('/chatter');
-  await expect(page.getByTestId('inject-type-detected')).toContainText('文字列 (std_msgs/String)');
+  await expect(page.getByTestId('inject-type-detected')).toContainText(CHATTER_KIND_LABEL);
   await page.getByTestId('inject-yaml').fill('data: "hello scenario"');
   await page.getByTestId('inject-start').click();
   await expect(page.getByRole('status')).toContainText('開始しました');

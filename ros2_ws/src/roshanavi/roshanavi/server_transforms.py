@@ -13,18 +13,17 @@
 from typing import Any, Dict
 
 from fastapi import FastAPI
-from pydantic import BaseModel, Field, constr, validator
 
 from .lab import Lab
 from .launcher.schema import TransformSpec
+from .pydantic_compat import Field, StrictModel, constr, validator
 from .transform.preview import preview
 
 MAX_SAMPLES = 8
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class PreviewRequest(_Strict):

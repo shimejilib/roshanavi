@@ -72,6 +72,7 @@ class Lab:
         self.importer = LaunchImporter(self.launcher, data_dir)
         self.runtime = RosRuntime(node_name)
         self.graph = graph.GraphMonitor(show_self=show_self)
+        self.launcher.manager.topic_types = lambda topic: self.graph.raw().topics.get(topic, [])
         self.traffic = TrafficService(self.runtime, probe=probe, window_sec=window_sec,
                                       exclude=traffic_exclude, clock=clock,
                                       monitor_heavy=monitor_heavy)

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import { rightClickNode } from './helpers';
+import { CHATTER_KIND_LABEL, rightClickNode } from './helpers';
 
 // Function nodes (#29): a plain Python function of a workspace package run as a node.
 // Uses roshanavi_examples.logic.shout on /chatter (the demo talker) -> /e2e_shouted.
@@ -26,7 +26,7 @@ test('create a function node from the example module; its output is echoed', asy
   await expect(dialog.getByTestId('function-call-on_message')).toBeChecked();
   await dialog.getByTestId('function-node-name').fill(NAME);
   await dialog.getByTestId('function-input-0-topic').fill('/chatter');
-  await expect(dialog.getByTestId('function-input-0-type-detected')).toContainText('文字列 (std_msgs/String)');
+  await expect(dialog.getByTestId('function-input-0-type-detected')).toContainText(CHATTER_KIND_LABEL);
   await dialog.getByTestId('function-output-topic').fill('/e2e_shouted');
   // The return annotation `-> str` already chose 文字列 for the new output topic.
   await expect(dialog.getByTestId('function-output-type-kind')).toHaveValue('string');

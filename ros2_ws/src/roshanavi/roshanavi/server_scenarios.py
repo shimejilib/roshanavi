@@ -18,9 +18,9 @@ from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field, confloat, constr
 
 from .lab import Lab
+from .pydantic_compat import Field, StrictModel, confloat, constr
 from .scenario.recorder import RecordError
 from .scenario.schema import ScenarioSchemaError, to_raw
 from .scenario.store import StoreError
@@ -31,9 +31,8 @@ WS_PERIOD_SEC = 0.25
 MAX_YAML = 512 * 1024
 
 
-class _Strict(BaseModel):
-    class Config:
-        extra = 'forbid'
+class _Strict(StrictModel):
+    pass
 
 
 class SaveRequest(_Strict):

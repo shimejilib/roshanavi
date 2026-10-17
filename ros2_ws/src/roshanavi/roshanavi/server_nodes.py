@@ -10,7 +10,6 @@ graph are contacted.
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import FastAPI
-from pydantic import BaseModel, constr
 
 from . import interfaces
 from .api_errors import ApiError
@@ -18,28 +17,23 @@ from .lab import Lab
 from .lifecycle import ALLOWED_TRANSITIONS, GOALS
 from .node_list import build_node_list, lifecycle_node_ids
 from .params import SETTABLE_TYPES, check_node_name
+from .pydantic_compat import StrictModel, constr
 from .ros_runtime import is_self_node
 
 ParamType = Literal[SETTABLE_TYPES]  # type: ignore[valid-type]
 
 
-class ParamSetRequest(BaseModel):
+class ParamSetRequest(StrictModel):
     name: constr(min_length=1, max_length=256)
     type: ParamType
     value: Any = None
     allow_external: bool = False
 
-    class Config:
-        extra = 'forbid'
 
-
-class LifecycleRequest(BaseModel):
+class LifecycleRequest(StrictModel):
     transition: Optional[Literal[ALLOWED_TRANSITIONS]] = None  # type: ignore[valid-type]
     goal: Optional[Literal[GOALS]] = None  # type: ignore[valid-type]
     allow_external: bool = False
-
-    class Config:
-        extra = 'forbid'
 
 
 def graph_node(lab: Lab, node: str) -> Dict[str, Any]:

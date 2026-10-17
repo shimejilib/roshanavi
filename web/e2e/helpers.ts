@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import { expect, type APIRequestContext, type Page } from '@playwright/test';
 
 type Cy = { getElementById: (i: string) => { renderedPosition: () => { x: number; y: number } } };
 
@@ -18,4 +18,22 @@ export async function rightClickBlank(page: Page) {
   const box = await page.getByTestId('graph-canvas').boundingBox();
   if (!box) throw new Error('graph canvas not visible');
   await page.mouse.click(box.x + box.width - 16, box.y + 16, { button: "right" });
+}
+
+/**
+ * The demo talker's /chatter type label, e.g. "文字列 (std_msgs/String)". Jazzy's demo_nodes
+ * publish std_msgs/msg/String, Lyrical's example_interfaces/msg/String (both are 文字列).
+ */
+export const CHATTER_KIND_LABEL = /文字列 \((std_msgs|example_interfaces)\/String\)/;
+
+/** The ROS type of /chatter as the server sees it (waits until the talker is on the graph). */
+export async function chatterType(request: APIRequestContext): Promise<string> {
+  let found = '';
+  await expect.poll(async () => {
+    const graph = await (await request.get('/api/graph')).json();
+    const topic = (graph.topics ?? []).find((t: { name: string }) => t.name === '/chatter');
+    found = topic?.types?.[0] ?? '';
+    return found;
+  }, { timeout: 20_000 }).not.toBe('');
+  return found;
 }

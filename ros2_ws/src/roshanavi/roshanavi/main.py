@@ -3,6 +3,9 @@
 Child processes started by the Launcher are stopped on every exit path:
 uvicorn's SIGINT/SIGTERM handling returns from ``uvicorn.run`` (``finally``),
 SIGHUP is turned into SIGTERM, and ``atexit`` covers ``sys.exit`` elsewhere.
+uvicorn 0.29+ (Lyrical) re-raises the handled signal after its graceful shutdown;
+the SIGTERM handler below turns that into :class:`_Stopped` (SIGINT into
+``KeyboardInterrupt``), so ``finally`` still runs instead of the process dying.
 Only SIGKILL of the server itself can leave children behind.
 """
 
@@ -135,13 +138,25 @@ def main(argv: Optional[List[str]] = None) -> int:
     atexit.register(lab.launcher.close)
     atexit.register(lab.tracing.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
+    signal.signal(signal.SIGTERM, _raise_stopped)
     try:
         app = create_app(lab, static_dir=args.static_dir, allowed_hosts=args.allowed_host,
                          allowed_origins=args.allowed_origin)
         uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+    except (_Stopped, KeyboardInterrupt):
+        pass  # the signal uvicorn re-raised after shutting down (uvicorn 0.29+)
     finally:
+        signal.signal(signal.SIGTERM, signal.SIG_DFL)  # a second SIGTERM while stopping kills
         lab.stop()
     return 0
+
+
+class _Stopped(Exception):
+    """SIGTERM reached the server outside uvicorn's own handler."""
+
+
+def _raise_stopped(*_args) -> None:
+    raise _Stopped()
 
 
 if __name__ == '__main__':

@@ -60,7 +60,7 @@ class TransformRunner:
         self._out_type = spec.output.type or spec.inputs[0].type
         self._publisher = runtime.create_publisher(
             msgutil.resolve_type(self._out_type), spec.output.topic,
-            make_qos(**spec.output.qos.dict()))
+            make_qos(**spec.output.qos.model_dump()))
         self._delay = DelayQueue(self._publish, self._on_overflow, clock) if spec.delay else None
         self._subscriptions: List[Any] = []
         self._subscribe()

@@ -1,3 +1,5 @@
+ARG ROS_DISTRO=jazzy
+
 # ---- stage 1: build the web UI (Vite + React) -------------------------------
 FROM node:24.14.0-bookworm-slim AS web
 WORKDIR /web
@@ -7,7 +9,10 @@ COPY web/ ./
 RUN npx tsc --noEmit -p tsconfig.json && npx vite build --outDir /out --emptyOutDir
 
 # ---- stage 2: ROS 2 runtime ---------------------------------------------------
-FROM ros:jazzy-ros-base
+# ROS_DISTRO picks the distro: jazzy (default) or lyrical (both official); kilted is verified
+# once only (best effort). The base image sets ROS_DISTRO in the environment too.
+FROM ros:${ROS_DISTRO}-ros-base
+ARG ROS_DISTRO
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -22,15 +27,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         python3-pil \
         python3-numpy \
         ffmpeg \
-        ros-jazzy-demo-nodes-cpp \
-        ros-jazzy-demo-nodes-py \
-        ros-jazzy-rosbag2 \
-        ros-jazzy-rosbag2-storage-default-plugins \
-        ros-jazzy-example-interfaces \
-        ros-jazzy-audio-common-msgs \
-        ros-jazzy-vision-msgs \
-        ros-jazzy-lifecycle \
-        ros-jazzy-launch-pytest \
+        ros-${ROS_DISTRO}-demo-nodes-cpp \
+        ros-${ROS_DISTRO}-demo-nodes-py \
+        ros-${ROS_DISTRO}-rosbag2 \
+        ros-${ROS_DISTRO}-rosbag2-storage-default-plugins \
+        ros-${ROS_DISTRO}-example-interfaces \
+        ros-${ROS_DISTRO}-audio-common-msgs \
+        ros-${ROS_DISTRO}-vision-msgs \
+        ros-${ROS_DISTRO}-lifecycle \
+        ros-${ROS_DISTRO}-launch-pytest \
         lttng-tools \
         python3-bt2 \
     && rm -rf /var/lib/apt/lists/*

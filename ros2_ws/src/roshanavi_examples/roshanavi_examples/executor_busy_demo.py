@@ -61,7 +61,7 @@ How the counting works (no monkeypatching)
         empty pass = a pass after which wait_for_ready_callbacks() returned nothing.
     ``PassCounter`` below is a small mixin that overrides those two public methods. The only
     assumption is that one wait-loop pass calls get_nodes() once, which holds for rclpy 7.x
-    (Jazzy); the unit tests and the integration test would notice if that stopped being true.
+    (Jazzy) and 10.x (Lyrical); the unit tests and the integration test would notice if that stopped being true.
 
 Run:  ros2 run roshanavi_examples executor_busy_demo --ros-args -p executor:=multi -p qos_events:=off
       ros2 launch roshanavi_examples busy_demo.launch.py executor:=multi qos_events:=default

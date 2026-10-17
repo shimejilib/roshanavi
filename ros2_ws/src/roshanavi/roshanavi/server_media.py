@@ -14,8 +14,8 @@ from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 from fastapi import FastAPI, Query, WebSocket, WebSocketDisconnect
 from fastapi.concurrency import run_in_threadpool
-from pydantic import BaseModel, Field, ValidationError, constr
 
+from .asyncutil import run_cleanup
 from .jobs import InjectError, InjectSpec, validate_topic
 from .lab import Lab
 from .media import adapters
@@ -23,6 +23,7 @@ from .media.capture import CaptureJob, CaptureStart
 from .media.errors import MediaError
 from .media.factory import choose_type, type_info
 from .media.viewer import VIEW_MAX_FPS
+from .pydantic_compat import Field, StrictModel, ValidationError, constr, validation_errors
 
 LOG = logging.getLogger(__name__)
 
@@ -33,12 +34,9 @@ WS_ERROR_CLOSE = 4400  # application close code: the error was sent as JSON firs
 _capture_lock = threading.Lock()  # "one capture per topic" check + registration
 
 
-class RecordRequest(BaseModel):
+class RecordRequest(StrictModel):
     topics: List[constr(min_length=1, max_length=256)] = Field(..., min_items=1, max_items=100)
     name: constr(max_length=40) = ''
-
-    class Config:
-        extra = 'forbid'
 
 
 def _error_body(exc: Exception) -> Dict[str, Any]:
@@ -97,9 +95,10 @@ async def _fail(ws: WebSocket, exc: Exception) -> None:
 async def _receive_start(ws: WebSocket) -> CaptureStart:
     raw = await asyncio.wait_for(ws.receive_json(), timeout=START_TIMEOUT_SEC)
     try:
-        return CaptureStart.parse_obj(raw)
+        return CaptureStart.model_validate(raw)
     except ValidationError as exc:
-        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg'] for e in exc.errors()]
+        parts = ['.'.join(str(p) for p in e['loc']) + ': ' + e['msg']
+                 for e in validation_errors(exc)]
         raise MediaError('invalid_request', '; '.join(parts)) from exc
 
 
@@ -156,7 +155,7 @@ def _register_capture(app: FastAPI, lab: Lab) -> None:
             await _fail(ws, MediaError('capture_failed', f'{type(exc).__name__}: {exc}'))
         finally:
             # finish() waits (bounded) for the last frames to be acknowledged: keep the loop free
-            if job is not None and await run_in_threadpool(job.finish, 'stopped'):
+            if job is not None and await run_cleanup(job.finish, 'stopped'):
                 LOG.info('capture %s stopped (%d sent)', job.id, job.sent)
 
 
@@ -223,7 +222,7 @@ def _register_viewer(app: FastAPI, lab: Lab) -> None:
         except MediaError as exc:
             await _fail(ws, exc)
         finally:
-            await run_in_threadpool(lab.viewer.release, topic)
+            await run_cleanup(lab.viewer.release, topic)
 
 
 def register(app: FastAPI, lab: Lab) -> None:

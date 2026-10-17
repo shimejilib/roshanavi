@@ -14,9 +14,9 @@ import tempfile
 from typing import Any, Dict, List, Optional, Sequence
 
 import yaml
-from pydantic import ValidationError
 
 from ..jobs import InjectSpec
+from ..pydantic_compat import ValidationError, validation_errors
 from .errors import LauncherError
 from .schema import DummySpec, FunctionSpec, TransformSpec, clean_dict
 
@@ -105,7 +105,7 @@ def load_function_config(path: str) -> Dict[str, Any]:
         raise LauncherError('invalid_config', f'{path}: expected keys "function", "workspace" '
                             '(and optionally "status_file")')
     try:
-        spec = FunctionSpec.parse_obj(raw['function'] or {})
+        spec = FunctionSpec.model_validate(raw['function'] or {})
     except ValidationError as exc:
         raise LauncherError('invalid_config', f'{path}: {format_errors(exc)}') from exc
     status = raw.get('status_file')
@@ -126,7 +126,7 @@ def load_transform_config(path: str) -> TransformSpec:
     if not isinstance(raw, dict) or set(raw) != {'transform'}:
         raise LauncherError('invalid_config', f'{path}: expected one key "transform"')
     try:
-        return TransformSpec.parse_obj(raw['transform'] or {})
+        return TransformSpec.model_validate(raw['transform'] or {})
     except ValidationError as exc:
         raise LauncherError('invalid_config', f'{path}: {format_errors(exc)}') from exc
 
@@ -137,7 +137,7 @@ def load_config(path: str) -> Dict[str, Any]:
     if not isinstance(raw, dict) or set(raw) - {'dummy', 'data_dir'}:
         raise LauncherError('invalid_config', f'{path}: expected keys "dummy" and "data_dir"')
     try:
-        spec = DummySpec.parse_obj(raw.get('dummy') or {})
+        spec = DummySpec.model_validate(raw.get('dummy') or {})
     except ValidationError as exc:
         raise LauncherError('invalid_config', f'{path}: {format_errors(exc)}') from exc
     return {'spec': spec, 'data_dir': str(raw.get('data_dir') or '/data')}
@@ -145,7 +145,7 @@ def load_config(path: str) -> Dict[str, Any]:
 
 def format_errors(exc: ValidationError, prefix: str = '') -> str:
     parts = []
-    for err in exc.errors():
+    for err in validation_errors(exc):
         loc = '.'.join(str(p) for p in (*([prefix] if prefix else []), *err['loc'])
                        if p != '__root__')
         parts.append(f'{loc or "(root)"}: {err["msg"]}')
@@ -155,8 +155,8 @@ def format_errors(exc: ValidationError, prefix: str = '') -> str:
 def inject_spec(spec: DummySpec) -> InjectSpec:
     return InjectSpec(mode=spec.mode, topic=spec.topic, type=spec.type, payload=spec.payload,
                       rate_hz=spec.rate_hz, count=spec.count, source=spec.source,
-                      loop=spec.loop, qos=spec.qos.dict(),
-                      media=spec.media.dict() if spec.media else None)
+                      loop=spec.loop, qos=spec.qos.model_dump(),
+                      media=spec.media.model_dump() if spec.media else None)
 
 
 def has_control_chars(text: str) -> bool:

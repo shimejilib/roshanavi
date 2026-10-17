@@ -9,6 +9,7 @@
 
 ## graph
 - `get_node_names_and_namespaces()`, `get_topic_names_and_types()`, `get_publishers_info_by_topic()`, `get_subscriptions_info_by_topic()` から構築。
+  - rmw の付属トピック (区切りが `_buf_` で始まるもの。Lyrical の rmw_fastrtps がバイト列を持つ型の C++ の購読ごとに `<topic>/_buf_cpu` を足す) は `RosRuntime.topic_names_and_types()` の時点で除き、地図・計測・エコーのどれにも出さない (購読すると付属トピックが連鎖して増える)。rclpy が問い合わせを拒むトピック (長すぎる名前など) は警告を出して飛ばし、地図の更新は止めない。
 - 出力: `{nodes:[{id,name,namespace,role}], topics:[{name,types[]}], edges:[{node,topic,dir:"pub"|"sub",qos:{reliability,durability,history,depth,deadline_ms,liveliness,lease_ms}}], diagnostics:[...]}`
   - `deadline_ms` / `lease_ms` は未設定・無制限なら `null`。
   - `role`: 実ノードは Launcher の対応づけ ([launcher.md#Launcher](launcher.md#launcher-p3)) で `mine` / `dependency` / `dummy` になり、`target_id` と `confidence` (`exact`/`heuristic`) が付く。対応づかないノードは `"other"`。同じ完全修飾名のノードが複数あっても 1 つにまとめる。実行中の注入ジョブ (topic を持つもの) は仮想ノード `dummy:<job id>` (`role:"dummy"`, `job_id`) として pub エッジ付きで含める。注入の publisher は roshanavi 自身のノード (既定で非表示) に属するため、ジョブ単位の仮想ノードにしないと注入が地図に現れない。bag ジョブは `rosbag2_player` が通常ノードとして見えるので仮想ノードにしない。
@@ -24,7 +25,7 @@
 - **計測の経路**: 既定 (`--probe auto`) は C++ の計測ノード `roshanavi_probe` ([measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) が測り、送信元ノードごとの値も出す。計測ノードがビルドされていない・繰り返し異常終了する・`--probe off` のときは、この節の Python の計測 (`TrafficMonitor`) を使う。どちらもエントリの形は同じで、`measurement: "probe" | "python"` で区別する。以下の統計の意味は両方に共通 (C++ 側は `stats.py` と同じ計算を移植)。
 - 新規トピックを 1 秒周期で検出し `create_subscription(msg_type, topic, cb, qos, raw=True)` で購読 (デシリアライズしない)。
 - QoS 互換: 当該トピックの publisher に BEST_EFFORT が 1 つでもあれば BEST_EFFORT で購読、それ以外 RELIABLE。durability は VOLATILE、depth 10。
-- 購読コールバックは 2 引数 `(data, info)` で、rclpy Jazzy が `raw=True` でも渡す `MessageInfo` (dict: `source_timestamp`, `received_timestamp` [ns], `publication_sequence_number`, `reception_sequence_number`) を使う。`publisher_gid` は rclpy Jazzy では公開されないため gid は常に none (publisher 別集計は C++ の計測ノードだけ)。サンプルは (受信 monotonic 時刻, size, source_ts, received_ts, gid, seq)。純粋な統計計算は `stats.py` (時計注入可)。
+- 購読コールバックは 2 引数 `(data, info)` で、rclpy Jazzy が `raw=True` でも渡す `MessageInfo` (dict: `source_timestamp`, `received_timestamp` [ns], `publication_sequence_number`, `reception_sequence_number`) を使う。`publisher_gid` は rclpy Jazzy では公開されないため gid は none。Lyrical の rclpy 10 は `publisher_gid` を dict (`{'implementation_identifier', 'data': bytes}`) で渡すので `data` を gid にする (`stats.sample_from_info`)。publisher 別集計はどちらでも C++ の計測ノードだけ (Python 側の gid は今は使っていない)。サンプルは (受信 monotonic 時刻, size, source_ts, received_ts, gid, seq)。純粋な統計計算は `stats.py` (時計注入可)。
 - **計算期間 (P4.5a)**: サンプルは最長の 10 秒分を保持し、`GET /api/traffic?window=1|5|10`・`/ws/live?window=…` で指定した期間の平均を返す (各エントリに `window_sec`)。それ以外の値は 400 `invalid_window` (WS はエラーを送って close 1008)。UI は選んだ期間を「直近 5 秒の平均」のように表示する。
 - **止まったら即 0 (P4.5a, `stats.is_silent`)**: 最後の受信から max(3 × 期待周期, 1 秒) 何も届かなければ、`hz` / `hz_recv` / `hz_source` / `bytes_per_sec` を 0 にし `stale: true` を付ける (期間平均の残留で、止まったトピックが数秒間動いて見えるのをなくす)。期待周期は保持中のサンプルの平均受信間隔 (選んだ期間によらない)。サイズ・ジッタ・遅延は最後の値のまま。1 秒ごとの hz 履歴も 0 になる。
 - 統計 (スライディングウィンドウ既定 5 秒): `hz`, `hz_basis` (`"source"`|`"receive"`), `hz_recv`, `hz_source`, `bytes_per_sec`, `avg_size`, `jitter_ms`, `jitter_recv_ms`, `dropped`, `drop_ratio`, `latency_ms`, `last_seen`, `total_count`。スパークライン用に 1 秒刻みの hz 履歴を 60 点保持。
