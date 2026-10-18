@@ -92,9 +92,9 @@ export function ClassStatusPanel({ target }: { target: Target }) {
           <div className="mono small">{error.message}</div>
         </div>
       )}
-      {spec.actions.length > 0 && (
+      {(spec.actions ?? []).length > 0 && (
         <ul className="plain-list class-actions" data-testid="class-actions">
-          {spec.actions.map((method) => <ActionButton key={method} target={target} method={method} record={status.actions[method]} />)}
+          {(spec.actions ?? []).map((method) => <ActionButton key={method} target={target} method={method} record={status.actions[method]} />)}
         </ul>
       )}
       <DependencyPanel module={spec.module} environment={status.environment} notices={status.notices} problem={status.problem} lastError={status.last_error} />

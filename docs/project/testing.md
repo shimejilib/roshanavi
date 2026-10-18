@@ -256,13 +256,16 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | J-18 | 「入出力だけ表示」「上流・下流だけ表示」 | ノードと直接のトピックだけ / トピックを通る経路だけ | ✅ (vitest `isolate.test.ts`) |
 | J-19 | ラベル (最終更新・計算期間・Hz の計測方法)、パラメータ入力、エッジの理由、初回の案内、パッケージの絞り込み | 「最終更新 09:05:07 (2 秒前)」、5 秒超で警告、「直近 5 秒の平均」、受信時刻ベースのときだけ「(受信時刻で概算)」 | ✅ (vitest `timing` / `paramValue` / `edgeInfo` / `guide` / `packages`) |
 | J-20 | E2E: 空白の右クリック → 新しいトピックに入力ノードを作る | ノードとトピックが地図に出て、右ペインでエコーが見える。入力ノードのメニューに一時停止・変更 | ✅ (`e2e/ux.spec.ts`) |
-| J-21 | E2E: talker のパラメータ / 外部ノード | talker の `use_sim_time` が見えて編集できる。external_talker は停止が無効、パラメータは閲覧のみ | ✅ |
+| J-21 | E2E: talker のパラメータ / 外部ノード | 「ROS の内部の設定値」(折りたたみ) を開くと talker の `use_sim_time` が見えて編集できる。external_talker は停止が無効、パラメータは閲覧のみ | ✅ |
 | J-22 | E2E: 型の定義とノードの入出力 | /chatter の定義に `string data`。/listener の「受信しているデータ」に /chatter と Hello World | ✅ |
 | J-23 | E2E: 初回の案内 | 起動リストが空なら案内が出て、「試しに talker を起動してみる」で talker が動き、案内が消える | ✅ |
 | J-24 | E2E: デモ構成 | talker = 自分、listener = 依存 (lab が起動)、external_talker = その他 (/external/chatter)、ROS 標準パッケージは既定で非表示 | ✅ (`smoke` / `launcher.spec.ts`) |
 | J-25 | パラメータの変更を外部ノードで確認ダイアログ経由で行う (UI) | 「変更を許可する」→ 確認 → 編集欄が出る | 🟡 (ロジックは unit、UI 操作は 👀) |
 | J-26 | 「ビルドして再起動」を地図から | ワークスペースのパッケージのノードでビルドが始まり、成功後に再起動 | 🟡 (無効化の条件は unit。デモ環境に自分のパッケージが無いため E2E 未整備) |
 | J-27 | 最終更新の警告色 (WS の切断) | 5 秒以上フレームが届かないと警告色 | 🟡 (判定は unit、切断の実操作は 👀) |
+| J-28 | サービスの待ち時間と読み取りのやり直し (unit、偽のクライアント) | 既定の待ち時間は 5 秒 (パラメータ・ライフサイクル)。応答が来ないと一覧・describe・get は 1 回だけやり直して 2 回目の答えを返し、それでも来なければ `param_timeout`。`set_parameters` はやり直さない (1 回だけ呼ぶ)。サービスが無い (`unavailable`) ときはやり直さない。`--service-timeout` は既定 5、0 は拒否 | ✅ (`test_service_call.py`) |
+| J-29 | パラメータの並び順 (サーバー) | クラスノードの `GET .../parameters` に `init_order` (`__init__` の引数の書いた順)。クラスでないノード・未登録・読めないモジュールは `null` でエラーにならない | ✅ (`test_params.py`) |
+| J-30 | パラメータのダイアログの並べ方・折りたたみ (vitest) | クラスノードは `__init__` の順、引数に無いものは最後に名前順、それ以外のノードは名前順。`use_sim_time`・`start_type_description_service`・`qos_overrides.*` は「ROS の内部の設定値」に入り、入力は変わらない | ✅ (`params/paramLayout.test.ts`) |
 
 ### K. ノード一覧・lifecycle・launch の分解取り込み・送受信ごとのトラフィック (P4.5b)
 
@@ -498,6 +501,9 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | S-20 | E2E: MovingAverage をクラスノードとして作る | 「クラス」→ モジュール → クラス (シグネチャ付き) → `window` は既定値 5 を 3 に → `process` は「トピックにつなぐ」、`reset` は「操作メソッド」→ 作成 → 地図の役割 function、`classes:` に保存 → 数を送ると平均 → 右クリック「reset を呼ぶ」→ 次の値が単独の平均になる → 右ペインのボタンと「最後の呼び出し」。スクリーンショット [`class-node-dialog.png`](../images/class-node-dialog.png) | ✅ |
 | S-21 | E2E: 作り直しの通知 | `Counter` のパラメータを変えると右ペインに「状態をリセットしました」、現在値が更新される | ✅ |
 | S-22 | Lyrical での実行 | 上の単体・実ノードのテストが Lyrical (rclpy 10、Python 3.14、pydantic 2) でも通る。`LifecycleNode` の API (`create_lifecycle_publisher`、`on_configure` ほか) は Jazzy と同じ | ✅ |
+| S-23 | 入力だけ・出力だけのメソッド (API と JSON) | 仕様に `inputs` / `outputs` / `methods` / `actions` の空のリストを `[]` で返す (`GET /api/targets`・`/api/project`)。プロジェクトファイルには書かない。保存 → 読み直しで同じ。pydantic 1 (Jazzy) と 2 (Lyrical) の両方 | ✅ (`test_api_spec.py`) |
+| S-24 | 入力だけ・出力だけのメソッドの口 (vitest) | 受けるだけの `on_pose` (入力 1・出力 0) と周期で出す `render` (入力 0・出力 1) の口、リストが丸ごと無い仕様 (古いサーバー)・メソッドも操作も無いクラス・入力の無い関数・入力の無い変換ノードでも落ちない。つなぐ計画も立つ。直す前は `Cannot read properties of undefined (reading 'map')` で 4 件落ちる | ✅ (`wiring/portsEmptyLists.test.ts`) |
+| S-25 | E2E: 入力だけのメソッドと周期で出すメソッドを持つクラス | API が `outputs: []` / `inputs: []` を返し、地図が落ちずに `on_pose` の入力口と `render` の出力口が出る (`pageerror` なし) | ✅ (`class-sink-source.spec.ts`) |
 
 ### T. 自分のコードを関数・クラスノードにする (置き場所・ひな形・依存)
 

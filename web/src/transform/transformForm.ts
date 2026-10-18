@@ -191,10 +191,10 @@ export function buildTransformSpec(form: TransformForm, takenIds: readonly strin
 export function formFromTransform(spec: TransformSpec, yamlOf: (value: Record<string, unknown>) => string): TransformForm {
   return {
     name: spec.name,
-    inputs: spec.inputs.map((row, i) => ({ topic: row.topic, type: row.type, alias: row.alias ?? defaultAlias(i, spec.inputs.length) })),
+    inputs: (spec.inputs ?? []).map((row, i, all) => ({ topic: row.topic, type: row.type, alias: row.alias ?? defaultAlias(i, all.length) })),
     mode: spec.mode,
     outputTopic: spec.output.topic,
-    outputType: spec.output.type ?? spec.inputs[0]?.type ?? '',
+    outputType: spec.output.type ?? (spec.inputs ?? [])[0]?.type ?? '',
     mappingYaml: spec.mapping ? yamlOf(spec.mapping) : '',
     condition: spec.condition ?? '',
     trigger: spec.trigger ?? 'any',

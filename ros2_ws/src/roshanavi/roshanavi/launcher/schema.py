@@ -6,7 +6,7 @@ workspace (package/executable exist, paths contained) are checked by
 """
 
 import sys
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Dict, FrozenSet, List, Literal, Optional, Union
 
 from .. import data_kinds
 from ..heavy_types import is_heavy
@@ -496,12 +496,27 @@ def param_text(value: ParamValue) -> str:
     return str(value)
 
 
-def clean_dict(model: BaseModel) -> Dict[str, Any]:
-    """Field-ordered dict without None / empty collections (stable, readable YAML)."""
+# List fields the web UI maps over unconditionally: the API keeps them as ``[]`` (a sink-only
+# method has no outputs, a periodic source no inputs, an actions-only class no methods) while the
+# project file stays free of empty collections.
+API_KEEP_EMPTY = frozenset({'inputs', 'outputs', 'methods', 'actions'})
+
+
+def clean_dict(model: BaseModel, keep_empty: FrozenSet[str] = frozenset()) -> Dict[str, Any]:
+    """Field-ordered dict without None / empty collections (stable, readable YAML).
+
+    Keys in ``keep_empty`` keep their empty lists / dicts (see :func:`api_dict`).
+    """
     def strip(value: Any) -> Any:
         if isinstance(value, dict):
-            return {k: strip(v) for k, v in value.items() if v is not None and v != [] and v != {}}
+            return {k: strip(v) for k, v in value.items()
+                    if v is not None and (k in keep_empty or (v != [] and v != {}))}
         if isinstance(value, list):
             return [strip(v) for v in value]
         return value
     return strip(model.model_dump())
+
+
+def api_dict(model: BaseModel) -> Dict[str, Any]:
+    """:func:`clean_dict` for API responses: port / method lists are always present."""
+    return clean_dict(model, API_KEEP_EMPTY)

@@ -17,6 +17,8 @@ import signal
 import sys
 from typing import Any, Dict, List, Optional
 
+from .service_defaults import DEFAULT_SERVICE_TIMEOUT_SEC
+
 PACKAGE_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 # The Docker image bakes the UI elsewhere and points this variable at it.
 DEFAULT_STATIC_DIR = os.environ.get('ROSHANAVI_STATIC_DIR') or PACKAGE_STATIC_DIR
@@ -81,6 +83,10 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='recording: stop automatically below this (MiB, default 256)')
     parser.add_argument('--record-stop-free-pct', type=float, default=1.0,
                         help='recording: stop automatically below this %% free (default 1)')
+    parser.add_argument('--service-timeout', type=float, default=DEFAULT_SERVICE_TIMEOUT_SEC,
+                        metavar='SEC',
+                        help='how long to wait for another node to answer a parameter / lifecycle '
+                             'service call (default %(default)s s)')
     parser.add_argument('--no-resources', action='store_true',
                         help='turn off resource monitoring (CPU / memory / disk / network / GPU, '
                              'docs/design/resources.md)')
@@ -111,6 +117,8 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     args, _unknown = parser.parse_known_args(argv)
     if not 0 < args.port < 65536:
         parser.error('--port must be in 1..65535')
+    if not 0 < args.service_timeout <= 120:
+        parser.error('--service-timeout must be in (0, 120] seconds')
     args.launch_spec = _launch_spec(parser, args.launch)
     return args
 
@@ -172,7 +180,8 @@ def main(argv: Optional[List[str]] = None) -> int:
               trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024,
               examples_dir=examples_dir, generate_samples=not args.no_sample_media,
               resources=not args.no_resources, reverse_dns=not args.no_reverse_dns,
-              use_remembered_project=args.launch_spec is None).start()
+              use_remembered_project=args.launch_spec is None,
+              service_timeout_sec=args.service_timeout).start()
     if args.launch_spec:
         _start_takeover(lab, args)
     atexit.register(lab.launcher.close)

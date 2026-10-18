@@ -118,3 +118,28 @@ def test_rest_parameters_external_policy(client, lab, target_node):
     assert bad.status_code == 422
     assert client.put('/api/nodes/roshanavi/parameters',
                       json={**change, 'allow_external': True}).status_code == 403
+
+
+def test_class_param_order_follows_the_init_signature(client, lab, monkeypatch):
+    from roshanavi import server_nodes
+    body = {'id': 'ord', 'name': 'ord', 'module': 'roshanavi_examples.stateful',
+            'class_name': 'Counter',
+            'methods': [{'method': 'process', 'inputs': [{'topic': '/ord_in', 'kind': 'string'}],
+                         'outputs': [{'topic': '/ord_out', 'kind': 'int'}]}]}
+    assert client.post('/api/classes', json=body).status_code == 201
+    fake = {'classes': [{'name': 'Counter', 'init_params': [{'name': 'zeta'}, {'name': 'alpha'}]}]}
+    monkeypatch.setattr(server_nodes.class_modules, 'describe_module', lambda *a: fake)
+    assert server_nodes.class_param_order(lab, {'id': '/ord', 'target_id': 'ord'}) == [
+        'zeta', 'alpha']
+    # not a class node / unknown target / unreadable module: no order, no error
+    assert server_nodes.class_param_order(lab, {'id': '/x', 'target_id': 'nope'}) is None
+    assert server_nodes.class_param_order(lab, {'id': '/x'}) is None
+    monkeypatch.setattr(server_nodes.class_modules, 'describe_module',
+                        lambda *a: (_ for _ in ()).throw(ValueError('broken')))
+    assert server_nodes.class_param_order(lab, {'id': '/ord', 'target_id': 'ord'}) is None
+
+
+def test_rest_parameters_of_a_plain_node_have_no_init_order(client, lab, target_node):
+    path = f'/api/nodes{target_node}/parameters'
+    wait_for(lambda: client.get(path).status_code == 200, timeout=15.0)
+    assert client.get(path).json()['init_order'] is None

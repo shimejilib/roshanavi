@@ -31,6 +31,8 @@ export interface ParamsResponse {
   role: string;
   external: boolean;
   parameters: ParamInfo[];
+  /** Class nodes: the class's `__init__` argument names in signature order (else null). */
+  init_order?: string[] | null;
 }
 
 export interface ParamSetRequest {

@@ -16,7 +16,7 @@ from .env import LOG_ENV
 from .errors import LauncherError
 from .logbuf import LogBuffer
 from .process import ProcessRunner
-from .schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec, clean_dict
+from .schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec, api_dict
 
 LOG = logging.getLogger(__name__)
 
@@ -190,7 +190,7 @@ class Target:
             runner = self._runner
             alive = runner is not None and runner.alive()
             return {'id': self.id, 'kind': kind_of(self.spec), 'role': role_of(self.spec),
-                    'spec': clean_dict(self.spec), 'status': self.status(),
+                    'spec': api_dict(self.spec), 'status': self.status(),
                     'exit_code': self._exit_code, 'problem': self.problem,
                     'pid': runner.pid if alive else None,
                     'pids': runner.tree_pids() if alive else [],

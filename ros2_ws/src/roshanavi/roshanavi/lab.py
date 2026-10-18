@@ -31,6 +31,7 @@ from .resources.attribution import SelfPids
 from .resources.service import ResourceContext, ResourceService
 from .ros_runtime import RosRuntime
 from .scenario.service import ScenarioService
+from .service_defaults import DEFAULT_SERVICE_TIMEOUT_SEC
 from .traffic import DEFAULT_WINDOW_SEC
 from .traffic_backend import PROBE_OFF, TrafficService
 from .tracing import merge as trace_merge
@@ -61,7 +62,8 @@ class Lab:
                  tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU,
                  examples_dir: Optional[str] = None, generate_samples: bool = False,
                  resources: bool = True, reverse_dns: bool = True,
-                 use_remembered_project: bool = True, takeover_poll_sec: float = 2.0):
+                 use_remembered_project: bool = True, takeover_poll_sec: float = 2.0,
+                 service_timeout_sec: float = DEFAULT_SERVICE_TIMEOUT_SEC):
         self.data_dir = data_dir
         self.examples_dir = examples_dir
         self._generate_samples = generate_samples
@@ -89,8 +91,8 @@ class Lab:
                                  extra_roots=(self.launcher.workspace.root,))
         self.echo = EchoManager(self.runtime)
         self.viewer = MediaViewer(self.runtime)
-        self.params = ParamService(self.runtime)
-        self.lifecycle = LifecycleService(self.runtime)
+        self.params = ParamService(self.runtime, service_timeout_sec)
+        self.lifecycle = LifecycleService(self.runtime, service_timeout_sec)
         self.recorder = Recorder(data_dir, DiskGuard(data_dir, disk_thresholds))
         # Resource monitoring (docs/design/resources.md): own 1 Hz thread, same disk thresholds.
         self.resources = ResourceService(self._resource_context, data_dir,

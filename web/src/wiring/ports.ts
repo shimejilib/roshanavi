@@ -87,7 +87,7 @@ function port(ref: Omit<PortRef, 'targetId'> & { targetId: string }, fields: Omi
 }
 
 function functionGroups(target: Target, spec: FunctionSpec, names: readonly string[] | undefined): PortGroup[] {
-  const inputs = spec.inputs.map((p, index) =>
+  const inputs = (spec.inputs ?? []).map((p, index) =>
     port({ targetId: target.id, side: 'in', group: 0, index }, {
       label: names?.[index] ?? t('wiring.port.arg', { n: index + 1 }), method: null, kind: p.kind, type: p.type ?? null, topic: p.topic, canUnwire: true,
     }));
@@ -104,13 +104,13 @@ function functionGroups(target: Target, spec: FunctionSpec, names: readonly stri
 }
 
 function classGroups(target: Target, spec: ClassSpec, argNames: (group: number) => readonly string[] | undefined): PortGroup[] {
-  return spec.methods.map((m, group) => {
+  return (spec.methods ?? []).map((m, group) => {
     const names = argNames(group);
-    const inputs = m.inputs.map((p, index) =>
+    const inputs = (m.inputs ?? []).map((p, index) =>
       port({ targetId: target.id, side: 'in', group, index }, {
         label: names?.[index] ?? t('wiring.port.arg', { n: index + 1 }), method: m.method, kind: p.kind, type: p.type ?? null, topic: p.topic, canUnwire: true,
       }));
-    const outputs = m.outputs.map((p, index) =>
+    const outputs = (m.outputs ?? []).map((p, index) =>
       port({ targetId: target.id, side: 'out', group, index }, {
         label: p.key ?? t('wiring.port.return'), method: m.method, kind: p.kind, type: p.type ?? null, topic: p.topic, canUnwire: true,
       }));
@@ -125,13 +125,14 @@ function classGroups(target: Target, spec: ClassSpec, argNames: (group: number) 
 }
 
 function transformGroups(target: Target, spec: TransformSpec): PortGroup[] {
-  const single = spec.inputs.length === 1;
-  const inputs = spec.inputs.map((p, index) =>
+  const specInputs = spec.inputs ?? [];
+  const single = specInputs.length === 1;
+  const inputs = specInputs.map((p, index) =>
     port({ targetId: target.id, side: 'in', group: 0, index }, {
       label: p.alias ?? (single ? 'msg' : `msg${index + 1}`), method: null, kind: null, type: p.type, topic: p.topic, canUnwire: false,
     }));
   const output = port({ targetId: target.id, side: 'out', group: 0, index: 0 }, {
-    label: t('wiring.port.output'), method: null, kind: null, type: spec.output.type ?? (spec.mode === 'relay' ? spec.inputs[0]?.type ?? null : null), topic: spec.output.topic, canUnwire: false,
+    label: t('wiring.port.output'), method: null, kind: null, type: spec.output.type ?? (spec.mode === 'relay' ? specInputs[0]?.type ?? null : null), topic: spec.output.topic, canUnwire: false,
   });
   const trigger = spec.trigger && spec.trigger !== 'any' ? spec.trigger : 'any';
   const mode: TimingMode = spec.mode === 'relay' ? 'relay' : single ? 'map' : 'multi_input';
@@ -162,7 +163,7 @@ export function portsOfTarget(target: Target, nodeId: string, argNames: ArgNames
     name: (spec as { name: string }).name,
     nodeId,
     groups,
-    actions: owner === 'class' ? [...(spec as ClassSpec).actions] : [],
+    actions: owner === 'class' ? [...((spec as ClassSpec).actions ?? [])] : [],
     running: target.status === 'running' || target.status === 'starting',
   };
 }

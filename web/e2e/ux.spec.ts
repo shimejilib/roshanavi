@@ -65,7 +65,11 @@ test('node menu: parameters of talker; external node is read-only', async ({ pag
   await page.screenshot({ path: `${SHOTS}menu-node.png` });
   await menu.getByTestId('menu-params').click();
   const dialog = page.getByTestId('params-dialog');
-  await expect(dialog.locator('[data-param="use_sim_time"]')).toBeVisible({ timeout: 10_000 });
+  // ROS's own settings are folded away (「ROS の内部の設定値」); open them to see use_sim_time.
+  await expect(dialog.getByTestId('params-internal')).toContainText('ROS の内部の設定値', { timeout: 10_000 });
+  await expect(dialog.locator('[data-param="use_sim_time"]')).toBeHidden();
+  await dialog.getByTestId('params-internal').locator('summary').click();
+  await expect(dialog.locator('[data-param="use_sim_time"]')).toBeVisible();
   await expect(dialog.getByTestId('param-input-use_sim_time')).toHaveValue('false');
   await page.screenshot({ path: `${SHOTS}params-dialog.png` });
   await page.keyboard.press('Escape');
@@ -74,6 +78,7 @@ test('node menu: parameters of talker; external node is read-only', async ({ pag
   await expect(page.getByTestId('map-menu').getByTestId('menu-stop')).toBeDisabled();
   await page.getByTestId('map-menu').getByTestId('menu-params').click();
   await expect(page.getByTestId('params-external')).toContainText('閲覧のみ', { timeout: 10_000 });
+  await page.getByTestId('params-internal').locator('summary').click();
   await expect(page.getByTestId('param-value-use_sim_time')).toBeVisible();
   await page.keyboard.press('Escape');
 });

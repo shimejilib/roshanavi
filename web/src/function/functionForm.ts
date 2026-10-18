@@ -133,7 +133,7 @@ export function formFromFunction(spec: FunctionSpec): FunctionForm {
     module: spec.module,
     fn: spec.function,
     call: spec.call,
-    inputs: spec.inputs.map(rowOf),
+    inputs: (spec.inputs ?? []).map(rowOf),
     output: rowOf(spec.output),
     rateHz: spec.rate_hz != null ? String(spec.rate_hz) : '1',
     trigger: spec.trigger ?? 'any',

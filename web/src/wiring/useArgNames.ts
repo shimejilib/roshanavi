@@ -17,7 +17,7 @@ export function argNamesFrom(info: ModuleInfo | undefined, target: Target, group
   }
   if (target.kind === 'class') {
     const spec = target.spec as ClassSpec;
-    const method = spec.methods[group]?.method;
+    const method = (spec.methods ?? [])[group]?.method;
     const cls = info.classes?.find((c) => c.name === spec.class_name);
     return cls?.methods.find((m) => m.name === method)?.params.map((p) => p.name);
   }

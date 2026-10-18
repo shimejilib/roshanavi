@@ -18,10 +18,11 @@ from rcl_interfaces.srv import (DescribeParameters, GetParameters, ListParameter
 from .api_errors import ApiError
 from .ros_runtime import RosRuntime
 from .service_call import ServiceCaller, ServiceErrors
+from .service_defaults import DEFAULT_SERVICE_TIMEOUT_SEC
 
 LOG = logging.getLogger(__name__)
 
-SERVICE_TIMEOUT_SEC = 2.0
+READ_RETRIES = 1  # reads are repeated once when the node did not answer in time; set is not
 MAX_PARAMS = 500
 MAX_CACHED_CLIENTS = 24
 MAX_STRING = 4096
@@ -141,11 +142,12 @@ def descriptor_dict(desc: Any) -> Dict[str, Any]:
 class ParamService:
     """Calls a node's parameter services from the roshanavi node (thread-safe)."""
 
-    def __init__(self, runtime: RosRuntime, timeout_sec: float = SERVICE_TIMEOUT_SEC):
+    def __init__(self, runtime: RosRuntime, timeout_sec: float = DEFAULT_SERVICE_TIMEOUT_SEC):
         self._caller = ServiceCaller(runtime, PARAM_ERRORS, timeout_sec, MAX_CACHED_CLIENTS)
 
-    def _call(self, node: str, suffix: str, srv_type: type, request: Any) -> Any:
-        return self._caller.call(node, suffix, srv_type, request)
+    def _call(self, node: str, suffix: str, srv_type: type, request: Any,
+              retries: int = READ_RETRIES) -> Any:
+        return self._caller.call(node, suffix, srv_type, request, retries=retries)
 
     def list(self, node: str) -> List[Dict[str, Any]]:
         """All parameters with type, value and descriptor, sorted by name."""
@@ -192,7 +194,7 @@ class ParamService:
             raise ApiError('param_type_mismatch', f'{name} is a {declared} parameter, '
                            f'not {type_name}')
         results = self._call(node, 'set_parameters', SetParameters, SetParameters.Request(
-            parameters=[Parameter(name=name, value=msg)])).results
+            parameters=[Parameter(name=name, value=msg)]), retries=0).results
         if not results or not results[0].successful:
             reason = results[0].reason if results else 'no result'
             raise ApiError('param_rejected', f'{node} rejected {name}: {reason}')

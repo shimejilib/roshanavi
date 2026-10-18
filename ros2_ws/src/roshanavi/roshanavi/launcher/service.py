@@ -29,7 +29,7 @@ from .manager import ProcessManager
 from .proc_record import ProcessRecord, describe, find_leftovers, stop_leftovers
 from .project import DEFAULT_FILE_NAME, ProjectStore
 from .schema import (ClassSpec, CodeSettings, DummySpec, FunctionSpec, ProjectSpec, QosSpec,
-                     TakeoverSpec, TargetSpec, TransformSpec, clean_dict)
+                     TakeoverSpec, TargetSpec, TransformSpec, api_dict)
 
 LOG = logging.getLogger(__name__)
 
@@ -126,7 +126,7 @@ class Launcher:
         return {'path': self.project.path, 'exists': self.project.exists(),
                 'dirty': self.project.is_dirty(current), 'error': self.load_error,
                 'save_error': self.save_error, 'autosave': not self._autosave_blocked,
-                'project': clean_dict(current)}
+                'project': api_dict(current)}
 
     def put_project(self, spec: ProjectSpec) -> Dict[str, Any]:
         self._set_code(spec)

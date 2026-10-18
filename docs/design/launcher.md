@@ -122,8 +122,8 @@ watch_topics: [/chat]
 
 ## ノードのパラメータと型の定義 (P4.5a)
 **パラメータ (`params.py`)** — rclpy / rclcpp のノードが必ず持つ `<node>/list_parameters`・`describe_parameters`・`get_parameters`・`set_parameters` (rcl_interfaces) を、サーバー自身のノードから呼ぶ。
-- クライアントは Reentrant なコールバックグループで作り、サービス名ごとに最大 24 個を LRU でキャッシュする。各呼び出しは `wait_for_service` と応答待ちのそれぞれに 2 秒のタイムアウト (応答しないノードでサーバーが止まらない)。失敗は 504 `param_service_unavailable` / `param_timeout`、502 `param_call_failed`。
-- 一覧は名前順に最大 500 個。各項目に型・値・説明・`read_only`・`dynamic_typing`・範囲。
+- クライアントは Reentrant なコールバックグループで作り、サービス名ごとに最大 24 個を LRU でキャッシュする。各呼び出しは `wait_for_service` と応答待ちのそれぞれに 5 秒のタイムアウト (`service_defaults.DEFAULT_SERVICE_TIMEOUT_SEC`、サーバーのフラグ `--service-timeout SEC` で変える。ノードの起動直後の 1 回目や、ホストが忙しいときは 2 秒では足りなかった。応答しないノードでサーバーが止まらない)。応答が時間内に来なかったとき (`param_timeout`)、読み取り (一覧・describe・get) は **1 回だけ自動でやり直す**。変更 (`set_parameters`) はやり直さない (時間切れでも反映済みかもしれないため)。失敗は 504 `param_service_unavailable` / `param_timeout`、502 `param_call_failed`。
+- 一覧は名前順に最大 500 個。各項目に型・値・説明・`read_only`・`dynamic_typing`・範囲。`GET /api/nodes/{node}/parameters` には、クラスノードのとき `init_order` (クラスの `__init__` の引数名を書いた順。それ以外は `null`) も付く。画面はこの順に並べる ([ui.md](ui.md) の「パラメータのダイアログ」)。
 - 変更は値を型どおりに厳密に検査してから (`value_to_msg`: bool は true/false のみ、整数は int64 範囲、小数は有限、文字列は 4096 文字まで、配列は 1000 要素まで、バイトは 0..255)、describe で読み取り専用と型の一致 (dynamic_typing でない限り) を確かめて送る。ノードが拒否したら理由付きで `param_rejected`。
 - **方針** (`server_nodes.py`): グラフに今いるノードだけを対象にする (404 `node_not_found`、任意のサービス名を作らせない)。ノード名・パラメータ名は正規表現で検査。roshanavi が起動していないノード (role `other`) は閲覧のみが既定で、変更には `allow_external: true` が必要 (UI は確認ダイアログの後に付ける。無ければ 403 `external_node_readonly`)。roshanavi 自身のノードは変更不可 (403 `self_node`)。mutating な PUT は既存のミドルウェア (Host / Content-Type) を通る。
 **型の定義 (`interfaces.py`)** — `rosidl_runtime_py.get_interface_path` でインストール済みの `.msg/.srv/.action` を読み、入れ子の型をタブで字下げして展開する (`ros2 interface show` 相当。入れ子のコメントは省く。深さ 6・2000 行まで、循環はたどらない)。名前は `pkg/(msg|srv|action)/Name` のみ。
@@ -138,7 +138,7 @@ watch_topics: [/chat]
 ## lifecycle ノード (P4.5b)
 `lifecycle.py`。ROS の正規の仕組み (lifecycle_msgs の `<node>/get_state`・`get_available_transitions`・`change_state`) だけを使うので、**roshanavi が起動していないノードにも使える** (プロセスにシグナルは送らない)。
 - 検出: 毎秒のグラフ収集で `get_service_names_and_types()` を 1 回呼び、`<node>/get_state` が `lifecycle_msgs/srv/GetState` 型のノードに `lifecycle: true` を付ける (`graph.lifecycle_nodes`)。
-- 呼び出しはパラメータと共通の `service_call.ServiceCaller` (Reentrant グループ、LRU 24、`wait_for_service` と応答待ちそれぞれにタイムアウト。問い合わせ 2 秒、`change_state` は on_configure の処理を見込んで 10 秒)。新しいクライアントにも QoS イベントハンドラは登録しない ([map-and-traffic.md#ros_runtime](map-and-traffic.md#ros_runtime))。失敗は 504 `lifecycle_unavailable` / `lifecycle_timeout`、502 `lifecycle_call_failed`。
+- 呼び出しはパラメータと共通の `service_call.ServiceCaller` (Reentrant グループ、LRU 24、`wait_for_service` と応答待ちそれぞれにタイムアウト。問い合わせ 5 秒 (パラメータと同じ `--service-timeout`。画面からの状態・遷移の読み取りは時間切れで 1 回だけやり直す。ノード一覧の状態の問い合わせは短い別の期限で、やり直さない)、`change_state` は on_configure の処理を見込んで 10 秒でやり直さない)。新しいクライアントにも QoS イベントハンドラは登録しない ([map-and-traffic.md#ros_runtime](map-and-traffic.md#ros_runtime))。失敗は 504 `lifecycle_unavailable` / `lifecycle_timeout`、502 `lifecycle_call_failed`。
 - 操作は configure / activate / deactivate / cleanup のみ (shutdown は元に戻せないので出さない)。いまの状態で使えない遷移は 409 `lifecycle_transition_unavailable`、ノードが拒否したら 409 `lifecycle_transition_failed`。目標 `goal` (`active` / `inactive`) は必要な遷移を順に行う (unconfigured → configure → activate)。一括操作 (ノード一覧) はこれを使う。
 - 方針は [launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a) と同じ: グラフにいるノードだけ (404)、lifecycle でなければ 400 `not_lifecycle`、外部ノード (role other) は `allow_external: true` が必要 (UI は確認ダイアログの後に付ける。無ければ 403)、roshanavi 自身は 403。
 - ノード一覧の状態表示は lifecycle ノードだけを並列 (最大 8) に 1 秒のタイムアウトで問い合わせ、1.5 秒キャッシュする。応答しないノードは「状態を取得できません」。

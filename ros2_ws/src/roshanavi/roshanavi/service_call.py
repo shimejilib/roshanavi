@@ -7,6 +7,7 @@ the response each have a timeout, so an unresponsive node can never hang an API
 request. Failures become :class:`ApiError` with domain-specific codes.
 """
 
+import logging
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
@@ -16,6 +17,8 @@ from rclpy.callback_groups import ReentrantCallbackGroup
 
 from .api_errors import ApiError
 from .ros_runtime import RosRuntime
+
+LOG = logging.getLogger(__name__)
 
 MAX_CACHED_CLIENTS = 24
 
@@ -56,8 +59,23 @@ class ServiceCaller:
         return client
 
     def call(self, node: str, suffix: str, srv_type: type, request: Any,
-             timeout_sec: Optional[float] = None) -> Any:
-        """Call ``<node>/<suffix>``; ApiError 504 on timeouts, 502 on transport errors."""
+             timeout_sec: Optional[float] = None, retries: int = 0) -> Any:
+        """Call ``<node>/<suffix>``; ApiError 504 on timeouts, 502 on transport errors.
+
+        ``retries`` extra attempts are made when the node did not answer in time. Use it only for
+        reads: a timed-out write may still have been applied.
+        """
+        for attempt in range(retries + 1):
+            try:
+                return self._call_once(node, suffix, srv_type, request, timeout_sec)
+            except ApiError as exc:
+                if exc.code != self._errors.timeout or attempt == retries:
+                    raise
+                LOG.info('%s on %s timed out, retrying', suffix, node)
+        raise AssertionError('unreachable')  # pragma: no cover
+
+    def _call_once(self, node: str, suffix: str, srv_type: type, request: Any,
+                   timeout_sec: Optional[float]) -> Any:
         timeout = self.timeout_sec if timeout_sec is None else timeout_sec
         errors = self._errors
         client = self._client(srv_type, f'{node}/{suffix}')

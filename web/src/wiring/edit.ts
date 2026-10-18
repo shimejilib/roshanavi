@@ -83,34 +83,34 @@ function retrigger(trigger: string | undefined, oldTopic: string, topic: string)
 
 function editFunction(spec: FunctionSpec, p: Port, topic: string, type: string | null, catalog: KindCatalog): WirePlan | FunctionSpec {
   if (p.ref.side === 'in') {
-    const old = spec.inputs[p.ref.index];
+    const old = (spec.inputs ?? [])[p.ref.index];
     if (!old) return { ok: false, reason: t('wiring.refuse.gone') };
-    const inputs = spec.inputs.map((x, i) => (i === p.ref.index ? wiredPort(x, p, topic, type, catalog) : x));
+    const inputs = (spec.inputs ?? []).map((x, i) => (i === p.ref.index ? wiredPort(x, p, topic, type, catalog) : x));
     if (topic && wiredTopics(inputs).filter((x) => x === topic).length > 1) return { ok: false, reason: DUPLICATE() };
     if (topic && topic === spec.output.topic) return { ok: false, reason: LOOP() };
     return { ...spec, inputs, trigger: retrigger(spec.trigger, old.topic, topic) };
   }
-  if (topic && spec.inputs.some((x) => x.topic === topic)) return { ok: false, reason: LOOP() };
+  if (topic && (spec.inputs ?? []).some((x) => x.topic === topic)) return { ok: false, reason: LOOP() };
   return { ...spec, output: wiredPort(spec.output, p, topic, type, catalog) };
 }
 
 function editClass(spec: ClassSpec, p: Port, topic: string, type: string | null, catalog: KindCatalog): WirePlan | ClassSpec {
-  const method = spec.methods[p.ref.group];
+  const method = (spec.methods ?? [])[p.ref.group];
   if (!method) return { ok: false, reason: t('wiring.refuse.gone') };
   let next: ClassMethodSpec;
   if (p.ref.side === 'in') {
-    const old = method.inputs[p.ref.index];
+    const old = (method.inputs ?? [])[p.ref.index];
     if (!old) return { ok: false, reason: t('wiring.refuse.gone') };
-    const inputs = method.inputs.map((x, i) => (i === p.ref.index ? wiredPort(x, p, topic, type, catalog) : x));
+    const inputs = (method.inputs ?? []).map((x, i) => (i === p.ref.index ? wiredPort(x, p, topic, type, catalog) : x));
     if (topic && wiredTopics(inputs).filter((x) => x === topic).length > 1) return { ok: false, reason: DUPLICATE() };
     next = { ...method, inputs, trigger: retrigger(method.trigger, old.topic, topic) };
   } else {
-    if (!method.outputs[p.ref.index]) return { ok: false, reason: t('wiring.refuse.gone') };
-    next = { ...method, outputs: method.outputs.map((x, i) => (i === p.ref.index ? wiredPort<ClassOutputSpec>(x, p, topic, type, catalog) : x)) };
+    if (!(method.outputs ?? [])[p.ref.index]) return { ok: false, reason: t('wiring.refuse.gone') };
+    next = { ...method, outputs: (method.outputs ?? []).map((x, i) => (i === p.ref.index ? wiredPort<ClassOutputSpec>(x, p, topic, type, catalog) : x)) };
   }
-  const methods = spec.methods.map((m, i) => (i === p.ref.group ? next : m));
-  const outs = methods.flatMap((m) => wiredTopics(m.outputs));
-  const ins = new Set(methods.flatMap((m) => wiredTopics(m.inputs)));
+  const methods = (spec.methods ?? []).map((m, i) => (i === p.ref.group ? next : m));
+  const outs = methods.flatMap((m) => wiredTopics(m.outputs ?? []));
+  const ins = new Set(methods.flatMap((m) => wiredTopics(m.inputs ?? [])));
   if (new Set(outs).size !== outs.length) return { ok: false, reason: t('wiring.refuse.outputTaken') };
   if (outs.some((x) => ins.has(x))) return { ok: false, reason: LOOP() };
   return { ...spec, methods };
@@ -119,16 +119,16 @@ function editClass(spec: ClassSpec, p: Port, topic: string, type: string | null,
 // ---- transform / input node ports (always wired; their ROS type is fixed in their own dialog) -----
 function editTransform(spec: TransformSpec, p: Port, topic: string, type: string | null): WirePlan | TransformSpec {
   if (p.ref.side === 'in') {
-    const old = spec.inputs[p.ref.index];
+    const old = (spec.inputs ?? [])[p.ref.index];
     if (!old) return { ok: false, reason: t('wiring.refuse.gone') };
     if (type && normalizeType(type) !== normalizeType(old.type)) return { ok: false, reason: t('wiring.refuse.transformType', { type: old.type }) };
     if (topic === spec.output.topic) return { ok: false, reason: LOOP() };
-    if (spec.inputs.some((x, i) => i !== p.ref.index && x.topic === topic)) return { ok: false, reason: DUPLICATE() };
-    return { ...spec, inputs: spec.inputs.map((x, i) => (i === p.ref.index ? { ...x, topic } : x)) };
+    if ((spec.inputs ?? []).some((x, i) => i !== p.ref.index && x.topic === topic)) return { ok: false, reason: DUPLICATE() };
+    return { ...spec, inputs: (spec.inputs ?? []).map((x, i) => (i === p.ref.index ? { ...x, topic } : x)) };
   }
-  const outType = spec.output.type ?? (spec.mode === 'relay' ? spec.inputs[0]?.type : undefined);
+  const outType = spec.output.type ?? (spec.mode === 'relay' ? (spec.inputs ?? [])[0]?.type : undefined);
   if (type && outType && normalizeType(type) !== normalizeType(outType)) return { ok: false, reason: t('wiring.refuse.transformType', { type: outType }) };
-  if (spec.inputs.some((x) => x.topic === topic)) return { ok: false, reason: LOOP() };
+  if ((spec.inputs ?? []).some((x) => x.topic === topic)) return { ok: false, reason: LOOP() };
   return { ...spec, output: { ...spec.output, topic } };
 }
 

@@ -283,13 +283,13 @@ function rowOf(port: { topic: string; kind: PortKind; type?: string | null }): F
 
 function formOfBinding(info: ClassMethodInfo | undefined, spec: ClassMethodSpec): MethodForm {
   const base = info ? emptyMethod(info) : { method: spec.method, use: 'none' as const, call: spec.call, inputs: [], outputs: [], dict: false, rateHz: '1', trigger: 'any' };
-  const dict = spec.outputs.some((o) => o.key);
+  const dict = (spec.outputs ?? []).some((o) => o.key);
   return {
     ...base,
     use: 'topic',
     call: spec.call,
-    inputs: spec.inputs.map(rowOf),
-    outputs: spec.outputs.length ? spec.outputs.map((o) => ({ ...rowOf(o), key: o.key ?? '' })) : [{ ...EMPTY_OUTPUT }],
+    inputs: (spec.inputs ?? []).map(rowOf),
+    outputs: (spec.outputs ?? []).length ? (spec.outputs ?? []).map((o) => ({ ...rowOf(o), key: o.key ?? '' })) : [{ ...EMPTY_OUTPUT }],
     dict,
     rateHz: spec.rate_hz != null ? String(spec.rate_hz) : '1',
     trigger: spec.trigger ?? 'any',
@@ -300,15 +300,15 @@ function formOfBinding(info: ClassMethodInfo | undefined, spec: ClassMethodSpec)
 export function formFromClass(spec: ClassSpec, info: ClassInfo | undefined): ClassForm {
   const listed = info?.methods ?? [];
   const methods: MethodForm[] = listed.map((m) => {
-    const bound = spec.methods.find((b) => b.method === m.name);
+    const bound = (spec.methods ?? []).find((b) => b.method === m.name);
     if (bound) return formOfBinding(m, bound);
-    return { ...emptyMethod(m), use: spec.actions.includes(m.name) ? 'action' : 'none' };
+    return { ...emptyMethod(m), use: (spec.actions ?? []).includes(m.name) ? 'action' : 'none' };
   });
-  for (const bound of spec.methods) {
+  for (const bound of spec.methods ?? []) {
     if (!listed.some((m) => m.name === bound.method)) methods.push(formOfBinding(undefined, bound));
   }
   const params = Object.fromEntries((info ? parameterArgs(info) : []).map((p) => {
-    const given = spec.params[p.name];
+    const given = (spec.params ?? {})[p.name];
     return [p.name, given === undefined ? paramText(p) : Array.isArray(given) ? given.join(', ') : String(given)];
   }));
   return { name: spec.name, module: spec.module, className: spec.class_name, params, methods, autostart: spec.autostart ?? false };

@@ -1,7 +1,7 @@
 // "パラメータを見る・変更する": list / change a node's parameters (parameter services).
 // Nodes roshanavi did not start are read-only until the user confirms.
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, describeError } from '../api/client';
 import type { ParamInfo, ParamsResponse } from '../api/nodeTypes';
 import { t } from '../i18n';
@@ -10,6 +10,7 @@ import { Modal } from '../lib/Modal';
 import { Term } from '../lib/Term';
 import { useAppState } from '../state/AppState';
 import { ParamRow } from './ParamRow';
+import { arrangeParams } from './paramLayout';
 
 export function ParamsDialog({ nodeId }: { nodeId: string }) {
   const { closeDialog } = useAppState();
@@ -26,6 +27,7 @@ export function ParamsDialog({ nodeId }: { nodeId: string }) {
       .catch((err: unknown) => setError(describeError(err)));
   }, [nodeId]);
   useEffect(load, [load]);
+  const layout = useMemo(() => (data ? arrangeParams(data.parameters, data.init_order) : null), [data]);
 
   const save = async (param: ParamInfo, value: ParamInfo['value']) => {
     if (param.type === 'not_set') return;
@@ -47,17 +49,16 @@ export function ParamsDialog({ nodeId }: { nodeId: string }) {
         </div>
       )}
       {data && data.parameters.length === 0 && <p className="muted">{t('params.none')}</p>}
-      {data && data.parameters.length > 0 && (
-        <table className="params-table" data-testid="params-table">
-          <thead>
-            <tr><th>{t('params.name')}</th><th>{t('params.type')}</th><th>{t('params.value')}</th></tr>
-          </thead>
-          <tbody>
-            {data.parameters.map((p) => (
-              <ParamRow key={p.name} param={p} external={data.external} unlocked={unlocked} onSave={save} />
-            ))}
-          </tbody>
-        </table>
+      {data && layout && layout.main.length === 0 && layout.internal.length > 0 && <p className="muted">{t('params.onlyInternal')}</p>}
+      {data && layout && layout.main.length > 0 && (
+        <ParamTable params={layout.main} external={data.external} unlocked={unlocked} onSave={save} testId="params-table" />
+      )}
+      {data && layout && layout.internal.length > 0 && (
+        <details className="params-internal" data-testid="params-internal">
+          <summary>{t('params.internal')} ({layout.internal.length})</summary>
+          <p className="muted small">{t('params.internalNote')}</p>
+          <ParamTable params={layout.internal} external={data.external} unlocked={unlocked} onSave={save} testId="params-internal-table" />
+        </details>
       )}
       <div className="row end">
         <button type="button" onClick={load}>{t('params.reload')}</button>
@@ -73,5 +74,28 @@ export function ParamsDialog({ nodeId }: { nodeId: string }) {
         />
       )}
     </Modal>
+  );
+}
+
+interface TableProps {
+  params: ParamInfo[];
+  external: boolean;
+  unlocked: boolean;
+  onSave: (param: ParamInfo, value: ParamInfo['value']) => Promise<void>;
+  testId: string;
+}
+
+function ParamTable({ params, external, unlocked, onSave, testId }: TableProps) {
+  return (
+    <table className="params-table" data-testid={testId}>
+      <thead>
+        <tr><th>{t('params.name')}</th><th>{t('params.type')}</th><th>{t('params.value')}</th></tr>
+      </thead>
+      <tbody>
+        {params.map((p) => (
+          <ParamRow key={p.name} param={p} external={external} unlocked={unlocked} onSave={onSave} />
+        ))}
+      </tbody>
+    </table>
   );
 }

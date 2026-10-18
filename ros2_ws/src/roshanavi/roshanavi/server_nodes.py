@@ -7,18 +7,23 @@ first); roshanavi's own node is never changed. Only nodes currently on the
 graph are contacted.
 """
 
-from typing import Any, Dict, Literal, Optional
+import logging
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import FastAPI
 
 from . import interfaces
 from .api_errors import ApiError
+from .function import class_modules
 from .lab import Lab
+from .launcher.schema import ClassSpec
 from .lifecycle import ALLOWED_TRANSITIONS, GOALS
 from .node_list import build_node_list, lifecycle_node_ids
 from .params import SETTABLE_TYPES, check_node_name
 from .pydantic_compat import StrictModel, constr
 from .ros_runtime import is_self_node
+
+LOG = logging.getLogger(__name__)
 
 ParamType = Literal[SETTABLE_TYPES]  # type: ignore[valid-type]
 
@@ -50,6 +55,26 @@ def node_role(lab: Lab, node: str) -> str:
     return graph_node(lab, node).get('role', 'other')
 
 
+def class_param_order(lab: Lab, entry: Dict[str, Any]) -> Optional[List[str]]:
+    """``__init__`` argument names of a class node's class, in signature order (else None).
+
+    The parameter dialog lists a class node's settings in this order; a class that cannot be read
+    right now (broken module) just falls back to the plain order.
+    """
+    try:
+        manager = lab.launcher.manager
+        spec = manager.target(entry.get('target_id') or '').spec
+        if not isinstance(spec, ClassSpec):
+            return None
+        info = class_modules.describe_module(manager.locations(), spec.module)
+        for cls in info.get('classes', []):
+            if cls['name'] == spec.class_name:
+                return [p['name'] for p in cls['init_params']]
+    except Exception as exc:  # unknown target, unreadable module: order is cosmetic
+        LOG.debug('no __init__ order for %s: %s', entry.get('id'), exc)
+    return None
+
+
 def lifecycle_node(lab: Lab, node: str) -> Dict[str, Any]:
     entry = graph_node(lab, node)
     if not entry.get('lifecycle'):
@@ -72,9 +97,10 @@ def register(app: FastAPI, lab: Lab) -> None:
     @app.get('/api/nodes/{node:path}/parameters')
     def get_parameters(node: str) -> Dict[str, Any]:
         node = _node_id(node)
-        role = node_role(lab, node)
+        entry = graph_node(lab, node)
+        role = entry.get('role', 'other')
         return {'node': node, 'role': role, 'external': role == 'other',
-                'parameters': lab.params.list(node)}
+                'parameters': lab.params.list(node), 'init_order': class_param_order(lab, entry)}
 
     @app.put('/api/nodes/{node:path}/parameters')
     def put_parameter(node: str, req: ParamSetRequest) -> Dict[str, Any]:

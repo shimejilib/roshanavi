@@ -20,12 +20,14 @@ from .api_errors import ApiError
 from .params import check_node_name
 from .ros_runtime import RosRuntime
 from .service_call import ServiceCaller, ServiceErrors
+from .service_defaults import DEFAULT_SERVICE_TIMEOUT_SEC
 
 LOG = logging.getLogger(__name__)
 
 ALLOWED_TRANSITIONS = ('configure', 'activate', 'deactivate', 'cleanup')
 GOALS = ('active', 'inactive')
-QUERY_TIMEOUT_SEC = 2.0
+QUERY_TIMEOUT_SEC = DEFAULT_SERVICE_TIMEOUT_SEC
+READ_RETRIES = 1  # state / transition reads are repeated once on a timeout; change_state is not
 CHANGE_TIMEOUT_SEC = 10.0  # on_configure may do real work
 STATE_CACHE_SEC = 1.5
 STATE_POLL_TIMEOUT_SEC = 1.0
@@ -59,15 +61,16 @@ class LifecycleService:
 
     def state(self, node: str, timeout_sec: Optional[float] = None) -> Dict[str, Any]:
         check_node_name(node)
-        result = self._caller.call(node, 'get_state', GetState, GetState.Request(),
-                                   timeout_sec)
+        # Interactive reads (no explicit short deadline) are repeated once on a timeout.
+        result = self._caller.call(node, 'get_state', GetState, GetState.Request(), timeout_sec,
+                                   retries=0 if timeout_sec is not None else READ_RETRIES)
         state = {'id': int(result.current_state.id), 'label': result.current_state.label}
         self._remember(node, state['label'])
         return state
 
     def transitions(self, node: str) -> List[Dict[str, Any]]:
         result = self._caller.call(node, 'get_available_transitions', GetAvailableTransitions,
-                                   GetAvailableTransitions.Request())
+                                   GetAvailableTransitions.Request(), retries=READ_RETRIES)
         seen, items = set(), []
         for desc in result.available_transitions:
             label = desc.transition.label

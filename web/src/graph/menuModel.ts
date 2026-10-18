@@ -75,7 +75,7 @@ function controlItems(node: GraphNode | undefined, targets: readonly Target[]): 
 function callItems(target: Target | undefined): MenuItem[] {
   if (target?.kind !== 'class') return [];
   const running = target.status === 'running';
-  return (target.spec as ClassSpec).actions.map((method) => ({
+  return ((target.spec as ClassSpec).actions ?? []).map((method) => ({
     action: `call:${method}` as const,
     label: t('menu.call', { method }),
     enabled: running,
