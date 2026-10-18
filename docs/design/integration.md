@@ -50,7 +50,7 @@
 - 別のプロジェクトを開いている間は検出を止める (`state: inactive`)。
 
 ## Docker の場合
-- 利用者のイメージの上に roshanavi を重ねたコンテナ 1 つで、`--launch` を使って起動する (例: turtle_demo の `dev` サービス)。元の起動方法 (roshanavi なし) は compose の profile (例: `plain`) で残し、切り替えられるようにする。
+- 利用者のイメージの上に roshanavi を重ねたコンテナ 1 つで、`--launch` を使って起動する (例: [turtle_demo](../turtle_demo.md) の `dev` サービス)。元の起動方法 (roshanavi なし) は compose の profile (例: `plain`) で残し、切り替えられるようにする。
 - roshanavi が強制終了されたときは `docker restart <コンテナ>` でコンテナごとやり直す ([launcher.md#子プロセスの後始末](launcher.md#子プロセスの後始末-12))。
 
 ## API

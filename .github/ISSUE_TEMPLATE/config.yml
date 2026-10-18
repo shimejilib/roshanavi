@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: セキュリティの問題 (脆弱性) の報告 / Report a security vulnerability
+    url: https://github.com/shimejilib/roshanavi/security/advisories/new
+    about: 公開の Issue には書かず、こちらから非公開で報告してください。 / Please report privately here, not in a public issue.
+  - name: 使い方の疑問は、まず利用ガイドと「困ったときの一覧」を / Usage questions
+    url: https://github.com/shimejilib/roshanavi/blob/main/docs/guide/troubleshooting.md
+    about: よくあるつまずきを症状から引けます。 / Common problems, listed by symptom.

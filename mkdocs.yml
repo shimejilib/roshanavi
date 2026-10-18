@@ -1,0 +1,94 @@
+site_name: roshanavi
+site_description: ROS 2 のノード開発を、ブラウザひとつで。 (A browser-based dev tool for ROS 2 nodes)
+repo_url: https://github.com/shimejilib/roshanavi
+repo_name: shimejilib/roshanavi
+edit_uri: edit/main/docs/
+docs_dir: docs
+site_dir: site
+use_directory_urls: true
+
+# docs/ is the single source of truth: no copies, no rewrites. Relative links
+# (including heading anchors) work as they are.
+
+theme:
+  name: material
+  language: ja
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - content.code.copy
+    - content.action.edit
+    - search.suggest
+    - search.highlight
+    - toc.follow
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: ダークモードにする
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: ライトモードにする
+
+plugins:
+  - search:
+      lang: ja
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.details
+  - pymdownx.superfences
+  - attr_list
+  - md_in_html
+  - toc:
+      permalink: true
+
+nav:
+  - ホーム: README.md
+  - 利用ガイド:
+      - 目次: guide/README.md
+      - はじめての起動と画面の見方: guide/getting-started.md
+      - 入力を流す: guide/inputs.md
+      - 自分のコードを関数・クラスノードにする: guide/user-code.md
+      - 線でつないで作る: guide/wiring.md
+      - ランチャーで自分のノードを動かす: guide/launcher.md
+      - 既存の launch ファイルごと動かす: guide/takeover.md
+      - Docker のプロジェクトに入れる: guide/docker-integration.md
+      - 動いているシステムを見るだけ: guide/observe.md
+      - シナリオで確かめる: guide/scenarios.md
+      - 測る: guide/measure.md
+      - 困ったときの一覧: guide/troubleshooting.md
+      - 用語集: guide/glossary.md
+      - 自分のワークスペースに入れる: guide/install.md
+      - 別のマシンから見る (SSH): guide/remote-ssh.md
+  - 設計:
+      - 地図とトラフィック: design/map-and-traffic.md
+      - 計測: design/measurement.md
+      - 入力とメディア: design/input-and-media.md
+      - ノードの種類: design/nodes.md
+      - 自分のコード: design/user-code.md
+      - ランチャー: design/launcher.md
+      - launch の引き取り: design/integration.md
+      - UI: design/ui.md
+      - API: design/api.md
+      - セキュリティ: design/security.md
+      - シナリオ: design/scenarios.md
+      - リソース監視: design/resources.md
+      - 配線と用語: design/wiring.md
+  - 全体像:
+      - 出発点と対象ユーザー: overview/vision.md
+      - 構成: overview/architecture.md
+      - ロードマップ: overview/roadmap.md
+  - 開発・運用:
+      - テスト: project/testing.md
+      - 依存関係: project/dependencies.md
+      - 配布: project/distribution.md
+      - turtle_demo (別リポジトリのデモ): turtle_demo.md
+  - 今後の予定 (設計のみ):
+      - リモートアクセス: planned/remote-access.md
+      - 既存プロジェクトへの組み込み: planned/integration.md

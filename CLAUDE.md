@@ -19,6 +19,7 @@ User-facing replies are in **Japanese**, plain language, no unexplained jargon (
 - One test file: `docker compose --profile test run --rm test python3 -m pytest -p no:cacheprovider -q /ws/src/roshanavi/test/<file>.py -k <expr>`
 - Web unit tests: `cd web && npm ci && npx vitest run [file]`; typecheck `npx tsc --noEmit`
 - E2E (isolated stack, never against the user's lab): `scripts/e2e.sh`
+- Release tarball with the built web UI (no npm for users): `scripts/build_release.sh` → `dist/roshanavi-<version>.tar.gz`. Demo GIF: `scripts/record_demo_gif.sh` (isolated stack; use your own `ROSHANAVI_IMAGE` / `COMPOSE_PROJECT_NAME` / `ROS_DOMAIN_ID`s).
 - Run the app: `docker compose up -d --build lab demo` → http://localhost:6871
 - ROS distro: every compose command takes `ROS_DISTRO=jazzy|lyrical|kilted` (default jazzy; image `roshanavi:dev-<distro>`), e.g. `ROS_DISTRO=lyrical docker compose --profile test run --rm test`, `ROS_DISTRO=lyrical scripts/e2e.sh`. Jazzy + Lyrical are official (run both for backend changes that touch ROS / pydantic / FastAPI); Kilted is best-effort. Import pydantic names from `roshanavi.pydantic_compat`, never from `pydantic`.
 
@@ -46,4 +47,5 @@ User-facing replies are in **Japanese**, plain language, no unexplained jargon (
 ## Git
 - Conventional commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `perf:`, `build:`, `style:`).
 - End commit messages with: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
-- Remote: private `github.com/shimejilib/roshanavi`.
+- Remote: public `github.com/shimejilib/roshanavi`. All work goes on a branch and lands on `main` through a PR; never push to `main` directly, never force push.
+- Push, PR and issue writes only when the user asks (or the task brief says so).

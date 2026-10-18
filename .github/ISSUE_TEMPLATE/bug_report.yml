@@ -1,0 +1,100 @@
+name: バグの報告 / Bug report
+description: 動きがおかしい、画面が崩れる、期待と違う / Something is broken or behaves unexpectedly
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        報告ありがとうございます。分かる範囲で書いてください。日本語でも英語でも構いません。
+        Thanks for reporting. Fill in what you can; Japanese or English is fine.
+
+        **セキュリティの問題 (脆弱性) は、ここに書かないでください。** [SECURITY.md](https://github.com/shimejilib/roshanavi/blob/main/SECURITY.md) の方法で非公開に報告してください。
+        **Do not report security vulnerabilities here.** Please follow SECURITY.md and report them privately.
+  - type: textarea
+    id: summary
+    attributes:
+      label: 何が起きましたか / What happened
+      description: 起きたことを、短く書いてください。 / A short description.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 再現の手順 / Steps to reproduce
+      description: 操作の順番を書いてください。 / The steps, in order.
+      placeholder: |
+        1. ...
+        2. ...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期待した動き / Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: 実際の動き / Actual behavior
+    validations:
+      required: true
+  - type: dropdown
+    id: ros_distro
+    attributes:
+      label: ROS 2 のディストロ / ROS 2 distro
+      options:
+        - Jazzy Jalisco
+        - Lyrical Luth
+        - Kilted Kaiju (動作確認のみ / best effort)
+        - その他 / Other
+    validations:
+      required: true
+  - type: input
+    id: rmw
+    attributes:
+      label: RMW
+      description: "`echo $RMW_IMPLEMENTATION` の結果。空なら「既定」と書いてください。 / Output of `echo $RMW_IMPLEMENTATION`; write \"default\" if empty."
+      placeholder: rmw_fastrtps_cpp
+    validations:
+      required: true
+  - type: dropdown
+    id: environment
+    attributes:
+      label: 動かし方 / How you run roshanavi
+      options:
+        - Docker (docker compose)
+        - ネイティブ (ソースからビルド) / Native (built from source)
+        - 既存の Docker プロジェクトに重ねている / Added to an existing Docker project
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: roshanavi のバージョン (またはコミット) / roshanavi version or commit
+      description: "`git rev-parse --short HEAD`、またはリリースのバージョン。 / A release version or `git rev-parse --short HEAD`."
+      placeholder: 0.1.0 または 75b00cc
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS とブラウザ / OS and browser
+      placeholder: Ubuntu 24.04 (WSL2), Chrome 140
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: スクリーンショット / Screenshots
+      description: 画面に関わる問題は、画像を貼ってください (ドラッグして貼り付けられます)。 / Paste images for UI problems.
+  - type: textarea
+    id: logs
+    attributes:
+      label: ログ / Logs
+      description: "ランチャーのログや `docker compose logs lab` の関係する部分。 / Relevant output of the launcher log or `docker compose logs lab`."
+      render: shell
+  - type: textarea
+    id: extra
+    attributes:
+      label: そのほか / Anything else

@@ -57,6 +57,7 @@ cd roshanavi && docker compose up -d --build lab demo
 |---|---|---|
 | まず画面を見て回る | Docker で起動して、チュートリアルをたどる | [はじめての起動と画面の見方](docs/guide/getting-started.md) |
 | 入力を流す | 入力ノード・お試し送信で、文字・画像・動画・音声・マイク・カメラを流す。録画して再現する | [入力を流す](docs/guide/inputs.md) |
+| 自分のノードをブラウザから起動・停止・ビルドする | ランチャーで、起動・停止・再起動・ログ・ビルド・パラメータの変更・ノード一覧での一括操作 | [ランチャーで自分のノードを動かす](docs/guide/launcher.md) |
 | 自分の Python のコードをノードにする | 普通の関数・クラスを「関数・クラスノード」にし、地図の上で線をつなぐ | [自分のコードを関数・クラスノードにする](docs/guide/user-code.md)、[線でつないで作る](docs/guide/wiring.md) |
 | 既存の起動セット (launch ファイル) ごと動かす | `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>`。ノードごとに止める・再起動・ログ・計測ができる | [既存の起動セットごと動かす](docs/guide/takeover.md) |
 | Docker で動いている既存のプロジェクトに入れる | 既存のイメージの上に roshanavi を重ねたコンテナを 1 つ足し、`--launch` で引き取る | [Docker で動いている既存のプロジェクトに入れる](docs/guide/docker-integration.md) |
@@ -65,6 +66,7 @@ cd roshanavi && docker compose up -d --build lab demo
 | 通信量・処理時間・CPU・メモリを測る | トラフィック、詳細計測モード、リソースタブ | [測る](docs/guide/measure.md) |
 | 自分のワークスペースで使う | `src/` に入れてビルドし、`ros2 run roshanavi app` で起動する (Web 画面の作り方など、手順は整備中) | [自分のワークスペースに入れる](docs/guide/install.md) |
 | 別のマシンから見る | SSH のポート転送 (`ssh -L 6871:localhost:6871 …`) | [別のマシンから見る (SSH)](docs/guide/remote-ssh.md) |
+| うまくいかないとき・用語を調べる | 症状から原因と直し方を引く。ROS の用語の説明 | [困ったときの一覧](docs/guide/troubleshooting.md)、[用語集](docs/guide/glossary.md) |
 
 ## 計測の精度と限界
 
@@ -81,6 +83,8 @@ cd roshanavi && docker compose up -d --build lab demo
 - 全体像: [vision](docs/overview/vision.md) (出発点・対象ユーザー)、[architecture](docs/overview/architecture.md) (技術選定・構成)、[roadmap](docs/overview/roadmap.md) (進み具合)
 - 機能ごとの設計 ([docs/design/](docs/design/)): [map-and-traffic](docs/design/map-and-traffic.md)、[measurement](docs/design/measurement.md)、[input-and-media](docs/design/input-and-media.md)、[nodes](docs/design/nodes.md)、[user-code](docs/design/user-code.md)、[launcher](docs/design/launcher.md)、[integration](docs/design/integration.md)、[ui](docs/design/ui.md)、[api](docs/design/api.md)、[security](docs/design/security.md)、[scenarios](docs/design/scenarios.md)、[resources](docs/design/resources.md)、[wiring](docs/design/wiring.md)
 - 開発・運用: [testing](docs/project/testing.md)、[dependencies](docs/project/dependencies.md)、[distribution](docs/project/distribution.md)。設計済み・未実装: [remote-access](docs/planned/remote-access.md)、[integration](docs/planned/integration.md)
+- デモ: [turtlesim のデモ (turtle_demo)](docs/turtle_demo.md) (別のリポジトリ。既存のプロジェクトに roshanavi を足す・Python のクラスをノードにする、の通しの実演)
+- 貢献・運用: [CONTRIBUTING.md](CONTRIBUTING.md)、[SECURITY.md](SECURITY.md) (脆弱性の報告)、[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)、[CHANGELOG.md](CHANGELOG.md)
 - 索引: [docs/README.md](docs/README.md)。既知の課題と今後の予定は GitHub Issues で管理しています。
 
 ## 開発
@@ -97,7 +101,7 @@ cd web && npm ci && npx vitest run
 scripts/e2e.sh
 ```
 
-それぞれ、バックエンドのテスト (gtest + pytest)、Web UI の単体テスト、E2E (専用の環境で実行し、手元の lab には触れない) です。詳しくは [docs/project/testing.md](docs/project/testing.md)。
+それぞれ、バックエンドのテスト (gtest + pytest)、Web UI の単体テスト、E2E (専用の環境で実行し、手元の lab には触れない) です。詳しくは [docs/project/testing.md](docs/project/testing.md)。貢献の手順は [CONTRIBUTING.md](CONTRIBUTING.md) にあります。
 
 ## ライセンス
 

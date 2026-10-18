@@ -114,8 +114,8 @@ def test_state_machine_scenario():
 
 ノードを起動する launch と、送って判定するシナリオ (`send` → `expect`) の完全な例が `examples/launch_pytest/` にあります。
 
-- [test_state_machine_launch.py](../../examples/launch_pytest/test_state_machine_launch.py)
-- [state_machine_scenario.yaml](../../examples/launch_pytest/state_machine_scenario.yaml)
+- [test_state_machine_launch.py](https://github.com/shimejilib/roshanavi/blob/main/examples/launch_pytest/test_state_machine_launch.py)
+- [state_machine_scenario.yaml](https://github.com/shimejilib/roshanavi/blob/main/examples/launch_pytest/state_machine_scenario.yaml)
 
 ## うまくいかないとき
 

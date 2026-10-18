@@ -6,6 +6,7 @@
 
 - [guide/README.md](guide/README.md): 使う人向けの説明の章の一覧 (ここから読む)。各章は「手順 → うまくいかないとき → 仕組みを知りたい人へ (design への案内)」の順。
 - [guide/getting-started.md](guide/getting-started.md): はじめての起動 (Docker)、タブの役割、地図の読み方、診断、チュートリアル。[guide/inputs.md](guide/inputs.md): 入力ノード・お試し送信・メディア・マイク/カメラ・録画。[guide/user-code.md](guide/user-code.md): 自分のコードを関数・クラスノードにする (置き場所 A/B/C、ひな形、依存 ①②、つまずき、サブモジュール)。[guide/wiring.md](guide/wiring.md): 線でつないで作る。
+- [guide/launcher.md](guide/launcher.md): ランチャーで自分のノードを動かす (追加・起動・停止・ログ・ビルド・パラメータのダイアログ・ノード一覧の一括操作と削除・lifecycle)。[guide/troubleshooting.md](guide/troubleshooting.md): 症状から原因と直し方を引く一覧。[guide/glossary.md](guide/glossary.md): ROS の用語の説明と、roshanavi の画面での出どころ。
 - [guide/takeover.md](guide/takeover.md): 既存の launch ファイルごと roshanavi で動かす (`--launch`)。[guide/docker-integration.md](guide/docker-integration.md): Docker のプロジェクトに入れる (Dockerfile・compose の例、注意点)。[guide/observe.md](guide/observe.md): 手を入れずに見るだけ。
 - [guide/scenarios.md](guide/scenarios.md): シナリオの記録・実行・CI・launch_pytest・リソースのチェック。[guide/measure.md](guide/measure.md): トラフィックの読み方、詳細計測モード、リソース、メモリリーク検出の精度と限界、規模と負荷の限界。[guide/install.md](guide/install.md): 自分のワークスペースに入れる。[guide/remote-ssh.md](guide/remote-ssh.md): 別のマシンから SSH で見る。
 
@@ -41,6 +42,12 @@
 - [project/testing.md](project/testing.md): テスト方針・実行コマンド・テスト項目と状態 (✅ 🟡 ⬜ 👀)。テストを足す・動かすとき。
 - [project/dependencies.md](project/dependencies.md): 依存関係 (用途・ライセンス・rosdep キー)。依存を足す・変えるとき。
 - [project/distribution.md](project/distribution.md): 配布とインストールの設計 (予定)。パッケージ化を考えるとき。
+- [turtle_demo.md](turtle_demo.md): 別リポジトリのデモ (turtlesim + PID) の説明。取り方・動かし方・3 部構成の実演の台本 (DEMO.md) と練習問題 (TRY_IT.md)。
+
+## リポジトリの直下のファイル
+
+- [../CONTRIBUTING.md](../CONTRIBUTING.md): 貢献の手順 (Docker での開発環境・テストの方針・コミット・ドキュメントの構成・言語)。[../SECURITY.md](../SECURITY.md): 脆弱性の非公開の報告方法と、セキュリティの考え方の要約。[../CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md)、[../CHANGELOG.md](../CHANGELOG.md)。
+- `mkdocs.yml`: この `docs/` を Material テーマのサイトにする設定 (CI は未設定)。`scripts/build_release.sh`: ビルド済みの画面入りのソースの tarball を作る。
 
 ## images — スクリーンショット
 

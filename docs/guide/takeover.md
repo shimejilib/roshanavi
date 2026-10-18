@@ -67,7 +67,7 @@ ros2 launch roshanavi takeover.launch.py package:=turtle_patrol launch_file:=pat
 
 ## 5. Docker で使う
 
-利用者のイメージの上に roshanavi を重ねたコンテナを 1 つ作り、その中で `--launch` を付けて起動します。元の起動方法 (roshanavi なし) は compose の profile に残しておくと、いつでも切り替えられます。例は `turtle_demo` の `docker-compose.yml` (`dev` サービスと profile `plain`) です。
+利用者のイメージの上に roshanavi を重ねたコンテナを 1 つ作り、その中で `--launch` を付けて起動します。元の起動方法 (roshanavi なし) は compose の profile に残しておくと、いつでも切り替えられます。例は `[turtle_demo](../turtle_demo.md)` の `docker-compose.yml` (`dev` サービスと profile `plain`) です。
 
 ## 6. roshanavi が強制終了されたとき
 

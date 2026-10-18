@@ -10,3 +10,5 @@ ros2_ws/install
 ros2_ws/log
 ros2_ws/src/roshanavi/roshanavi/static
 **/__pycache__
+dist
+site

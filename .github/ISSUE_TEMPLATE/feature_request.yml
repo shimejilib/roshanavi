@@ -1,0 +1,60 @@
+name: 機能の提案 / Feature request
+description: こんなことができたら、という提案 / An idea for a new feature or an improvement
+title: "[feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        提案ありがとうございます。実現方法より先に、「何に困っているか」を書いてもらえると助かります。
+        Thanks for the idea. Please start with the problem you are trying to solve rather than the solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: 困っていること・やりたいこと / The problem or goal
+      description: いま、どんな場面で、何に困っていますか。 / In what situation, and what is hard today?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: こうなってほしい / What you would like
+      description: 思いついた形があれば書いてください (なくても構いません)。 / Your idea, if you have one (optional).
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 今はどうしているか / What you do today
+      description: 代わりの方法 (ros2 のコマンド、別のツールなど)。 / Workarounds or other tools you use now.
+  - type: dropdown
+    id: area
+    attributes:
+      label: 関係する所 / Area
+      options:
+        - 地図・診断 / Map and diagnostics
+        - トラフィック・計測 / Traffic and measurement
+        - 入力・メディア・録画 / Input, media and recording
+        - ランチャー・launch ファイル / Launcher and launch files
+        - 関数・クラス・変換ノード / Function, class and transform nodes
+        - シナリオ・テスト / Scenarios and testing
+        - リソース監視 / Resource monitoring
+        - ドキュメント・チュートリアル / Docs and tutorial
+        - 配布・インストール / Packaging and install
+        - その他 / Other
+  - type: dropdown
+    id: scope
+    attributes:
+      label: サービス・アクション・tf に関わりますか / Does it involve services, actions or tf?
+      description: いまの対象はトピックだけです。サービス・アクション・tf は今後の予定です。 / Only topics are supported today; services, actions and tf are planned.
+      options:
+        - いいえ / No
+        - はい / Yes
+  - type: input
+    id: ros_distro
+    attributes:
+      label: ROS 2 のディストロ / ROS 2 distro
+      placeholder: Jazzy
+  - type: textarea
+    id: extra
+    attributes:
+      label: そのほか / Anything else
+      description: 画面のスケッチ、参考にしたいツールなど。 / Sketches, references, etc.

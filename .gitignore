@@ -14,3 +14,8 @@ web/playwright-report/
 
 # Claude Code worktrees and local state
 .claude/worktrees/
+
+# Release tarballs (scripts/build_release.sh), docs site (mkdocs build), demo GIF recorder
+dist/
+site/
+web/demo-gif/out/
