@@ -186,7 +186,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | H-27 | UI: Launcher から talker を起動 → 地図で「自分のノード」→ 停止 | E2E で確認 | ✅ (`e2e/launcher.spec.ts`) |
 | H-28 | UI: 依存ノード・恒久ダミーの色、右ペインの対応づけ表示とログへのリンク | E2E で確認 | ✅ |
 | H-29 | UI: フォームの検証・パッケージ検索・ログの絞り込み | 純ロジックの unit | ✅ (vitest) |
-| H-30 | composable container | コンテナ単位で対応づく (ノード単位にはならない) | ⬜ |
+| H-30 | composable container | コンテナ単位で対応づく (ノード単位にはならない) | ✅ (実コンテナ: `test_container_ros.py`。`launch_ros_<pid>` の誤対応を修正) |
 | H-31 | 別コンテナ / 別 PC のノード | 対応づけない (`other`) | 👀 |
 | H-32 | 地図の右クリック / 右ペインから停止・再起動・起動 | roshanavi が起動したノードだけ操作でき、停止前に同時に止まるノードを列挙して確認する | ✅ (可否と確認文は vitest、右クリック → 停止 → 確認 → 地図から消える は E2E) |
 | H-33 | roshanavi が起動していないノード | 停止ボタンは無効で、理由を表示する (シグナルを送らない) | ✅ (vitest + E2E) |
@@ -298,10 +298,10 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | K-28 | E2E: 外部の lifecycle ノード (lc_talker) | configure → activate → deactivate → activate → cleanup。確認ダイアログに外部の注意 | ✅ (`e2e/nodes.spec.ts`) |
 | K-29 | E2E: launch の取り込み | roshanavi / demo_system.launch.py を解析 → 2 ノードと ExecuteProcess → 取り込むと一覧に取り込み元付きで出る | ✅ (`e2e/nodes.spec.ts`) |
 | K-30 | E2E: トラフィックの展開とノード別 | /chatter を展開して talker (送信・実測) と listener (受信・理論値)、ノード別に切り替えても同じ | ✅ (`e2e/smoke.spec.ts`) |
-| K-31 | 一緒に止まる composable container のノード (実機) | container 内の複数ノードが 1 グループになり、確認ダイアログに全ノード | 🟡 (集約・確認文は unit。デモに container が無いため E2E 未整備) |
+| K-31 | 一緒に止まる composable container のノード (実機) | container 内の複数ノードが 1 グループになり、確認ダイアログに全ノード | ✅ (実コンテナ: `test_container_ros.py` で全ノードが 1 グループ・確認に列挙するノード一覧・停止で全部止まる。E2E: `e2e/pipeline.spec.ts`) |
 | K-32 | 地図の右クリック・右ペインからの lifecycle | lifecycle ノードにだけ項目が出て、ダイアログが開く | 🟡 (項目は vitest `menuModel.test.ts`、操作は 👀) |
 | K-33 | 取り込んだノードの実起動 | 取り込んだ talker を起動するとノード名・名前空間・リマップ・パラメータファイルどおりに動く | 👀 (demo_system の talker を取り込み起動 → `/demo_robot/imported_talker` が確実で対応づき実行。talker が宣言しないパラメータ `note` は rclcpp の仕様で一覧に出ない) |
-| K-34 | 非常に大きい launch (数百ノード) の評価時間 | 20 秒以内に評価が終わる | ⬜ |
+| K-34 | 非常に大きい launch (数百ノード) の評価時間 | 20 秒以内に評価が終わる | ✅ (200 ノードのパイプライン launch、`test_container_ros.py`) |
 
 ### L. 詳細計測モード (トレース, P4.7)
 
@@ -579,3 +579,27 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | V-16 | Chromium 以外・タッチでのドラッグ | Firefox / Safari、タッチ操作 (pointer events) でつなげる | 👀 (未確認: E2E は Chromium のみ) |
 | V-17 | スクリーンリーダーの実機確認 | NVDA / VoiceOver でつなぎ口の名前と一覧が読まれる | 👀 (未確認: 読み上げ用の名前は E2E で検査) |
 
+### W. 中継パイプラインのサンプル・composable container (#51, #22)
+
+仕様は [nodes.md#中継パイプライン](../design/nodes.md#中継パイプライン-source--relay--sink51)、[launcher.md#composable container の扱い](../design/launcher.md#composable-container-の扱い-22)、測定は [measurement.md#規模と負荷の限界](../design/measurement.md#規模と負荷の限界-51)。fixture は `test/pipeline_fixtures.py` (生成した spec を書いて launch の起動設定を作る)。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| W-01 | ロジックの gtest (ROS なし) | 間引き (`drop_ratio`・`rate_limit_hz`・同じ種で同じ結果)、payload の切り詰め・ゼロ埋め、fan-out (all / round_robin)、連番の欠け、遅延の窓 (p50/p95・上限・古いものの除外) | ✅ (`test_pipeline_logic`、21 件) |
+| W-02 | ノードの振る舞い (実プロセス) | stamp・frame_id・連番の引き継ぎ、`payload_bytes`、`rate_limit_hz` で頭打ち、`drop_ratio`、fan-out、合流、`keep_stamp`、sink の遅延・欠落、実行中のパラメータ変更と不正値の拒否、不正な起動値でエラー終了、`count` | ✅ (`test_pipeline_nodes_ros.py`) |
+| W-03 | 生成器: 形・規模・配線 | プリセットが 3 / 20 / 200 ノード。どのトピックも送信者 1・受信者 1 以上、段は前向きだけ、パラメータの個数と配線が一致。期待される Hz (合計・drop・rate_limit)。不正な値の拒否 | ✅ (`test_pipeline_gen.py`) |
+| W-04 | 生成物の整合 | プロジェクトが roshanavi のスキーマとランチャーの検査を通る。コミットしてある `examples/pipeline_*` が生成器の出力と一致 | ✅ |
+| W-05 | launch の組み立て | process は Node が 1 ノードずつ、container は `ComposableNodeContainer` に全ノードを 1 回ずつ (N 個に分割、st / mt、intra-process) | ✅ (`test_pipeline_launch.py`) |
+| W-06 | small を両方の方法で起動 | 欠落 0・Hz と遅延が sink で測れる。process は別 pid・`exact`、container は共通の pid・`heuristic`。どちらも 1 グループ | ✅ (`test_pipeline_modes_ros.py`) |
+| W-07 | コンテナのノード → コンテナのプロセス、一覧のグループ | 12 ノードが同じ pid・同じグループ | ✅ (`test_container_ros.py`) |
+| W-08 | `launch_ros_<pid>` の対応 | コンテナではなく `ros2 launch` のプロセスに対応づく | ✅ (unit + 実機) |
+| W-09 | リソースがコンテナ単位 | `component_container` の行が 1 つ、各ノードの値は同じ (`scope: process`) | ✅ |
+| W-10 | 確認ダイアログ用の一覧と停止 | `targets.nodes` に全ノード。停止で全部が消えプロセスが残らない。起動し直すと戻る | ✅ |
+| W-11 | launch の取り込み | コンテナは「分解できない部分」(中のノード名つき)、全体取り込みが選べる。process モードの同じ launch は全ノードが取り込める。200 ノードの評価が 20 秒以内 (K-34) | ✅ |
+| W-12 | 詳細計測モードがコンテナの中のノードごとに測れる | 3 本の列で 20 / 10 / 5 Hz が別々、`unsupported` は `launch_ros_<pid>` だけ | ✅ |
+| W-13 | intra-process のコンテナ | 地図・トラフィックには出る (✅)。詳細計測モードは誤って「処理が追いつかない」と出る既知の不具合 (`xfail(strict)` で記録、未修正) | 🟡 |
+| W-14 | E2E: medium を開く | 20 ノードが地図に出て、エッジに Hz、実データでも fps > 30 | ✅ (`e2e/pipeline.spec.ts`) |
+| W-15 | E2E: コンテナ構成 | 1 グループにまとまり、1 ノードを選んだ停止の確認にコンテナの全ノードが並ぶ | ✅ (`e2e/pipeline.spec.ts`) |
+| W-16 | 規模と負荷の限界の測定 (`scripts/bench_pipeline.py`) | 結果の表が measurement.md にある | ✅ (この PC での実測。再実行は手動) |
+| W-17 | 重いデータの送受信 (`heavy_source` / `heavy_sink`) | Image / PointCloud2 の型・大きさ・連番、sink の統計 (欠落 0)。不正な `kind` でエラー終了 | ✅ (`test_pipeline_nodes_ros.py`) |
+| W-18 | 重いデータを計測に入れたときの限界 (`scripts/bench_heavy.py`、共有メモリ / UDP の 2 通り、件数・大きさ・実物の 4 系列) | 結果の表・probe の費用の近似・目安が measurement.md にある | ✅ (この PC での実測。再実行は手動) |

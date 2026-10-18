@@ -54,6 +54,20 @@ def test_heuristic_tie_break_by_executable_name():
     assert mapping['/anon'].target_id == 'b'  # no name match: most recently started
 
 
+def test_launch_service_node_maps_to_the_launch_process_not_to_a_container():
+    # ros2 launch (pid 10) started a composable container (pid 11); the nodes inside live in 11,
+    # but launch_ros_10 is the launch service's own node and lives in 10.
+    target = TargetProcs('pipe', 100.0, (
+        proc(10, 1, 0, '/usr/bin/python3', '/opt/ros/jazzy/bin/ros2', 'launch', 'p', 'f.py'),
+        proc(11, 10, 1, '/opt/ros/jazzy/lib/rclcpp_components/component_container'),
+    ))
+    seen = {'/launch_ros_10': 101.0, '/relay_1': 101.0, '/launch_ros_999': 101.0}
+    mapping = map_nodes(seen, [target], seen)
+    assert mapping['/launch_ros_10'].pid == 10
+    assert mapping['/relay_1'].pid == 11  # a node of the container
+    assert mapping['/launch_ros_999'].pid == 11  # somebody else's pid: no special case
+
+
 def test_dead_targets_do_not_claim():
     dead = TargetProcs('t1', 100.0, ())
     assert map_nodes(['/n'], [dead], {'/n': 101.0}) == {}

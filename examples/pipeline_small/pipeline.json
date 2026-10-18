@@ -1,0 +1,74 @@
+{
+ "version": 1,
+ "name": "pipeline_small",
+ "shape": "chain",
+ "stages": 3,
+ "width": 1,
+ "links": "mesh",
+ "launch": {
+  "mode": "process",
+  "containers": 1,
+  "container_type": "st",
+  "intra_process": false
+ },
+ "nodes": [
+  {
+   "name": "src",
+   "kind": "source",
+   "stage": 0,
+   "lane": 0,
+   "params": {
+    "rate_hz": 10.0,
+    "payload_bytes": 1024
+   },
+   "remaps": {
+    "out": "/pipe/src"
+   }
+  },
+  {
+   "name": "relay_1",
+   "kind": "relay",
+   "stage": 1,
+   "lane": 0,
+   "params": {},
+   "remaps": {
+    "in": "/pipe/src",
+    "out": "/pipe/relay_1"
+   }
+  },
+  {
+   "name": "sink",
+   "kind": "sink",
+   "stage": 2,
+   "lane": 0,
+   "params": {},
+   "remaps": {
+    "in": "/pipe/relay_1"
+   }
+  }
+ ],
+ "topics": [
+  {
+   "topic": "/pipe/relay_1",
+   "publisher": "relay_1",
+   "subscribers": [
+    "sink"
+   ],
+   "hz": 10.0
+  },
+  {
+   "topic": "/pipe/src",
+   "publisher": "src",
+   "subscribers": [
+    "relay_1"
+   ],
+   "hz": 10.0
+  }
+ ],
+ "expected": {
+  "sink_hz": {
+   "sink": 10.0
+  },
+  "total_sink_hz": 10.0
+ }
+}

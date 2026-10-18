@@ -70,6 +70,7 @@ services:
     command: ["bash", "-c",
               "/ws/build/roshanavi_probe/test_stats --gtest_brief=1 &&
                /ws/build/roshanavi_examples/test_image_ops --gtest_brief=1 &&
+               /ws/build/roshanavi_examples/test_pipeline_logic --gtest_brief=1 &&
                python3 -m pytest -p no:cacheprovider -q /ws/src/roshanavi/test"]
 
   lab-e2e:

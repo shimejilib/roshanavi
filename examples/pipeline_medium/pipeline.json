@@ -1,0 +1,603 @@
+{
+ "version": 1,
+ "name": "pipeline_medium",
+ "shape": "grid",
+ "stages": 5,
+ "width": 4,
+ "links": "mesh",
+ "launch": {
+  "mode": "process",
+  "containers": 1,
+  "container_type": "st",
+  "intra_process": false
+ },
+ "nodes": [
+  {
+   "name": "src_0",
+   "kind": "source",
+   "stage": 0,
+   "lane": 0,
+   "params": {
+    "rate_hz": 10.0,
+    "payload_bytes": 1024,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "out": "/pipe/src_0",
+    "out_1": "/pipe/src_0_o1"
+   }
+  },
+  {
+   "name": "src_1",
+   "kind": "source",
+   "stage": 0,
+   "lane": 1,
+   "params": {
+    "rate_hz": 10.0,
+    "payload_bytes": 1024,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "out": "/pipe/src_1",
+    "out_1": "/pipe/src_1_o1"
+   }
+  },
+  {
+   "name": "src_2",
+   "kind": "source",
+   "stage": 0,
+   "lane": 2,
+   "params": {
+    "rate_hz": 10.0,
+    "payload_bytes": 1024,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "out": "/pipe/src_2",
+    "out_1": "/pipe/src_2_o1"
+   }
+  },
+  {
+   "name": "src_3",
+   "kind": "source",
+   "stage": 0,
+   "lane": 3,
+   "params": {
+    "rate_hz": 10.0,
+    "payload_bytes": 1024,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "out": "/pipe/src_3",
+    "out_1": "/pipe/src_3_o1"
+   }
+  },
+  {
+   "name": "relay_1_0",
+   "kind": "relay",
+   "stage": 1,
+   "lane": 0,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/src_0",
+    "in_1": "/pipe/src_3_o1",
+    "out": "/pipe/relay_1_0",
+    "out_1": "/pipe/relay_1_0_o1"
+   }
+  },
+  {
+   "name": "relay_1_1",
+   "kind": "relay",
+   "stage": 1,
+   "lane": 1,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/src_0_o1",
+    "in_1": "/pipe/src_1",
+    "out": "/pipe/relay_1_1",
+    "out_1": "/pipe/relay_1_1_o1"
+   }
+  },
+  {
+   "name": "relay_1_2",
+   "kind": "relay",
+   "stage": 1,
+   "lane": 2,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/src_1_o1",
+    "in_1": "/pipe/src_2",
+    "out": "/pipe/relay_1_2",
+    "out_1": "/pipe/relay_1_2_o1"
+   }
+  },
+  {
+   "name": "relay_1_3",
+   "kind": "relay",
+   "stage": 1,
+   "lane": 3,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/src_2_o1",
+    "in_1": "/pipe/src_3",
+    "out": "/pipe/relay_1_3",
+    "out_1": "/pipe/relay_1_3_o1"
+   }
+  },
+  {
+   "name": "relay_2_0",
+   "kind": "relay",
+   "stage": 2,
+   "lane": 0,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_1_0",
+    "in_1": "/pipe/relay_1_3_o1",
+    "out": "/pipe/relay_2_0",
+    "out_1": "/pipe/relay_2_0_o1"
+   }
+  },
+  {
+   "name": "relay_2_1",
+   "kind": "relay",
+   "stage": 2,
+   "lane": 1,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_1_0_o1",
+    "in_1": "/pipe/relay_1_1",
+    "out": "/pipe/relay_2_1",
+    "out_1": "/pipe/relay_2_1_o1"
+   }
+  },
+  {
+   "name": "relay_2_2",
+   "kind": "relay",
+   "stage": 2,
+   "lane": 2,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_1_1_o1",
+    "in_1": "/pipe/relay_1_2",
+    "out": "/pipe/relay_2_2",
+    "out_1": "/pipe/relay_2_2_o1"
+   }
+  },
+  {
+   "name": "relay_2_3",
+   "kind": "relay",
+   "stage": 2,
+   "lane": 3,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_1_2_o1",
+    "in_1": "/pipe/relay_1_3",
+    "out": "/pipe/relay_2_3",
+    "out_1": "/pipe/relay_2_3_o1"
+   }
+  },
+  {
+   "name": "relay_3_0",
+   "kind": "relay",
+   "stage": 3,
+   "lane": 0,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_2_0",
+    "in_1": "/pipe/relay_2_3_o1",
+    "out": "/pipe/relay_3_0",
+    "out_1": "/pipe/relay_3_0_o1"
+   }
+  },
+  {
+   "name": "relay_3_1",
+   "kind": "relay",
+   "stage": 3,
+   "lane": 1,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_2_0_o1",
+    "in_1": "/pipe/relay_2_1",
+    "out": "/pipe/relay_3_1",
+    "out_1": "/pipe/relay_3_1_o1"
+   }
+  },
+  {
+   "name": "relay_3_2",
+   "kind": "relay",
+   "stage": 3,
+   "lane": 2,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_2_1_o1",
+    "in_1": "/pipe/relay_2_2",
+    "out": "/pipe/relay_3_2",
+    "out_1": "/pipe/relay_3_2_o1"
+   }
+  },
+  {
+   "name": "relay_3_3",
+   "kind": "relay",
+   "stage": 3,
+   "lane": 3,
+   "params": {
+    "num_inputs": 2,
+    "num_outputs": 2,
+    "fanout": "round_robin"
+   },
+   "remaps": {
+    "in": "/pipe/relay_2_2_o1",
+    "in_1": "/pipe/relay_2_3",
+    "out": "/pipe/relay_3_3",
+    "out_1": "/pipe/relay_3_3_o1"
+   }
+  },
+  {
+   "name": "sink_0",
+   "kind": "sink",
+   "stage": 4,
+   "lane": 0,
+   "params": {
+    "num_inputs": 2
+   },
+   "remaps": {
+    "in": "/pipe/relay_3_0",
+    "in_1": "/pipe/relay_3_3_o1"
+   }
+  },
+  {
+   "name": "sink_1",
+   "kind": "sink",
+   "stage": 4,
+   "lane": 1,
+   "params": {
+    "num_inputs": 2
+   },
+   "remaps": {
+    "in": "/pipe/relay_3_0_o1",
+    "in_1": "/pipe/relay_3_1"
+   }
+  },
+  {
+   "name": "sink_2",
+   "kind": "sink",
+   "stage": 4,
+   "lane": 2,
+   "params": {
+    "num_inputs": 2
+   },
+   "remaps": {
+    "in": "/pipe/relay_3_1_o1",
+    "in_1": "/pipe/relay_3_2"
+   }
+  },
+  {
+   "name": "sink_3",
+   "kind": "sink",
+   "stage": 4,
+   "lane": 3,
+   "params": {
+    "num_inputs": 2
+   },
+   "remaps": {
+    "in": "/pipe/relay_3_2_o1",
+    "in_1": "/pipe/relay_3_3"
+   }
+  }
+ ],
+ "topics": [
+  {
+   "topic": "/pipe/relay_1_0",
+   "publisher": "relay_1_0",
+   "subscribers": [
+    "relay_2_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_0_o1",
+   "publisher": "relay_1_0",
+   "subscribers": [
+    "relay_2_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_1",
+   "publisher": "relay_1_1",
+   "subscribers": [
+    "relay_2_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_1_o1",
+   "publisher": "relay_1_1",
+   "subscribers": [
+    "relay_2_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_2",
+   "publisher": "relay_1_2",
+   "subscribers": [
+    "relay_2_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_2_o1",
+   "publisher": "relay_1_2",
+   "subscribers": [
+    "relay_2_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_3",
+   "publisher": "relay_1_3",
+   "subscribers": [
+    "relay_2_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_1_3_o1",
+   "publisher": "relay_1_3",
+   "subscribers": [
+    "relay_2_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_0",
+   "publisher": "relay_2_0",
+   "subscribers": [
+    "relay_3_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_0_o1",
+   "publisher": "relay_2_0",
+   "subscribers": [
+    "relay_3_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_1",
+   "publisher": "relay_2_1",
+   "subscribers": [
+    "relay_3_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_1_o1",
+   "publisher": "relay_2_1",
+   "subscribers": [
+    "relay_3_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_2",
+   "publisher": "relay_2_2",
+   "subscribers": [
+    "relay_3_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_2_o1",
+   "publisher": "relay_2_2",
+   "subscribers": [
+    "relay_3_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_3",
+   "publisher": "relay_2_3",
+   "subscribers": [
+    "relay_3_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_2_3_o1",
+   "publisher": "relay_2_3",
+   "subscribers": [
+    "relay_3_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_0",
+   "publisher": "relay_3_0",
+   "subscribers": [
+    "sink_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_0_o1",
+   "publisher": "relay_3_0",
+   "subscribers": [
+    "sink_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_1",
+   "publisher": "relay_3_1",
+   "subscribers": [
+    "sink_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_1_o1",
+   "publisher": "relay_3_1",
+   "subscribers": [
+    "sink_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_2",
+   "publisher": "relay_3_2",
+   "subscribers": [
+    "sink_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_2_o1",
+   "publisher": "relay_3_2",
+   "subscribers": [
+    "sink_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_3",
+   "publisher": "relay_3_3",
+   "subscribers": [
+    "sink_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/relay_3_3_o1",
+   "publisher": "relay_3_3",
+   "subscribers": [
+    "sink_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_0",
+   "publisher": "src_0",
+   "subscribers": [
+    "relay_1_0"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_0_o1",
+   "publisher": "src_0",
+   "subscribers": [
+    "relay_1_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_1",
+   "publisher": "src_1",
+   "subscribers": [
+    "relay_1_1"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_1_o1",
+   "publisher": "src_1",
+   "subscribers": [
+    "relay_1_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_2",
+   "publisher": "src_2",
+   "subscribers": [
+    "relay_1_2"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_2_o1",
+   "publisher": "src_2",
+   "subscribers": [
+    "relay_1_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_3",
+   "publisher": "src_3",
+   "subscribers": [
+    "relay_1_3"
+   ],
+   "hz": 5.0
+  },
+  {
+   "topic": "/pipe/src_3_o1",
+   "publisher": "src_3",
+   "subscribers": [
+    "relay_1_0"
+   ],
+   "hz": 5.0
+  }
+ ],
+ "expected": {
+  "sink_hz": {
+   "sink_0": 10.0,
+   "sink_1": 10.0,
+   "sink_2": 10.0,
+   "sink_3": 10.0
+  },
+  "total_sink_hz": 40.0
+ }
+}

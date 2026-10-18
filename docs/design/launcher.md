@@ -46,9 +46,10 @@
 **ノード ⇄ プロセスの対応づけ (`process_map.py`)** — リソース監視 ([resources.md#前提](resources.md#前提-ノードとプロセスの対応づけ)) でもそのまま使う (リソース監視では、Launcher の時刻による推定より argv の `__node:=` を優先する)。
 - 純関数 `map_nodes(nodes, targets, first_seen, baseline, sticky)` と、状態を持つ `NodeProcessMapper` (初出時刻・ベースライン・確定済みの推定) に分ける。プロセスツリーは psutil (`process_tree(pid)`: ルート + 子孫を深さ順)。
 - **exact**: ターゲットのプロセスツリーの argv に `__node:=<name>` (と `__ns:=`、`node:__node:=` 形式も) があれば一致。`ros2 run` のラッパーと実行ファイルの両方に付くため、最も深いプロセスを pid とする。launch_ros は `Node(name=…)` のときに付け、Launcher はノード名を入力したときに付ける。
+- **launch サービス自身のノード**: `ros2 launch` は `launch_ros_<pid>` という名前のノードを 1 つ持つ。この `<pid>` がターゲットのプロセスツリーにいれば、そのプロセス (`ros2 launch` 本体) に対応づける (推定のまま)。launch がコンテナを起動していても、コンテナには対応づけない (#22 の実機確認で見つかった誤り。以前はツリーの末端 = コンテナの pid になっていた)。
 - **heuristic**: ターゲットの (再) 起動から 20 秒以内に初めて現れ、他のターゲットが exact で持っていないノード。候補が複数あれば、実行ファイル名とノード名が一致するターゲット、なければ最後に起動したターゲット。一度決まった推定は、そのターゲットが生きている間は保持する。
 - ベースライン: 自分のプロセスが 1 つも動いていない間に見えたノードは推定の対象外 (消えたらベースラインからも外す)。autostart はサーバー起動の 2 秒後に行い、既存ノードの発見を先に済ませる。roshanavi 自身のノードは対象外。
-- 限界 (UI に「推定」と出す): composable node はコンテナプロセス単位 (コンテナ内のどのノードかは分からない)。別コンテナ (PID 名前空間が別) や別 PC のノードは対応づけない。起動直後に無関係のノードが同時に現れると推定を誤ることがある (ノード名を付ければ exact になる)。
+- 限界 (UI に「推定」と出す): composable node はコンテナプロセス単位 (コンテナ内のどのノードかは分からない。実機での確認は [composable container の扱い](#composable-container-の扱い-22))。別コンテナ (PID 名前空間が別) や別 PC のノードは対応づけない。起動直後に無関係のノードが同時に現れると推定を誤ることがある (ノード名を付ければ exact になる)。
 
 **役割**: グラフの各ノードに `role` を付ける。`mine` (ターゲットの「開発中」フラグ)、`dependency` (それ以外のターゲット)、`dummy` (注入ジョブの仮想ノードと恒久ダミーノード)、`other`。対応づいたノードには `target_id` と `confidence` (`exact`/`heuristic`) も付ける。
 
@@ -177,3 +178,21 @@ watch_topics: [/chat]
 ## ノード一覧の集約 (P4.5b)
 - **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
 - **削除と「元に戻す」** (`launcher/trash.py`, `POST /api/registry/delete` / `undo`): ノード一覧で選んだ roshanavi の登録 (起動リスト・取り込んだもの・入力・変換・関数・クラスノード) をまとめて外す。知らない ID が 1 つでもあれば何も変えない (404)。外すときに動いているものは止め、仕様 (spec) と「動いていたか」を 15 秒 (UI は 10 秒) まで最大 8 回分覚えておき、`undo` で登録し直して (検証を通らなくなっていても `invalid` で残す) 動いていたものを起動する。ソースコード・パッケージ・取り込んだパラメータファイル・録画には触らない。
+
+## composable container の扱い (#22)
+1 つのプロセス (`component_container`) の中に複数のノードが入る構成を、**実物のコンテナ**で確かめた。使ったのは中継パイプライン ([nodes.md#中継パイプライン](nodes.md#中継パイプライン-source--relay--sink51)) の `mode:=container` (`ComposableNodeContainer` に 12〜20 ノード) を `ros2 launch` で起動する `kind: launch` の起動設定。テストは `test_container_ros.py`、E2E は `web/e2e/pipeline.spec.ts`。
+
+| 見る点 | 実機での結果 |
+|---|---|
+| ノード ⇄ プロセス | コンテナの中のノードはすべて同じ起動設定 (`target_id`) に、**推定 (`heuristic`) で同じ pid (コンテナのプロセス)** に対応づく。コンテナ自身のノード (`/pipeline_container`) は `__node:=` を持つので `exact`。1 ノードずつの pid にはならない。同じパイプラインを `mode:=process` (1 ノード 1 プロセス) で動かした場合は、全ノードが `exact` で別々の pid (`test_pipeline_modes_ros.py`) |
+| ノード一覧 | `kind: launch` の起動設定なので 1 つのグループ (`kind: launch`、ラベルは launch ファイル名) にまとまり、全ノードの `control` は `target` (地図・一覧から停止・再起動できる) |
+| 停止 | どのノードを選んでも操作の対象は同じ起動設定。確認ダイアログに出すノードの一覧 (`GET /api/targets` の `nodes`) には、コンテナの全ノード (パイプライン 12 + コンテナ + launch サービスのノード) が入る。停止すると全ノードが同時に地図から消え、`ros2 launch` もコンテナも終了する。起動し直すと全部が戻る |
+| リソース | プロセス単位だけ。`component_container` の行が 1 つ (`label` = 起動設定、`nodes` = 全ノード)、各ノードの値は**同じ値** (`scope: process`、`shared` に同居するノード) |
+| launch の取り込み | `ComposableNodeContainer` は分解できず「分解できない部分」(`composable_container`) として、**中のノード名とプラグインを一覧に出す**。パッケージの launch ファイルなので「launch 全体として取り込む」が選べて、`kind: launch` (引数 `mode:=container` 付き) になる。同じ launch を `mode:=process` で読むと全ノードが 1 つずつ取り込める |
+| 詳細計測モード | **ノードごとに測れる**。同じコンテナの中のノードごとに受信 Hz・処理 Hz・コールバック時間が別々に出る (送信元の速さが違う 3 本の列で 20 / 10 / 5 Hz が別々に出ることを確認)。rclpy の `launch_ros_<pid>` だけが「受信数のみ」 |
+| intra-process 通信 (`use_intra_process_comms`) | 地図・トラフィックには出る (roshanavi の計測ノードは別プロセスなので DDS 経由でも受ける)。**詳細計測モードは正しく測れない (未修正の不具合)**: コンテナ内のノードのコールバックが購読に対応づかず、処理数が 0 になって「処理が追いつかない」と誤って出る (`intra` の印も付かない)。`test_container_ros.py` に `xfail(strict)` で記録してあり、直したら外す |
+| 速さの限界 | 1 本のスレッドで回る `component_container` では、中のノードの処理時間の合計がそのコンテナの上限を決める ([measurement.md#規模と負荷の限界](measurement.md#規模と負荷の限界-51)) |
+
+直した不具合: `ros2 launch` 自身のノード `launch_ros_<pid>` が「コンテナのノード」として数えられ、コンテナのプロセスに対応づけられていた (確認ダイアログとリソースの「n ノードで共有」に混ざる)。上記「launch サービス自身のノード」の規則で `ros2 launch` のプロセスに対応づけるようにした。
+
+まだ確かめていないこと: コンテナを roshanavi の外で起動して `ros2 component load` で後からノードを足す構成 (ノードは roshanavi の起動したものではなく、外部扱いになるはず)、複数のコンテナを別々の起動設定にした場合の組み合わせ、`LoadComposableNodes` で既存のコンテナに足す launch。

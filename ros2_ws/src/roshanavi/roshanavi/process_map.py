@@ -129,8 +129,17 @@ def exact_claims(targets: Iterable[TargetProcs]) -> Dict[str, NodeMapping]:
     return claims
 
 
+LAUNCH_NODE_PREFIX = 'launch_ros_'
+
+
 def _guess_pid(target: TargetProcs, node: str) -> Optional[int]:
     base = node.rsplit('/', 1)[-1]
+    # `ros2 launch` runs a node of its own, named after its pid (launch_ros_<pid>): it lives in
+    # that process, not in a container the launch file started (docs/design/launcher.md).
+    if base.startswith(LAUNCH_NODE_PREFIX) and base[len(LAUNCH_NODE_PREFIX):].isdigit():
+        launch_pid = int(base[len(LAUNCH_NODE_PREFIX):])
+        if any(p.pid == launch_pid for p in target.procs):
+            return launch_pid
     matches = [p for p in target.procs if p.exe_name == base]
     if matches:
         return matches[-1].pid

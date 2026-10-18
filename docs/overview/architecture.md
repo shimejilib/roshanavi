@@ -23,6 +23,7 @@ roshanavi/
   ros2_ws/src/roshanavi_msgs/  # ament_cmake: 計測ノードとの内部 msg (ProbeConfig / ProbeStats ほか, docs/design/measurement.md)
   ros2_ws/src/roshanavi_probe/ # ament_cmake (C++17, rclcpp): 計測ノード (docs/design/measurement.md)
   ros2_ws/src/roshanavi_test_nodes/ # ament_cmake: テスト・ベンチマーク用の C++ ノード (rate_talker / slow_listener, docs/design/measurement.md)
+  ros2_ws/src/roshanavi_examples_msgs/ # ament_cmake: 中継パイプラインの公開メッセージ (Payload / SinkStats, docs/design/nodes.md)
   ros2_ws/src/roshanavi_examples/   # ament_cmake + ament_cmake_python: 同梱サンプルノード (docs/design/nodes.md)
                                # src/ (C++: image_filter / blob_detector / image_ops)、roshanavi_examples/ (Python:
                                # audio_level / state_machine)、launch/ (ノードごと)、test/test_image_ops.cpp (gtest)

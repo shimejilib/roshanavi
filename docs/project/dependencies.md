@@ -52,6 +52,15 @@ Docker イメージ (`roshanavi:dev-<distro>`) で 2026-10-18 に確認した版
 
 いずれも `ros:<distro>-ros-base` と ROS 2 の標準インストールに含まれる。C++ コンパイラ (build-essential) が必要。
 
+### 中継パイプラインのサンプル (`roshanavi_examples`、`roshanavi_examples_msgs`、#51)
+| パッケージ | 用途 |
+|---|---|
+| `rosidl_default_generators`, `std_msgs` | 公開メッセージ `Payload` / `SinkStats` の生成 (`roshanavi_examples_msgs`) |
+| `rclcpp_components` | source / relay / sink を composable node としても実行ファイルとしても動かす。launch から `component_container` / `component_container_mt` を使う (`exec_depend`) |
+| `launch_ros` | `pipeline.launch.py` が `Node` / `ComposableNodeContainer` を作る (既存の依存) |
+
+どれも `ros:<distro>-ros-base` に含まれる (Docker に足したものは無い)。生成器 (`scripts/gen_pipeline.py`) は標準ライブラリだけの Python。
+
 ### システム・Python (apt / rosdep キー)
 | rosdep キー | 用途 | ライセンス |
 |---|---|---|

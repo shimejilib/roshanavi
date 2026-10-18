@@ -4,8 +4,6 @@
 
 対応: **ROS 2 Jazzy・Lyrical Luth** に正式対応。Kilted Kaiju は動作確認のみ (継続的な保証なし) です。
 
-名前は「ROS + 花火 (launch = 打ち上げ)」と「ナビ (案内役)」から。既定のポート 6871 も ro(6)s-ha(8)-na(7)-bi(1)。
-
 ![通信マップ](docs/images/graph-roles.png)
 
 ## なぜ作ったか
@@ -29,12 +27,43 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | シナリオ | 「入力したら、○秒以内にこう出る」を記録して、UI と CLI で自動判定 |
 | リソース監視 | ノードごとの CPU・メモリ (地図にバッジ)、PC 全体の CPU・メモリ・ディスク・ネットワーク・GPU、外部との接続先、メモリリークの疑いと UDP 受信バッファ溢れの診断 (この PC のみ) |
 | チュートリアル | 画面の見方・入力ノード・QoS の直し方・関数ノード・シナリオを、画面上で操作を案内しながら学べる (⚙ 設定からいつでも) |
+| 中継パイプラインのサンプル | 受け取って次に送る C++ ノード (処理時間・大きさ・頻度・取りこぼしを調整) を、直列・分岐・合流・格子の形と 3 / 20 / 200 ノードの規模で生成して、別プロセスでも composable container でも動かせる ([nodes.md](docs/design/nodes.md#中継パイプライン-source--relay--sink51)) |
 
 ![関数ノードの作成](docs/images/function-dialog.png)
 
 MVP の対象はトピックのみです。**サービス・アクションへの対応は今後予定しています。**
 
-## リソース監視とメモリリークの検出
+## 試す (Docker)
+
+ホストに ROS は不要です。Docker と Docker Compose があれば動きます。
+
+```bash
+git clone https://github.com/shimejilib/roshanavi.git
+```
+
+```bash
+cd roshanavi && docker compose up -d --build lab demo
+```
+
+ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) と、rclpy の MultiThreadedExecutor が CPU を空回りする様子を確かめるデモ (busy_demo) も開けます。
+
+自分のプロジェクトでの使い方は、次の「使い方・組み込み方」を見てください。
+
+## 使い方・組み込み方
+
+| やりたいこと | 方法 | 説明 |
+|---|---|---|
+| 自分のワークスペースで使う | ワークスペースの `src/` に入れてビルドし、`ros2 run roshanavi app` で起動する | [docs/project/distribution.md](docs/project/distribution.md) (ビルド済みの画面の同梱など、手順の整備は進行中) |
+| 既存の起動セット (launch ファイル) ごと動かす | `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>`。roshanavi が今の launch ファイルのノードを起動し、ノードごとに止める・再起動する・ログを見る・計測するができる | [docs/guide/takeover.md](docs/guide/takeover.md) |
+| Docker で動いている既存のプロジェクトに入れる | 既存のイメージの上に roshanavi を重ねたコンテナを 1 つ足し、`--launch` で今の launch ファイルを引き取る | [docs/design/integration.md](docs/design/integration.md) |
+| 動いているシステムを、手を入れずに見るだけ | 同じ ROS のネットワーク (ドメイン ID) で roshanavi を起動する。地図・トラフィック・エコー・入力ノード・シナリオが使える (ノードの停止や詳細計測はできない) | [docs/design/integration.md](docs/design/integration.md) |
+| 自分の Python のコードをノードにする | 普通の関数・クラスを「関数・クラスノード」にし、地図の上で線をつなぐ | [docs/guide/user-code.md](docs/guide/user-code.md)、[docs/guide/wiring.md](docs/guide/wiring.md) |
+| テストや CI に組み込む | 画面で記録したシナリオを `ros2 run roshanavi scenario run <ファイル> --junit 結果.xml` で実行する。launch_pytest からも呼べる | [docs/design/scenarios.md](docs/design/scenarios.md)、[examples/launch_pytest/](examples/launch_pytest/) |
+| 別のマシンから見る | SSH のポート転送 (`ssh -L 6871:localhost:6871 …`) | [docs/guide/remote-ssh.md](docs/guide/remote-ssh.md) |
+
+## 計測の精度と限界
+
+### リソース監視とメモリリークの検出
 
 ノードごとの CPU・メモリを地図にバッジで出し、「リソース」タブで PC 全体 (CPU・メモリ・ディスク・ネットワーク・GPU) とプロセス一覧を見られます。roshanavi 自身のプロセスは「roshanavi 自身」という別枠に並びます。**監視できるのは roshanavi が動いている PC のプロセスだけです。**
 
@@ -60,21 +89,14 @@ MVP の対象はトピックのみです。**サービス・アクションへ�
 - **どのコードが漏らしているかは分かりません**。原因の特定は各言語のプロファイラ (Python の tracemalloc / memray、C++ の valgrind / heaptrack など) を使ってください。
 - 同じ PC のプロセスだけが対象です (他の PC や別コンテナのノードは見えません)。
 
-## 試す (Docker)
+### 性能 (規模と負荷の限界)
+中継パイプラインのサンプルで実測した、この PC (Docker・24 コア・ほかの処理も動いている共用機) での目安です。詳しい表と測り方は [docs/design/measurement.md](docs/design/measurement.md#規模と負荷の限界-51)。
 
-ホストに ROS は不要です。Docker と Docker Compose があれば動きます。
-
-```bash
-git clone https://github.com/shimejilib/roshanavi.git
-```
-
-```bash
-cd roshanavi && docker compose up -d --build lab demo
-```
-
-ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) と、rclpy の MultiThreadedExecutor が CPU を空回りする様子を確かめるデモ (busy_demo) も開けます。
-
-自分のワークスペースで使う手順は [docs/project/distribution.md](docs/project/distribution.md) を参照してください (ソースからのインストール。将来は apt で配布予定)。
+- **ノード数**: 80 ノード (128 トピック) まで、地図の更新は 1 秒周期のまま (フレームの遅れ p95 ≲ 100 ms)。200 ノード (360 トピック) では 1 フレームが約 1.5 MB になり、更新が 1.4〜1.6 秒おきに遅れ、server が 1 コアの 5〜7 割を使います。
+- **通信量**: C++ 計測ノードの CPU は流量に比例します。20 ノードで全トピック合計 約 1.6 万通/秒、または 1 MiB×30 Hz の 4 本の列 (約 500 MB/秒) で 1 コア近く。roshanavi の server は 20 ノードで 12% 以下、80 ノードで 26〜32%。
+- **先に詰まるのは ROS 側**: 20 ノードで 送信元 1 つあたり 300 Hz まで、メッセージ 1 MiB まで欠落なし。composable container (1 スレッド) は処理が重い段の合計が 1 コア分を超えると崩れます (`component_container_mt` で解消)。1 ノード 1 プロセスで 200 ノードは、この PC の Fast DDS では発見が成立せず動きませんでした (container なら動く)。
+- **画像・点群など重いトピックを計測に入れたとき** ([詳細](docs/design/measurement.md#重いデータの計測の限界-51)): probe の CPU は「毎秒の件数」と「毎秒の合計バイト数」の両方で決まり、**メッセージが約 85 KB より大きいとバイト数 (コピー) が、小さいと件数が効きます** (目安は 1 件あたり約 0.12 ms + 1 MB あたり約 1.4 ms)。**同じ PC で Fast DDS の共有メモリが使えれば**、1 トピック約 150 MB/秒 (1080p × 30 Hz、100 万点の点群 × 10 Hz) まで、計測を入れても計測される側の遅延は 1〜3 ms しか増えません。共有メモリが使えず UDP だけの構成では大きいメッセージの負担が約 2 倍になるので、目安は約 100 MB/秒まで。4K × 30 Hz (約 750 MB/秒) などはどちらでも壊れる (購読側が 2〜6 割取りこぼす) ので、計測を切るか詳細計測モードを使ってください。
+- **詳細計測モード (トレース)** を入れても取りこぼしは出ませんでした。server + トレースの CPU は 20 ノードで 23〜115%。
 
 ## ドキュメント
 

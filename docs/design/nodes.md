@@ -90,6 +90,70 @@
 
 起動: `ros2 launch roshanavi_examples busy_demo.launch.py [executor:=multi] [qos_events:=off] [work_ms:=5.0] [num_threads:=4] [rate_hz:=100.0]`、または `ros2 run roshanavi_examples busy_demo_driver` と `ros2 run roshanavi_examples executor_busy_demo --ros-args -p qos_events:=off`。
 
+## 中継パイプライン (source / relay / sink、#51)
+受け取って次に送る C++ のノードを、形 (直列・分岐・合流・格子) と規模 (3 段 / 20 ノード / 200 ノード以上) を指定してつなげるサンプルと生成器。「ノードが多いと地図・計測・リソース監視はどこまで持つか」を測る ([measurement.md#規模と負荷の限界](measurement.md#規模と負荷の限界-51)) のと、**別プロセスと composable container の両方で同じ構成を動かして** composable container の扱いを確かめる ([launcher.md#composable container の扱い](launcher.md#composable-container-の扱い-22)) のが目的。
+
+**メッセージ** (`roshanavi_examples_msgs`、公開。どのノードからも使ってよい)
+| 型 | 中身 |
+|---|---|
+| `roshanavi_examples_msgs/msg/Payload` | `std_msgs/Header header` (`stamp` = source が作った時刻、`frame_id` = source のノード名 = **経路**)、`uint32 seq` (source ごとの連番)、`uint8[] data` (中身は無意味、大きさだけが意味を持つ) |
+| `.../msg/SinkStats` | sink が `~/stats` に出す統計: `sink`、`window_sec`、`PathStats[] paths` |
+| `.../msg/PathStats` | 経路 (source) ごとの `received` / `lost` (連番の欠け) の累計、窓内の `rate_hz`、`latency_ms_mean` / `p50` / `p95` / `max` |
+
+**3 つのノード** (`roshanavi_examples`、C++/rclcpp。**composable node** (`roshanavi_examples::PipelineSource` / `PipelineRelay` / `PipelineSink`) としても、実行ファイル (`pipeline_source` / `pipeline_relay` / `pipeline_sink`) としても動く。トピック名は相対名で、リマップして使う。1 本目は `in` / `out`、2 本目以降は `in_1` / `out_1` …)
+
+| ノード | 役割 | パラメータ (実行中に変えられるのは ○) |
+|---|---|---|
+| `pipeline_source` | `rate_hz` で `Payload` を作って `out` (`out_1` …) に送る。`header.stamp` = いま、`frame_id` = 自分のノード名 | `rate_hz` (10) ○、`payload_bytes` (64) ○、`enabled` (true、false で一時停止) ○、`count` (0 = 止まらない)、`num_outputs` (1)、`fanout` (`all`)、`queue_depth` (10) |
+| `pipeline_relay` | `in` … の**どれかに**メッセージが来るたびに、間引き → 処理 → 送信 | `process_ms` (0) ○、`process_mode` (`busy` = CPU を使う / `sleep`) ○、`payload_bytes` (-1 = 入力の中身をそのまま、0 以上ならその大きさに切り詰め・ゼロ埋め) ○、`rate_limit_hz` (0 = 入力ごと。0 より大きいと、前に送ってから 1/Hz 経っていない入力は捨てる) ○、`keep_stamp` (true = 入力の `stamp` をそのまま / false = いまの時刻) ○、`drop_ratio` (0..1、確率で捨てる) ○、`num_inputs` / `num_outputs` (1)、`fanout` (`all` = 全部の出力へ / `round_robin` = 1 通ごとに順番に 1 本へ)、`seed` (0 = ノード名から)、`queue_depth`、`log_period_s` (0) |
+| `pipeline_sink` | 受けて「いま − `stamp`」を測る。経路 (`frame_id`) ごとに窓 (`window_s`、5 秒) の統計を `~/stats` に出し、`log_period_s` ごとにログにも 1 行出す | `num_inputs` (1)、`window_s` (5)、`stats_period_s` (1、0 で出さない)、`log_period_s` (5)、`max_samples` (50000)、`queue_depth` |
+
+- `header.frame_id` と `seq` はどの relay も入力から引き継ぐ。sink はそれで経路を分け、連番の欠けを `lost` として数える。**`lost` が意味を持つのは経路がほかと混ざらないとき** (直列・分岐・合流・まっすぐな格子)。`fanout: round_robin` を通ると 1 つの source の連番が複数の出口に分かれて飛び飛びになるので、`lost` は見かけ上増える。その場合の欠落率は下の「期待値」との比で出す。
+- 遅延は `keep_stamp: true` の relay だけを通ると source からの **端から端まで**になる。`false` の relay では、そこで時計を 0 に戻す (その段の「入ってから出るまで」を sink で見たいとき)。
+- 範囲外の値は `ros2 param set` が理由付きで拒否する (`drop_ratio must be between 0 and 1` など)。起動時の値が不正 (`fanout` が `all` / `round_robin` 以外、個数が 1 未満) ならノードは起動せずエラーで終わる。
+- 数値のパラメータは整数 (`-p process_ms:=5`) でも小数 (`5.0`) でも受け付ける (動的型付け)。
+- 純粋なロジック (`RelayGate` = 間引き、`make_payload`、`FanoutSelector`、`SeqTracker`、`LatencyWindow`) は `include/roshanavi_examples/pipeline_logic.hpp` にあり、ROS なしの gtest (`test/test_pipeline_logic.cpp`) で確かめる。ノードの振る舞いは実プロセスの pytest (`test_pipeline_nodes_ros.py`)。
+- 詳細計測モードでは relay・sink ともコールバックの回数と処理時間が測れる (C++)。
+
+**重いデータの送受信** (`heavy_source` / `heavy_sink`、同じ `roshanavi_examples` の C++。composable としても動く。[measurement.md#重いデータの計測の限界](measurement.md#重いデータの計測の限界-51) の測定用): `heavy_source` は `out` に `sensor_msgs/Image` (rgb8、`width` × `height`) または `PointCloud2` (x y z intensity の float32、`points` 点) を `rate_hz` で送る (`kind: image | pointcloud`、`qos: best_effort | reliable`、`depth`)。`header.stamp` = いま、`frame_id` = 連番。`heavy_sink` は `in` を同じ QoS で受けて遅延と連番の欠けを測り、`~/stats` (`SinkStats`、経路名 `heavy`) に出す。データには触らないので、受信側の負担はほぼ無い。
+
+**生成器** `scripts/gen_pipeline.py` (標準ライブラリだけの Python。生成時に ROS を import しない。中身は `roshanavi_examples/pipeline_gen.py`)
+
+```
+scripts/gen_pipeline.py --preset medium                    # examples/pipeline_medium/ に書く
+scripts/gen_pipeline.py --all                              # 3 つのプリセット
+scripts/gen_pipeline.py --shape fanout --stages 5 --width 3 --rate 50 --process-ms 2 --out /tmp/p
+```
+
+| 形 (`--shape`) | つながり | ノード数 |
+|---|---|---|
+| `chain` | src → relay × (stages-2) → sink | stages |
+| `fanout` | src → 中継 (`num_outputs` = width、全部へ送る) → width 本の列 (relay × (stages-3) → sink) | 2 + width × (stages-2) |
+| `fanin` | width 本の列 (src → relay × (stages-3)) → 合流する relay (`num_inputs` = width) → sink | width × (stages-2) + 2 |
+| `grid` | stages 段 × width 列。0 段目は src、最後の段は sink、間は relay。`--links mesh` (既定) は各ノードが同じ列と隣の列へ 1 通ごとに交互に送り (`round_robin`)、上流の 2 つから受ける (どの列のノードも流量は変わらない)。`straight` は独立した列 | stages × width |
+
+| プリセット | 形 | ノード数 |
+|---|---|---|
+| `small` | `chain` 3 段 | 3 |
+| `medium` | `grid` 5 段 × 4 列 | 20 (src 4・relay 12・sink 4、トピック 32) |
+| `large` | `grid` 10 段 × 20 列 | 200 (src 20・relay 160・sink 20、トピック 360) |
+
+主なオプション: `--rate` (source ごとの Hz)、`--payload-bytes`、`--process-ms` / `--process-mode`、`--relay-payload-bytes`、`--rate-limit`、`--drop-ratio`、`--no-keep-stamp`、`--mode process|container` (launch ファイルの既定)、`--containers N`、`--container-type st|mt`、`--intra-process`、`--topic-prefix` (既定 `/pipe`)、`--out`。値が不正なら理由を出して終わる (終了コード 2)。
+
+**出力** (`examples/pipeline_<preset>/`。コミットしてあり、テスト `test_committed_examples_are_up_to_date` が生成器の出力と一致していることを確かめる)
+| ファイル | 内容 |
+|---|---|
+| `pipeline.json` | 形・ノード (種類・段・列・パラメータ・リマップ)・トピック (送信ノード・受信ノード・期待される Hz)・**期待値** (`expected.sink_hz` = 何も詰まらないとき各 sink が受けるはずの毎秒の数) |
+| `pipeline.launch.py` | `pipeline.json` を隣から読んで起動する launch ファイル。`ros2 launch .../pipeline.launch.py mode:=process` (1 ノード 1 プロセス) / `mode:=container` (`ComposableNodeContainer` に全ノード)。ほかの引数: `containers` (コンテナの数、ノードは段の順に等分)、`container_type` (`st` = `component_container`、`mt` = `component_container_mt`)、`intra_process` (`use_intra_process_comms`) |
+| `roshanavi.yaml` | roshanavi のプロジェクト (1 ノード 1 プロセス)。ノードが 60 以下なら 1 ノード 1 つの `kind: run` (リマップ・パラメータ付き。relay は `role: mine`)、それより多いと (プロジェクトの起動設定は 100 まで) `kind: launch` 1 つ |
+| `roshanavi_container.yaml` | 同じ構成を composable container で動かすプロジェクト (`kind: launch` 1 つ、`mode:=container`) |
+
+インストールされる `launch/pipeline.launch.py` (`ros2 launch roshanavi_examples pipeline.launch.py spec:=<pipeline.json> mode:=...`) を roshanavi の起動設定 (`package` + `launch_file`) が使う。`pipeline.json` のパスは roshanavi から見えるパスで書く (Docker では `/examples/pipeline_<preset>/pipeline.json`)。
+
+**期待値** (`pipeline_gen._propagate`): source は `rate_hz`、relay は「入力の合計 × (1 - drop_ratio)」を `rate_limit_hz` で頭打ちにし、`round_robin` なら出口の数で割る。sink は入力の合計。測定 ([measurement.md#規模と負荷の限界](measurement.md#規模と負荷の限界-51)) の**欠落率 = 1 - (sink が受けた毎秒の数の合計 / 期待値)**。
+
+**使う**: ⚙ のプロジェクト切り替えから `pipeline_medium` を開くと 20 ノードが起動し、地図に格子が出る (エッジの Hz は各トピック 5 Hz = 10 Hz の送信元を 2 つの出口に交互に送るため)。composable container で動かすには `roshanavi_container.yaml` を `/data/roshanavi.yaml` に置くか、起動設定に `roshanavi_examples` の `pipeline.launch.py` を `spec:=…` `mode:=container` で追加する。
+
 ## データの種類 (ROS のメッセージ型を意識させない、P5.5)
 **課題**: 入力ノード・変換ノードなどの型選択が、ROS のメッセージ型の名前順の一覧だった。ROS を知らない人はメッセージ型を意識しないし、選べない。
 

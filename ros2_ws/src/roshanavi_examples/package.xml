@@ -3,13 +3,15 @@
 <package format="3">
   <name>roshanavi_examples</name>
   <version>0.1.0</version>
-  <description>Sample nodes for roshanavi tutorials, demos and tests: image_filter and blob_detector (C++), audio_level, state_machine and executor_busy_demo (Python)</description>
+  <description>Sample nodes for roshanavi tutorials, demos and tests: image_filter and blob_detector (C++), audio_level, state_machine and executor_busy_demo (Python); the relay pipeline sample pipeline_source / pipeline_relay / pipeline_sink (C++, composable and standalone) with its launch builder</description>
   <maintainer email="yuya.aoki.0928@gmail.com">aoki</maintainer>
   <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
   <buildtool_depend>ament_cmake_python</buildtool_depend>
   <depend>rclcpp</depend>
+  <depend>rclcpp_components</depend>
+  <depend>roshanavi_examples_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
   <depend>vision_msgs</depend>
