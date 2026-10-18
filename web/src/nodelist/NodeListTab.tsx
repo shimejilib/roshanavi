@@ -8,6 +8,7 @@ import { allState, DEFAULT_FILTER, externalCount, filterRows, pruneSelection, se
 import { NodeListToolbar } from './NodeListToolbar';
 import { NodeTable } from './NodeTable';
 import { useBulkAction } from './useBulkAction';
+import { useRemoveAction } from './useRemoveAction';
 import { useNodeList } from './useNodeList';
 
 export function NodeListTab({ active }: { active: boolean }) {
@@ -16,6 +17,7 @@ export function NodeListTab({ active }: { active: boolean }) {
   const [filter, setFilter] = useState<RowFilter>(DEFAULT_FILTER);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const bulk = useBulkAction(reload);
+  const remove = useRemoveAction(reload);
   const rows = useMemo(() => data?.rows ?? [], [data]);
   const visible = useMemo(() => filterRows(rows, filter), [rows, filter]);
   const sections = useMemo(() => sectionRows(visible, data?.groups ?? []), [visible, data]);
@@ -30,10 +32,11 @@ export function NodeListTab({ active }: { active: boolean }) {
         filter={filter}
         onFilter={setFilter}
         selectedCount={chosen.length}
-        busy={bulk.busy}
+        busy={bulk.busy || remove.busy}
         onAction={(action) => data && bulk.request(action, data, selected)}
         onClear={() => setSelected(new Set())}
         onImport={openImport}
+        onDelete={() => data && remove.request(data, selected)}
       />
       <p className="muted small node-list-intro">{t('nodes.intro')}</p>
       {externals > 0 && (
@@ -47,6 +50,14 @@ export function NodeListTab({ active }: { active: boolean }) {
         <p className={bulk.message.kind === 'ok' ? 'ok-box' : 'error-box'} role="status" data-testid="nodes-bulk-message">
           {bulk.message.text}
         </p>
+      )}
+      {remove.message && (
+        <div className={`${remove.message.kind === 'ok' ? 'ok-box' : 'error-box'} undo-bar`} role="status" data-testid="nodes-delete-message">
+          <span>{remove.message.text}</span>
+          {remove.undoable && (
+            <button type="button" onClick={remove.undo} data-testid="nodes-undo-delete">{t('nodes.delete.undo')}</button>
+          )}
+        </div>
       )}
       <div className="table-wrap">
         {!data && !error && <p className="muted">{t('common.loading')}</p>}
@@ -63,6 +74,15 @@ export function NodeListTab({ active }: { active: boolean }) {
           />
         )}
       </div>
+      {remove.pending && (
+        <ConfirmDialog
+          title={t('nodes.confirm.delete')}
+          text={remove.pending.text}
+          okLabel={t('nodes.confirmOk.delete')}
+          onOk={remove.confirm}
+          onCancel={remove.cancel}
+        />
+      )}
       {bulk.pending && (
         <ConfirmDialog
           title={t(`nodes.confirm.${bulk.pending.plan.action}`)}

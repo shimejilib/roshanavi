@@ -78,7 +78,7 @@ function parseEnvelope(body: unknown, status: number): ApiError {
   return new ApiError(status === 404 ? 'not_found' : 'unknown', `HTTP ${status}`, status);
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
   let resp: Response;
   try {
     resp = await fetch(path, {

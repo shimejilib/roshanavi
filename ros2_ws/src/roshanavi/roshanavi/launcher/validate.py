@@ -8,7 +8,7 @@ so free-form values must not be able to smuggle options in.
 
 import os
 import re
-from typing import Iterable, List, Mapping, Optional, Sequence, Sized, Tuple
+from typing import Dict, Iterable, List, Mapping, Optional, Sequence, Sized, Tuple
 
 from rclpy.exceptions import (InvalidNamespaceException, InvalidNodeNameException,
                               InvalidTopicNameException)
@@ -134,6 +134,46 @@ def launch_args(values: Mapping[str, str]) -> List[Tuple[str, str]]:
             raise LauncherError('invalid_arg', f'invalid launch argument name: {name!r}')
         result.append((name, _check_value(f'args.{name}', value)))
     return sorted(result)
+
+
+ENV_NAME_RE = re.compile(r'^[A-Za-z_][A-Za-z0-9_]{0,127}$')
+# Names a target's ``env`` may not set: they decide which code / libraries a process loads
+# (a file uploaded to the data dir must never run) or are set by roshanavi itself.
+ENV_BLOCKED_PREFIXES = ('LD_', 'DYLD_', 'PYTHON', 'ROSHANAVI_')
+ENV_BLOCKED_NAMES = ('PATH', 'AMENT_PREFIX_PATH', 'COLCON_PREFIX_PATH', 'CMAKE_PREFIX_PATH',
+                     'ROS_PACKAGE_PATH', 'RCUTILS_COLORIZED_OUTPUT',
+                     'RCUTILS_LOGGING_BUFFERED_STREAM', 'HOME', 'SHELL', 'BASH_ENV', 'ENV')
+
+
+def env_blocked(name: str) -> bool:
+    return name in ENV_BLOCKED_NAMES or name.startswith(ENV_BLOCKED_PREFIXES)
+
+
+def env_split(values: Mapping[str, str]) -> Tuple[Dict[str, str], List[str]]:
+    """(allowed, blocked names) of environment variables carried over from a launch file."""
+    allowed: Dict[str, str] = {}
+    blocked: List[str] = []
+    for name, value in values.items():
+        if (not isinstance(name, str) or not ENV_NAME_RE.match(name) or env_blocked(name)
+                or not isinstance(value, str) or len(value) > MAX_VALUE_LEN
+                or CONTROL_RE.search(value)):
+            blocked.append(str(name)[:128])
+        elif len(allowed) < MAX_ITEMS:
+            allowed[name] = value
+    return allowed, blocked
+
+
+def env_vars(values: Mapping[str, str]) -> Dict[str, str]:
+    """A target's ``env``: identifier names (not the blocked ones), plain string values."""
+    _check_count('env', list(values))
+    for name, value in values.items():
+        if not isinstance(name, str) or not ENV_NAME_RE.match(name):
+            raise LauncherError('invalid_env', f'invalid environment variable name: {name!r}')
+        if env_blocked(name):
+            raise LauncherError('invalid_env', f'environment variable {name} cannot be set for a '
+                                'target (it decides which code is loaded, or roshanavi sets it)')
+        _check_value(f'env.{name}', value)
+    return dict(values)
 
 
 def run_args(values: Iterable[str]) -> List[str]:

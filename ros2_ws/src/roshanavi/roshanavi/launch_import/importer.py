@@ -80,6 +80,10 @@ class LaunchImporter:
         self._lock = threading.Lock()
         self._previews: 'OrderedDict[str, Tuple[float, Dict[str, Any]]]' = OrderedDict()
 
+    @property
+    def launcher(self) -> Launcher:
+        return self._launcher
+
     # ---- source ------------------------------------------------------------
     def resolve(self, source: Source) -> Tuple[str, str, Optional[Dict[str, Any]]]:
         """(file path, origin label, whole-launch target spec or None)."""
@@ -109,6 +113,8 @@ class LaunchImporter:
         except LauncherError as exc:
             return exc.code, str(exc)
         return None
+
+    validate_spec = _validate
 
     def evaluate(self, path: str, args: Dict[str, str]) -> Dict[str, Any]:
         workspace = self._launcher.workspace
@@ -158,6 +164,8 @@ class LaunchImporter:
         except OSError as exc:
             raise LauncherError('save_failed', f'cannot write {path}: {exc}', 500) from exc
         return path
+
+    write_params = _write_params
 
     def _import_node(self, node: Dict[str, Any], role: str, autostart: bool) -> Dict[str, Any]:
         spec = dict(node['spec'], role=role, autostart=autostart)

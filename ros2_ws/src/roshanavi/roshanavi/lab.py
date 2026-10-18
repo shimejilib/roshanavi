@@ -18,8 +18,10 @@ from .echo import EchoManager
 from .fd_guard import FdGuard
 from .injector import Injector
 from .launch_import.importer import LaunchImporter
+from .launch_import.takeover import TakeoverService
 from .launcher.catalog import ProjectCatalog
 from .launcher.service import Launcher
+from .launcher.trash import Trash
 from .media.diskguard import DiskGuard, DiskThresholds
 from .media.recorder import Recorder
 from .media.viewer import MediaViewer
@@ -58,18 +60,23 @@ class Lab:
                  disk_thresholds: DiskThresholds = DiskThresholds(), probe: str = PROBE_OFF,
                  tracing: str = TRACING_OFF, trace_buffer_per_cpu: int = DEFAULT_RT_PER_CPU,
                  examples_dir: Optional[str] = None, generate_samples: bool = False,
-                 resources: bool = True, reverse_dns: bool = True):
+                 resources: bool = True, reverse_dns: bool = True,
+                 use_remembered_project: bool = True, takeover_poll_sec: float = 2.0):
         self.data_dir = data_dir
         self.examples_dir = examples_dir
         self._generate_samples = generate_samples
         self.catalog = ProjectCatalog(data_dir, examples_dir)
-        remembered = self.catalog.remembered_path()  # the last project the user switched to
+        # The last project the user switched to; --launch always works on --project instead.
+        remembered = self.catalog.remembered_path() if use_remembered_project else None
         if remembered:
             LOG.info('starting on the remembered project %s', remembered)
         self.launcher = Launcher(workspace or os.getcwd(), data_dir,
                                  project_path=remembered or project_path,
                                  autostart=autostart, timeouts=stop_timeouts)
         self.importer = LaunchImporter(self.launcher, data_dir)
+        self.trash = Trash(self.launcher)
+        self.takeover = TakeoverService(self.importer, data_dir, poll_sec=takeover_poll_sec,
+                                        autostart=autostart)
         self.runtime = RosRuntime(node_name)
         self.graph = graph.GraphMonitor(show_self=show_self)
         self.launcher.manager.topic_types = lambda topic: self.graph.raw().topics.get(topic, [])
@@ -173,6 +180,7 @@ class Lab:
     def stop(self) -> None:
         self.resources.close()  # idempotent; only reads, so it can go first
         self.scenarios.close()  # cancel a running scenario first: its teardown uses the rest
+        self.takeover.close()  # no re-import while the targets stop
         self.launcher.close()  # idempotent; child processes go first
         self.tracing.close()  # idempotent; the worker destroys its LTTng sessions
         self.recorder.close()  # SIGINT so the bag is finalized

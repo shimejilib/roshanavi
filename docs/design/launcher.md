@@ -18,7 +18,15 @@
 - 状態: `stopped` / `starting` (起動後 2 秒。ただしノードが地図に対応づいた時点で、2 秒未満でも `running` にする。一覧 API `launcher.targets()` で合わせる) / `running` / `exited` (自分で 0 終了) / `crashed` (自分で非 0 終了) / `invalid` (設定が検証を通らない。例: パッケージが消えた)。稼働時間、再起動回数、`pending_restart` (実行中に設定を変えた) を返す。世代番号で、古いプロセスの終了通知が新しいプロセスの状態を上書きしないようにする。
 - 自動再起動 (`auto_restart`、既定 off): `crashed` のとき 1, 2, 4 … 最大 30 秒のバックオフで再起動する。30 秒以上動いたら間隔を戻す。ユーザーが止めたら再起動しない。
 - ログ: stdout / stderr を行単位で読み、`stream` タグ付きでターゲットごとのリングバッファ (5000 行) に入れる。起動コマンドと終了コードは `system` 行として残す。子プロセスの環境に `PYTHONUNBUFFERED=1`, `RCUTILS_LOGGING_BUFFERED_STREAM=0`, `RCUTILS_COLORIZED_OUTPUT=0` を入れ、遅延と色コードをなくす。
-- サーバー終了時に全ターゲットを並列に停止する。uvicorn の SIGINT/SIGTERM 処理の後の `finally`、SIGHUP → SIGTERM への読み替え、`atexit` の 3 経路で呼ぶ (冪等)。サーバー自身が SIGKILL された場合だけは子が残る (制約)。
+- サーバー終了時に全ターゲットを並列に停止する。uvicorn の SIGINT/SIGTERM 処理の後の `finally`、SIGHUP → SIGTERM への読み替え、`atexit` の 3 経路で呼ぶ (冪等)。サーバー自身が SIGKILL された場合は次の「子プロセスの後始末」。
+- `env` (`kind: run`): サーバーの環境に足す環境変数 (launch ファイルの引き取りで引き継いだもの。読み込むコードを左右する名前は拒否、[security.md](security.md))。roshanavi のログ設定 (`PYTHONUNBUFFERED` など) は上書きできない。
+
+**子プロセスの後始末 (#12)** — サーバーが強制終了 (`kill -9`、メモリ不足) されたときに、起動したノードが残らないようにする仕組みと、残ったときの片付け方。
+- **直接の子**: Linux では起動時に `PR_SET_PDEATHSIG` (SIGTERM) を付ける (`process.spawn`、`preexec_fn`。`prctl` は fork の前に一度だけ探す。fork と prctl の間に親が死んでいたら自分に SIGTERM)。このシグナルはカーネルが「起動した **スレッド** の終了」で送るため、要求を処理するスレッド (anyio のスレッドは暇になると終わる)・自動起動のスレッド・自動再起動のタイマーから fork すると、元気な子が後で殺される。そこで子プロセスはすべて、サーバーが生きている間ずっと残る専用のスレッド (`roshanavi-spawn`) から起動する。
+- **孫は対象外**: `ros2 run` / `ros2 launch` はノードを自分の子として起動するので、SIGKILL のあと `ros2 run` は止まってもノード本体 (孫) は残る (PR_SET_PDEATHSIG は子に受け継がれない)。そこで **記録** する: 起動したプロセスと子孫のすべてを、起動時刻・コマンドラインのハッシュ付きで `<data_dir>/run/procs-<サーバーの pid>.json` に書く (`proc_record.py`。1 秒ごとの見回りで、変わったときだけ原子的に書き換える。何も動いていなければファイルを消し、通常の終了でも消す。コンテナで前回と同じ pid になったときは前回のファイルを `procs-<pid>.prev-<時刻>.json` に退避)。
+- **片付け**: 次に起動したとき、記録したサーバーがもう動いていないファイルのうち、**起動時刻とコマンドラインが今も一致するプロセス** (と、その後に生まれた子孫) を「残ったプロセス」とし、画面のバナー「前回の roshanavi が起動したノードが残っています (N 個)。止めますか?」(`GET /api/leftovers`、`POST /api/leftovers/stop`) で止める。同じ処理をコマンドでも行える: `ros2 run roshanavi cleanup [--data-dir DIR] [--dry-run]`。止め方はプロセスグループごとに SIGINT → 4 秒 → SIGTERM → 2 秒 → SIGKILL。記録に無いプロセス・一致しないプロセスには何もしない。
+- **Docker**: コンテナの中で roshanavi が強制終了されたら、`docker restart <コンテナ>` がいちばん確実 (コンテナの中のすべてが止まる)。compose の `init: true` (tini) の下では、サーバーが死ぬとコンテナごと終わる。
+- **残る制約**: (1) 記録は 1 秒ごとなので、起動した直後 (1 秒未満) に強制終了されると孫が記録に間に合わないことがある (直接の子は PR_SET_PDEATHSIG で止まる)。(2) 自分で `setsid` / 二重 fork して親から離れたプロセスは、記録の後に生まれたものは見つけられない (記録済みのプロセスの子孫としてたどれる範囲だけ)。(3) Linux 以外では PR_SET_PDEATHSIG が無い (記録と片付けは動く)。(4) ビルド (`colcon`) やシナリオのセットアップのプロセスは記録しない (直接の子は PR_SET_PDEATHSIG で止まる)。(5) 片付けは自動では行わない (利用者が確かめてから止める)。
 
 **入力の検証 (`validate.py` / `command.py`)** — 値はすべて argv の 1 要素として渡すが、`ros2 run` / `ros2 launch` / rcl 自身が解釈する argv (`--prefix`, `--ros-args`, `--params-file`, `__node:=` …) を利用者の値に紛れ込ませないため、厳しく検査する。
 - package / executable / launch file は正規表現 (先頭 `-` 不可、`..` 不可) に加え、**走査結果に存在すること**。
@@ -106,6 +114,7 @@ watch_topics: [/chat]
 - **自動保存 (P4.5a)**: Launcher facade 経由の追加・更新・削除・常駐化はすぐにファイルへ保存する (`Launcher.add/update/remove`、UI の保存ボタンと「未保存」表示は廃止。読み直しは設定メニュー)。保存の失敗は例外にせず `save_error` で返す。**読み込みに失敗したファイルは自動では上書きしない** (`autosave: false`。読み直しか明示的な保存 `POST /api/project/save` で解除)。
 - **テンプレート (P4.5a)**: `--project-template PATH` (または `$ROSHANAVI_PROJECT_TEMPLATE`) を付けると、プロジェクトファイルが **無いときだけ** それをコピーしてから読み込む (`bootstrap_project`。`O_EXCL` で作成し既存は上書きしない。壊れたテンプレートはコピーせずログに出す)。パッケージが見つからないなど検証を通らないターゲットも、`invalid` 状態で一覧に残す (古いプロジェクトでも開ける)。
 - `autostart: true` のターゲットとダミーはサーバー起動時に起動する (`--no-autostart` で無効)。
+- **launch の引き取り** (`takeover:` と、ターゲットの `takeover: true`): [integration.md](integration.md)。`takeover: {package, launch_file, args: ["name:=value"], mode: node|whole}` は「どの launch ファイルを引き取ったか」だけを残す。
 
 - **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。切り替えに成功すると (読み込みエラーが無いとき) 開いた一覧の `id` を `<data_dir>/last_project.json` (`{"id": ...}`) に書き、**サーバーを再起動するとそのプロジェクトで始まる** (#9)。起動時は保存された `id` を現在の一覧と照らして検証し (一覧に無い・ファイルが消えた・JSON が壊れている・型が違うときは無視して警告だけ出す)、通らなければ `--project` のファイルで始める。保存に失敗しても切り替え自体は成功する (ログに警告)。
 
@@ -162,7 +171,9 @@ watch_topics: [/chat]
 **パラメータ** (`params_merge.py`, 純関数): launch_ros と同じ順 (SetParameter などのグローバル → ノード自身の dict / `Parameter` / パラメータファイルの順、後勝ち) に 1 つにまとめる。パラメータファイルは rcl の YAML の規則 (入れ子・絶対・相対のノードパス、`*` と `**` のワイルドカード。ワイルドカードの項目を先に、ノード名の項目を後に適用) で、そのノードに当たる値だけを取り出す。ファイルの中身は子プロセスが読んで (1 MB まで) JSON で返す (サーバーは launch ファイルが指すパスを開かない)。ノード名が無い Node は `/**` の項目だけ (警告)。まとめた値のうち、名前が識別子で値が bool / 整数 / 小数 / 4096 文字までの文字列のものは `params` (UI で編集できる)、それ以外 (配列・入れ子) は取り込み時に `<data_dir>/imported_params/<id>.yaml` (`/**: ros__parameters:`) に書き、`params_file` で渡す。キーは重ならないので `-p` とファイルの順序に依存しない。
 
 **プレビューと取り込み**: プレビューの段階で各案をランチャーと同じ検査 (`manager.validate`: パッケージ・実行ファイルの存在、名前、引数の規則) にかけ、通らないものは理由付きで「取り込めない」。同じ package / executable / name / namespace の起動設定がすでにあれば「重複」として既定で選ばない。案はサーバーに 30 分 (最大 16 個) 保存し、`preview_id` で取り込む (クライアントからパラメータファイルの中身を受け取らない)。ID はノード名 (なければ実行ファイル名) から重複を避けて作る。取り込んだものは停止状態・autostart なしで起動リストに入り、自動保存される。`TargetSpec.imported_from` (情報用) に取り込み元 (`pkg/file` かワークスペースからの相対パス) を残す。
+- **launch ファイルごと引き取る** (`--launch`): この分解を使って起動まで自動で行い、launch ファイルの変更を検出して取り込み直す。[integration.md](integration.md)。分解の結果には、`respawn` / `respawn_delay` / `on_exit=Shutdown` (required) / ノードに届く環境変数 (`env`) / 読み込んだ launch ファイルの一覧 (`files`) / 条件を評価したか (`conditions_evaluated`) も入る。ノードごとの取り込みでは `respawn` を `auto_restart` に、環境変数を `env` に引き継ぐ (`carried` / `lost`)。
 - デモ: `roshanavi/demo_system.launch.py` (talker / listener を名前空間・リマップ・パラメータ付きで起動し、最後に「分解できない部分」の例として ExecuteProcess)。
 
 ## ノード一覧の集約 (P4.5b)
 - **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
+- **削除と「元に戻す」** (`launcher/trash.py`, `POST /api/registry/delete` / `undo`): ノード一覧で選んだ roshanavi の登録 (起動リスト・取り込んだもの・入力・変換・関数・クラスノード) をまとめて外す。知らない ID が 1 つでもあれば何も変えない (404)。外すときに動いているものは止め、仕様 (spec) と「動いていたか」を 15 秒 (UI は 10 秒) まで最大 8 回分覚えておき、`undo` で登録し直して (検証を通らなくなっていても `invalid` で残す) 動いていたものを起動する。ソースコード・パッケージ・取り込んだパラメータファイル・録画には触らない。

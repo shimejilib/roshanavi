@@ -36,6 +36,8 @@ setup(
     entry_points={
         'console_scripts': [
             'server = roshanavi.main:main',
+            'app = roshanavi.main:main',
+            'cleanup = roshanavi.cleanup:main',
             'dummy = roshanavi.dummy_node:main',
             'transform = roshanavi.transform_node:main',
             'function = roshanavi.function_node:main',

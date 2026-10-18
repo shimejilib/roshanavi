@@ -52,6 +52,7 @@ class WalkResult:
     blocked: List[Dict[str, Any]] = field(default_factory=list)
     skipped: List[Dict[str, Any]] = field(default_factory=list)
     warnings: List[Dict[str, Any]] = field(default_factory=list)
+    files: List[str] = field(default_factory=list)  # every launch file read (main + includes)
     visited: int = 0
 
     def warn(self, code: str, detail: str = '') -> None:
@@ -60,7 +61,11 @@ class WalkResult:
 
     def to_dict(self) -> Dict[str, Any]:
         return {'nodes': self.nodes, 'blocked': self.blocked, 'skipped': self.skipped,
-                'warnings': self.warnings}
+                'warnings': self.warnings, 'files': self.files}
+
+    def add_file(self, path: Optional[str]) -> None:
+        if path and path not in self.files:
+            self.files.append(path)
 
 
 def classify(entity: Any) -> str:
@@ -95,6 +100,7 @@ def _condition_holds(entity: Any, context: Any, result: WalkResult) -> Optional[
     condition = getattr(entity, 'condition', None)
     if condition is None:
         return True
+    result.warn('conditions_evaluated')  # decided now, with the arguments of this evaluation
     try:
         return bool(condition.evaluate(context))
     except Exception as exc:  # unresolved substitution in the condition
@@ -133,7 +139,7 @@ def _visit(entity: Any, context: Any, result: WalkResult, depth: int) -> None:
     if isinstance(entity, la.OpaqueFunction):
         result.warn('opaque_function_ran', describe(entity, context))
     if isinstance(entity, ENV_ACTIONS):
-        result.warn('env_not_imported')
+        result.warn('env_actions')  # carried over to each node (plan: env)
     try:
         children = entity.visit(context) or []
     except Exception as exc:  # broken include, missing argument, bad substitution ...
@@ -141,6 +147,8 @@ def _visit(entity: Any, context: Any, result: WalkResult, depth: int) -> None:
             else 'evaluation_failed'
         _report(result, 'blocked', entity, context, code, f'{type(exc).__name__}: {exc}')
         return
+    if isinstance(entity, la.IncludeLaunchDescription):
+        result.add_file(current_file(context))  # the include just set it in these locals
     for child in children:
         context._push_locals()  # same scoping as LaunchService
         try:

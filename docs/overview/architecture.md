@@ -62,7 +62,11 @@ roshanavi/
                        #   viewer / recorder / diskguard / camera_info / imaging / options / factory
       server_media.py  # メディア型の判定・ブラウザ入力・ビューア・録画の REST + WS
       launcher/        # docs/design/launcher.md: discovery / validate / command / process / target / manager /
-                       #   build / env / schema / project / dummy_config / service
+                       #   build / env / schema / project / dummy_config / service / proc_record (#12) / trash (削除)
+      launch_import/   # launch の分解取り込み (サンドボックスの子) と引き取り takeover / takeover_plan / skip
+                       #   (docs/design/integration.md)。../launch/takeover_rest.launch.py が「残りの部分」
+      server_takeover.py # 引き取り・残ったプロセス・削除と元に戻すの REST
+      cleanup.py       # エントリ: `ros2 run roshanavi cleanup` (強制終了で残ったノードを止める)
       process_map.py   # ノード ⇄ プロセス対応づけ (再利用可能。リソース監視でも使う)
       resources/       # リソース監視 Lv1: 1 Hz のサンプラー、対応づけ、リーク判定、接続先、GPU (docs/design/resources.md)
       dummy_node.py    # エントリ: `ros2 run roshanavi dummy --config <yaml>` (恒久ダミーノード)

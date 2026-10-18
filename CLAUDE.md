@@ -30,6 +30,7 @@ User-facing replies are in **Japanese**, plain language, no unexplained jargon (
 ## How work is organized
 - The main session designs, writes briefs, audits diffs, and reports to the user. Implementation goes to subagents (`Agent` tool) with an explicit model: `sonnet` for normal/medium work, `opus` for heavy design-level implementation, `haiku` for mechanical edits. Main implements directly only when a subagent failed twice or the change is very subtle.
 - Run heavy subagents **one at a time** (max 2 if urgent). Ask them to be token-efficient: grep first, then read limited ranges.
+- Parallel work in a git worktree: the worktree is created from the **remote** default branch, not local `main`. Tell the subagent to `git rebase main` (local) first, or push before starting it. Give it its own `ROSHANAVI_IMAGE`, `COMPOSE_PROJECT_NAME`, `ROS_DOMAIN_ID` and `E2E_ROS_DOMAIN_ID` before any docker command, and forbid touching `lab`/`demo`/`./data`. Pick tasks whose files barely overlap; put new UI strings in a new i18n file.
 - Always audit a subagent's result before accepting it: reproduce the test summary, read the security-relevant parts of the diff, look at screenshots for UI work. Report problems found in the audit honestly.
 - Do not inject new scope into a running subagent unless it touches the same files; queue it for the next phase.
 

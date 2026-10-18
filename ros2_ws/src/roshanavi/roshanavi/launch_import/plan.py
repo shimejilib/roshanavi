@@ -10,6 +10,7 @@ importable. The child's JSON is treated as untrusted shape-wise (pydantic).
 
 from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Tuple
 
+from ..launcher import validate as validate_env
 from ..launcher.errors import LauncherError
 from ..launcher.service import id_from_name
 from ..pydantic_compat import CompatModel, Field, ValidationError
@@ -33,6 +34,10 @@ class ChildNode(_Loose):
     lifecycle: bool = False
     file: Optional[str] = None
     warnings: List[str] = Field(default_factory=list)
+    env: Dict[str, str] = Field(default_factory=dict)
+    required: bool = False
+    respawn: bool = False
+    respawn_delay: Optional[float] = None
 
 
 class ChildEntity(_Loose):
@@ -52,6 +57,7 @@ class ChildResult(_Loose):
     blocked: List[ChildEntity] = Field(default_factory=list, max_items=1000)
     skipped: List[ChildEntity] = Field(default_factory=list, max_items=1000)
     warnings: List[Dict[str, Any]] = Field(default_factory=list)
+    files: List[str] = Field(default_factory=list, max_items=1000)
 
 
 def parse_result(payload: Mapping[str, Any]) -> ChildResult:
@@ -74,6 +80,33 @@ def _same_node(spec: Mapping[str, Any], target: Mapping[str, Any]) -> bool:
     return target.get('kind') == 'run' and all(spec.get(k) == other.get(k) for k in keys)
 
 
+def carry_over(node: ChildNode) -> Tuple[Dict[str, Any], List[Dict[str, Any]],
+                                         List[Dict[str, Any]]]:
+    """(spec fields, carried, lost): what of the launch-only behaviour a per-node target keeps.
+
+    respawn -> auto_restart (roshanavi's back-off, not respawn_delay); environment variables
+    the launch set -> ``env`` (names roshanavi must control are left out); a required node
+    (on_exit=Shutdown) cannot be reproduced.
+    """
+    fields: Dict[str, Any] = {}
+    carried: List[Dict[str, Any]] = []
+    lost: List[Dict[str, Any]] = []
+    if node.respawn:
+        fields['auto_restart'] = True
+        carried.append({'code': 'respawn', 'detail': ''})
+        if node.respawn_delay:
+            lost.append({'code': 'respawn_delay', 'detail': f'{node.respawn_delay:g}'})
+    env, blocked = validate_env.env_split(node.env)
+    if env:
+        fields['env'] = env
+        carried.append({'code': 'env', 'detail': ', '.join(sorted(env))})
+    if blocked:
+        lost.append({'code': 'env_blocked', 'detail': ', '.join(sorted(blocked))})
+    if node.required:
+        lost.append({'code': 'required', 'detail': ''})
+    return fields, carried, lost
+
+
 def plan_node(index: int, node: ChildNode, taken: List[str], origin: str,
               existing: Iterable[Mapping[str, Any]], validate: Validator) -> Dict[str, Any]:
     fq = fq_name(node.name, node.namespace)
@@ -81,10 +114,11 @@ def plan_node(index: int, node: ChildNode, taken: List[str], origin: str,
     scalars, rest = split_params(merged)
     target_id = id_from_name(node.name or node.executable, taken)
     taken.append(target_id)
+    extra, carried, lost = carry_over(node)
     spec = {'id': target_id, 'kind': 'run', 'package': node.package,
             'executable': node.executable, 'name': node.name, 'namespace': node.namespace,
             'params': scalars, 'remaps': dict(node.remaps), 'args': list(node.args),
-            'imported_from': origin}
+            'imported_from': origin, **extra}
     spec = {k: v for k, v in spec.items() if v not in (None, {}, [])}
     problem = validate(spec)
     warnings = [{'code': code, 'detail': ''} for code in node.warnings] + problems
@@ -93,6 +127,7 @@ def plan_node(index: int, node: ChildNode, taken: List[str], origin: str,
     duplicate = next((t['id'] for t in existing if _same_node(spec, t)), None)
     return {'index': index, 'fq_name': fq, 'lifecycle': node.lifecycle, 'file': node.file,
             'spec': spec, 'file_params': rest, 'param_files': files, 'warnings': warnings,
+            'carried': carried, 'lost': lost,
             'importable': problem is None, 'problem': problem and
             {'code': problem[0], 'message': problem[1]}, 'duplicate_of': duplicate}
 
@@ -106,4 +141,4 @@ def build_plan(result: ChildResult, origin: str, existing: List[Mapping[str, Any
             'missing_args': result.missing_args, 'nodes': nodes,
             'blocked': [e.model_dump(exclude_none=True) for e in result.blocked],
             'skipped': [e.model_dump(exclude_none=True) for e in result.skipped],
-            'warnings': result.warnings}
+            'warnings': result.warnings, 'files': list(result.files)}

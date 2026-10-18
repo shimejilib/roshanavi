@@ -524,3 +524,29 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | T-20 | E2E: 理由 → ひな形 → 書き換え → 出力が変わる | `__init__.py` の無いフォルダに理由と実際のパス、置き場所、Python。不正な名前は断られ、`e2e_logic` を作ると関数が選ばれた状態 → `/chatter` で `HELLO WORLD` → テストが `logic.py` を書き換えると `edited: Hello World`。OpenCV を使う関数ノードの右ペインに ① `python3-opencv` と ② venv。スクリーンショット [`user-code-locations.png`](../images/user-code-locations.png)・[`user-code-scaffold.png`](../images/user-code-scaffold.png)・[`user-code-dependency.png`](../images/user-code-dependency.png) | ✅ |
 | T-21 | Lyrical での実行 | T の単体・実ノード・API のテストが Lyrical (Python 3.14、pydantic 2) でも通る (77 件) | ✅ |
 
+
+### U. launch の引き取り (`--launch`)・強制終了の後始末 (#12)・ノード一覧の削除
+
+仕様は [integration.md](../design/integration.md)、[launcher.md#子プロセスの後始末](../design/launcher.md#子プロセスの後始末-12)。fixture は `test/takeover_fixtures.py` (偽の install に置いた `tk_demo` パッケージ: 引き継ぐもの・元どおりにならないものをすべて含む `tk_full.launch.py` (+ include・パラメータファイル)、ノードだけの `tk_simple.launch.py`、OnProcessExit → Shutdown の `tk_exit.launch.py`)。`test_takeover.py`・`test_leftovers.py`・`test_registry_delete.py`、vitest `takeover/model.test.ts`・`nodelist/remove.test.ts`、E2E `web/e2e/takeover.spec.ts`。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| U-01 | ノードごとの引き取り (実ノード) | include 先も含む 4 ノードが `kind: run` (`takeover: true`・`imported_from`)、`--mine` のノードは mine、`respawn` → `auto_restart`、`SetEnvironmentVariable` と `additional_env` → `env`、引数 `rate:=7` とパラメータファイルの値が `params`。残り (TimerAction・イベント・ExecuteProcess) は `takeover_rest.launch.py` 1 つ。報告: 引き継ぎ `env` `respawn`、元どおりにならない `required` (/tk_listener)・`respawn_delay`・`events`・`timer_order`・`conditions_fixed`、`suggest_whole`。すべて起動し、プロジェクトに `takeover:` | ✅ |
+| U-02 | 残りの部分は別に起動するノードを起動しない (実プロセス) | 残りの部分のプロセスに TimerAction のノード (`tk_late`) と `sleep 600` があり、`__node:=tk_talker` などは無い。tk_talker のプロセスの環境に `TK_COLOR` / `TK_SHAPE` | ✅ |
+| U-03 | 起動し直し (冪等) | 同じファイル・引数で起動し直すと同じ ID・役割のまま (重複なし、`pending` なし)。引数を変えると同じ ID のまま設定が変わる | ✅ |
+| U-04 | 止めている間の変更 | 起動し直すと前回の内容で動き、`pending.reason: changed_since_last` (追加 /tk_c・なくなる /tk_b)。適用すると入れ替わり、同じ `preview_id` は 2 回目 404 | ✅ |
+| U-05 | 動いている間の変更の検出と取り込み直し | launch ファイルにパラメータとノードを足すと `pending.reason: file_changed`、変わったファイル、追加 /tk_new・変更 /tk_a (`params`)。適用すると tk_a だけ再起動 (tk_b の pid は同じ)、tk_new が起動 | ✅ |
+| U-06 | 中身の同じ保存 | `touch` だけでは `pending` にならない (解析し直して差分なし) | ✅ |
+| U-07 | 全体モード | `kind: launch` 1 つ (`--mine` で mine)、報告は空。OnProcessExit → Shutdown で launch が終わり `exited` (元どおりに動く) | ✅ |
+| U-08 | 入力の検査 | `../etc/passwd`・不正なパッケージ名は拒否、無い launch ファイルは `state: error` (`unknown_launch_file`) | ✅ |
+| U-09 | API | `GET /api/takeover`、余計なキーは 4xx、`POST /api/takeover/start` (demo_system → 2 ノード + 残り)、`check` で差分なし、知らない `preview_id` は 404 | ✅ |
+| U-10 | SIGKILL → `ros2 run roshanavi cleanup` (実サーバー) | 3 つのターゲット (run・launch・ダミー) を記録してからサーバーを SIGKILL。直接の子は PR_SET_PDEATHSIG で止まり、孫が残る。`--dry-run` は一覧だけ、`cleanup` で全部止まり記録が消える。2 回目は「Nothing to clean up」 | ✅ |
+| U-11 | SIGKILL → 次の起動のバナー (実サーバー) | 次に起動したサーバーの `GET /api/leftovers` が残ったプロセスを数え、`POST /api/leftovers/stop` で全部止まり 0 になる | ✅ |
+| U-12 | 記録の照合 (unit) | 起動時刻の違う記録 (PID の再利用) は残ったプロセスにせず、ファイルを片付ける。一致すれば残ったプロセスになり止められる。通常の終了で記録が消える | ✅ |
+| U-13 | 起動したスレッドが終わっても子は生きる | 短命のスレッドから起動した子が 1 秒後も動いている (PR_SET_PDEATHSIG はスレッドの終了で送られるため、専用のスレッドから起動する) | ✅ |
+| U-14 | 削除と元に戻す (unit + API) | 動いている起動設定と止まっているダミーを削除 → 止まって登録から消え自動保存、元に戻すと同じ設定で登録され、動いていたものだけ起動 (別の pid)。2 回目・期限切れは `undo_expired`。知らない ID が混ざると何も消さない。API の不正な ID は 4xx | ✅ |
+| U-15 | 画面のロジック (vitest) | バナーの順と「あとで」、引き継ぎ・元どおりにならない動作の文、差分の項目名、削除の計画 (起動設定ごとに 1 回、一緒に止まるノード、外部は削除しない、安全の文、取り込み直すと戻る) | ✅ |
+| U-16 | E2E: launch ファイルの変更 → バナー → 差分 → 取り込み直し | E2E のワークスペースにパッケージを書いてビルド、`POST /api/takeover/start`、launch ファイルにノードを足すと「launch ファイルが変更されました。取り込み直しますか?」→ 差分に /e2e_tk_listener → 取り込み直すと一覧に出る。スクリーンショット [`takeover-changed-banner.png`](../images/takeover-changed-banner.png)・[`takeover-diff.png`](../images/takeover-diff.png) | ✅ (全体の実行で 1 回目はビルド前にワークスペースの再走査が無く失敗 → 直して単独で通過) |
+| U-17 | E2E: 削除 → 元に戻す | 入力ノードを選んで削除 → 確認に「削除すると止まります」「ソースコード・パッケージ・パラメータファイル・録画は消えません」→ 一覧から消える → 「元に戻す」で戻り動く。外部のノードは選べない。スクリーンショット [`node-list-delete.png`](../images/node-list-delete.png) | ✅ |
+| U-18 | Lyrical での実行 | U の pytest (と launch 取り込み・停止・プロセス管理の既存テスト) が Lyrical でも通る (55 件) | ✅ |
+| U-19 | turtle_demo を引き取りで動かす | `dev` サービス (`--launch turtle_patrol patrol.launch.py --mine patrol`) で /sim と /patrol が roshanavi のノード (patrol は mine)、API から patrol を止める・起動し直す、ログ、turtle_viz の正方形 | 👀 2026-10-18: 報告は空 (元どおりにならない動作なし)、/sim (dependency)・/patrol (mine)・/turtle_viz が確実で対応づき、patrol の停止で地図から消え、起動・再起動で pid が変わり sim の pid はそのまま、ログに「Side N done」と起動コマンド、`reset` 後 40 秒で正方形 (400×400、外接 136×137 px)。コンテナを再起動しても同じ ID・役割で再利用 (`pending` なし、残ったプロセス 0) |

@@ -51,6 +51,12 @@ class TargetSpec(_Strict):
     auto_restart: bool = False
     # Informational: the launch file this target was decomposed from (docs/design/launcher.md).
     imported_from: Optional[constr(max_length=1024)] = None
+    # kind run: environment variables on top of the server's (carried over from a launch file;
+    # names that decide which code is loaded are refused, launcher/validate.env_vars).
+    env: Dict[constr(max_length=128), constr(max_length=4096)] = Field(default_factory=dict)
+    # Managed by the launch takeover (docs/design/integration.md): a re-import may change or
+    # remove it, because the launch file is the source of truth.
+    takeover: Optional[bool] = None  # written only when true
 
     @root_validator(skip_on_failure=True)
     def _kind_fields(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -63,7 +69,8 @@ class TargetSpec(_Strict):
             if not values.get('launch_file'):
                 raise ValueError('kind "launch" needs "launch_file"')
             unsupported = [k for k in ('executable', 'params_file', 'namespace', 'name')
-                           if values.get(k)] + [k for k in ('params', 'remaps') if values.get(k)]
+                           if values.get(k)] + [k for k in ('params', 'remaps', 'env')
+                                                if values.get(k)]
             if unsupported:
                 raise ValueError(f'kind "launch" does not take {unsupported}; '
                                  'pass launch arguments as args ["name:=value"]')
@@ -427,6 +434,18 @@ class CodeSettings(_Strict):
         return _unique_code_settings(values)
 
 
+class TakeoverSpec(_Strict):
+    """The launch file the project was taken over from (``--launch``, docs/design/integration.md).
+
+    Only what identifies the import; the nodes themselves are the targets marked ``takeover``.
+    """
+
+    package: constr(min_length=1, max_length=100)
+    launch_file: constr(min_length=1, max_length=128)
+    args: List[constr(max_length=4096)] = Field(default_factory=list, max_items=64)
+    mode: Literal['node', 'whole'] = 'node'
+
+
 class ProjectSpec(_Strict):
     version: Literal[1] = PROJECT_VERSION
     targets: List[TargetSpec] = Field(default_factory=list, max_items=100)
@@ -440,6 +459,7 @@ class ProjectSpec(_Strict):
     code_paths: List[CodePath] = Field(default_factory=list, max_items=MAX_CODE_PATHS)
     installed_modules: List[InstalledModule] = Field(default_factory=list,
                                                      max_items=MAX_INSTALLED_MODULES)
+    takeover: Optional[TakeoverSpec] = None
 
     @root_validator(skip_on_failure=True)
     def _unique_ids(cls, values: Dict[str, Any]) -> Dict[str, Any]:

@@ -16,6 +16,7 @@ from launch import LaunchContext
 from launch.launch_description_sources import AnyLaunchDescriptionSource
 from launch.utilities import perform_substitutions
 
+from .extract import set_base_env
 from .walker import WalkResult, walk
 
 NO_DESCRIPTION = 'no description given'  # launch's placeholder text
@@ -45,6 +46,7 @@ def describe_arguments(description: Any, context: Any) -> List[Dict[str, Any]]:
 
 
 def evaluate(path: str, args: Dict[str, str]) -> Dict[str, Any]:
+    set_base_env(dict(os.environ))  # before the file's own Python runs
     context = LaunchContext()
     description = AnyLaunchDescriptionSource(path).get_launch_description(context)
     for name, value in args.items():
@@ -58,11 +60,21 @@ def evaluate(path: str, args: Dict[str, str]) -> Dict[str, Any]:
     if missing:
         return {**base, **WalkResult().to_dict()}
     result = WalkResult()
+    result.add_file(path)
     walk(description, context, result)
     return {**base, **result.to_dict()}
 
 
+def _fresh_bytecode() -> None:
+    """Always compile launch files from their source: a cached .pyc is trusted when the
+    source's size and mtime (whole seconds) match, so an edit that keeps the size within
+    the same second (3.0 -> 2.0) would be evaluated as the old file."""
+    sys.dont_write_bytecode = True
+    sys.pycache_prefix = os.path.join(os.sep, 'nonexistent', 'roshanavi-no-pycache')
+
+
 def main() -> int:
+    _fresh_bytecode()
     result_fd = os.dup(1)
     os.dup2(2, 1)  # the launch file's own prints go to stderr
     try:

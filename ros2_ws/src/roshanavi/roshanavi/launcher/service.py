@@ -26,9 +26,10 @@ from .discovery import Workspace
 from .dummy_config import export, format_errors
 from .errors import LauncherError
 from .manager import ProcessManager
+from .proc_record import ProcessRecord, describe, find_leftovers, stop_leftovers
 from .project import DEFAULT_FILE_NAME, ProjectStore
 from .schema import (ClassSpec, CodeSettings, DummySpec, FunctionSpec, ProjectSpec, QosSpec,
-                     TargetSpec, TransformSpec, clean_dict)
+                     TakeoverSpec, TargetSpec, TransformSpec, clean_dict)
 
 LOG = logging.getLogger(__name__)
 
@@ -57,10 +58,19 @@ class Launcher:
         self.project = ProjectStore(project_path or os.path.join(self.workspace.root,
                                                                  DEFAULT_FILE_NAME))
         self.mapper = NodeProcessMapper(clock=clock)
+        # #12: what this server started (for cleanup after a SIGKILL), and what a previous,
+        # force-killed server left running (the leftover banner).
+        self.records = ProcessRecord(data_dir)
+        self.leftovers = find_leftovers(data_dir)
+        if self.leftovers:
+            LOG.warning('%d process(es) left by a previous roshanavi run are still running '
+                        '(stop them from the banner or with `ros2 run roshanavi cleanup`)',
+                        len(self.leftovers))
         self._clock = clock
         self._created = clock()
         self._autostart_pending = autostart
         self._watch_topics: List[str] = []
+        self.takeover: Optional[TakeoverSpec] = None  # set by the launch takeover
         self.load_error: Optional[str] = None
         self.save_error: Optional[str] = None
         self._autosave_blocked = False
@@ -81,6 +91,7 @@ class Launcher:
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
+        self.takeover = spec.takeover
         return self.project_state()
 
     def _set_code(self, spec: Union[ProjectSpec, CodeSettings]) -> None:
@@ -107,7 +118,8 @@ class Launcher:
                            classes=self.manager.classes(),
                            watch_topics=self._watch_topics,
                            code_paths=list(self.manager.code.code_paths),
-                           installed_modules=list(self.manager.code.installed_modules))
+                           installed_modules=list(self.manager.code.installed_modules),
+                           takeover=self.takeover)
 
     def project_state(self) -> Dict[str, Any]:
         current = self.current_project()
@@ -121,6 +133,7 @@ class Launcher:
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
+        self.takeover = spec.takeover
         return self.save_project()
 
     def save_project(self) -> Dict[str, Any]:
@@ -169,7 +182,9 @@ class Launcher:
     # ---- graph integration (housekeeping thread) ---------------------------
     def observe(self, node_ids: Iterable[str]) -> Dict[str, Dict[str, Any]]:
         """Map graph nodes to targets; returns ``{node id: role info}`` for the graph."""
-        mapping = self.mapper.update(node_ids, self.manager.process_refs())
+        refs = self.manager.process_refs()
+        mapping = self.mapper.update(node_ids, refs)
+        self.records.update(refs)
         roles = self.manager.roles()
         self._maybe_autostart()
         return {node: {'role': roles.get(m.target_id, 'other'), 'target_id': m.target_id,
@@ -244,6 +259,16 @@ class Launcher:
         return export(dummies, target_dir, self.manager.data_dir, transforms, functions,
                       self.workspace.root, classes, self.manager.code)
 
+    # ---- leftovers of a force-killed previous server (#12) -------------------
+    def leftover_state(self) -> Dict[str, Any]:
+        return describe(self.leftovers)
+
+    def stop_leftovers(self) -> Dict[str, Any]:
+        result = stop_leftovers(self.leftovers, report=LOG.info)
+        self.leftovers = []
+        return result
+
     def close(self) -> None:
         self.builder.close()
         self.manager.close()
+        self.records.close()

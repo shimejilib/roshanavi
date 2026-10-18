@@ -15,7 +15,7 @@ import logging
 import os
 import signal
 import sys
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 PACKAGE_STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'static')
 # The Docker image bakes the UI elsewhere and points this variable at it.
@@ -88,11 +88,48 @@ def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
                         help='do not look up host names of remote addresses in the connection list')
     parser.add_argument('--log-level', default='info',
                         choices=['debug', 'info', 'warning', 'error'])
+    takeover = parser.add_argument_group(
+        'launch takeover', 'Run an existing launch file under roshanavi: its nodes become '
+        'targets you can stop, restart and read logs of one by one (docs/guide).')
+    takeover.add_argument('--launch', nargs='+', metavar='ARG', default=None,
+                          help='PACKAGE LAUNCH_FILE [name:=value ...]: take over this launch '
+                               'file of a package and start everything in it. The launch file '
+                               'stays the source of truth: when it changes, the UI offers to '
+                               'import it again. Restarting roshanavi with the same file and '
+                               'arguments reuses the targets (no duplicates)')
+    takeover.add_argument('--launch-mode', choices=['node', 'whole'], default='node',
+                          help='node (default): one target per node (fine-grained control); '
+                               'parts that cannot run one by one (ExecuteProcess, containers, '
+                               'timers, event handlers) run together as one extra target, and '
+                               'the UI lists launch behaviour that is lost. whole: run the '
+                               'launch file as one target, exactly like ros2 launch (stop and '
+                               'restart only all together)')
+    takeover.add_argument('--mine', action='append', default=[], metavar='NODE',
+                          help='node you are developing (role "mine"); repeatable, e.g. '
+                               '--mine patrol')
     # `ros2 run` may append --ros-args ...; ignore anything we do not know.
     args, _unknown = parser.parse_known_args(argv)
     if not 0 < args.port < 65536:
         parser.error('--port must be in 1..65535')
+    args.launch_spec = _launch_spec(parser, args.launch)
     return args
+
+
+def _launch_spec(parser: argparse.ArgumentParser,
+                 values: Optional[List[str]]) -> Optional[Dict[str, Any]]:
+    """``--launch PACKAGE LAUNCH_FILE [name:=value ...]`` -> {package, launch_file, args}."""
+    if not values:
+        return None
+    if len(values) < 2:
+        parser.error('--launch needs PACKAGE and LAUNCH_FILE, e.g. '
+                     '--launch turtle_patrol patrol.launch.py side_length:=2.0')
+    launch_args: Dict[str, str] = {}
+    for item in values[2:]:
+        name, sep, value = item.partition(':=')
+        if not sep or not name:
+            parser.error(f'--launch: launch arguments look like name:=value (got {item!r})')
+        launch_args[name] = value
+    return {'package': values[0], 'launch_file': values[1], 'args': launch_args}
 
 
 def _bootstrap(args: argparse.Namespace) -> None:
@@ -134,7 +171,10 @@ def main(argv: Optional[List[str]] = None) -> int:
               probe=args.probe, tracing=args.tracing,
               trace_buffer_per_cpu=max(8, args.trace_buffer_kib) * 1024,
               examples_dir=examples_dir, generate_samples=not args.no_sample_media,
-              resources=not args.no_resources, reverse_dns=not args.no_reverse_dns).start()
+              resources=not args.no_resources, reverse_dns=not args.no_reverse_dns,
+              use_remembered_project=args.launch_spec is None).start()
+    if args.launch_spec:
+        _start_takeover(lab, args)
     atexit.register(lab.launcher.close)
     atexit.register(lab.tracing.close)
     signal.signal(signal.SIGHUP, lambda *_: os.kill(os.getpid(), signal.SIGTERM))
@@ -149,6 +189,17 @@ def main(argv: Optional[List[str]] = None) -> int:
         signal.signal(signal.SIGTERM, signal.SIG_DFL)  # a second SIGTERM while stopping kills
         lab.stop()
     return 0
+
+
+def _start_takeover(lab: Any, args: argparse.Namespace) -> None:
+    from .launcher.errors import LauncherError
+    spec = args.launch_spec
+    try:
+        lab.takeover.configure(spec['package'], spec['launch_file'], spec['args'],
+                               mode=args.launch_mode, mine=args.mine)
+    except LauncherError as exc:  # shown in the UI as well (GET /api/takeover)
+        LOG.error('--launch: %s', exc)
+        lab.takeover.fail(exc)
 
 
 class _Stopped(Exception):

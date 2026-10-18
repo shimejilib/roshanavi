@@ -16,6 +16,12 @@
 | GET / POST | `/api/nodes/{node}/lifecycle` | lifecycle の状態と可能な遷移 / 遷移 `{transition}` か目標 `{goal: active\|inactive}` + `allow_external` ([launcher.md#lifecycle ノード](launcher.md#lifecycle-ノード-p45b)) |
 | POST | `/api/launch-import/preview` | launch ファイルを別プロセスで評価し、ノードごとの起動設定案を返す `{source, args}` → `{preview_id, nodes, blocked, skipped, arguments, whole}` ([launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b)) |
 | POST | `/api/launch-import/commit` | 案から取り込む `{preview_id, mode: nodes\|whole, indices, role}` (自動保存) |
+| GET | `/api/takeover` | launch の引き取り ([integration.md](integration.md)): `{active, state: off\|starting\|ready\|error\|inactive, package, launch_file, args, mode, mine, error, report{carried, lost, rest, notes, separate, suggest_whole}, pending{preview_id, reason, files, added, removed, changed, unchanged, report}, targets}` |
+| POST | `/api/takeover/start` | パッケージの launch ファイルを引き取って起動する `{package, launch_file, args, mode: node\|whole, mine[]}` (202、解析は裏で。`--launch` と同じ) |
+| POST | `/api/takeover/check` | 今すぐ解析し直して差分を `pending` にする (適用はしない)。引き取っていなければ 409 `no_takeover` |
+| POST | `/api/takeover/apply`, `/api/takeover/dismiss` | `{preview_id}`: 取り込み直す (追加は起動、削除は停止、変更は動いていれば再起動) → `{added, removed, changed, restarted, errors, status}` / 「あとで」。古い `preview_id` は 404 `preview_expired` |
+| GET / POST | `/api/leftovers`, `/api/leftovers/stop` | 強制終了された前回のサーバーが残したプロセス `{count, processes[{pid, pgid, target, cmd}]}` / 止める (記録と一致するものだけ。SIGINT → SIGTERM → SIGKILL) → `{stopped, survivors}` ([launcher.md#子プロセスの後始末](launcher.md#子プロセスの後始末-12)) |
+| POST | `/api/registry/delete`, `/api/registry/undo` | ノード一覧の「削除」`{ids[]}` (起動リスト・入力・変換・関数・クラスノード、1〜200 個。知らない ID があれば何も消さずに 404) → `{removed[{id, kind, was_running}], undo_id, undo_sec}` / 「元に戻す」`{undo_id}` (15 秒以内に 1 回) → `{restored, started, errors}`。期限切れは 404 `undo_expired` |
 | GET | `/api/interfaces/{pkg}/{msg\|srv\|action}/{Name}` | 型の定義 `{type, text, expanded, truncated}` ([launcher.md#ノードのパラメータと型の定義](launcher.md#ノードのパラメータと型の定義-p45a)) |
 | GET | `/api/files` | data_dir 内のファイル一覧 (stream/bag 選択用) |
 | GET | `/api/echo/{topic}/sample` | エコー中のトピックの最新メッセージを切り詰めずに返す (上限 256 KiB。超えると `capped: true` で表示用の値)。変換ノードのプレビュー用 ([nodes.md](nodes.md)) |

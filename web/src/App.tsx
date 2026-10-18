@@ -8,6 +8,7 @@ import { LiveProvider, useLive } from './state/LiveProvider';
 import { RecordingBadge } from './scenarios/ScenariosTab';
 import { ScenarioLiveProvider } from './scenarios/ScenarioLive';
 import { DEFAULT_TAB, TABS } from './tabs/registry';
+import { TakeoverBanner } from './takeover/TakeoverBanner';
 import { TourOverlay } from './tour/TourOverlay';
 import { TourProvider } from './tour/TourProvider';
 
@@ -47,6 +48,9 @@ function Shell() {
         <SettingsMenu />
         <ConnectionStatus />
       </header>
+      <ErrorBoundary scope="dialog">
+        <TakeoverBanner />
+      </ErrorBoundary>
       <div className={TABS.find((d) => d.id === tab)?.fullWidth ? 'workspace full-width' : 'workspace'}>
         <main className="tab-panels">
           {TABS.map((def) => {

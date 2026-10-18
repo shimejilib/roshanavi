@@ -17,6 +17,16 @@ from launch_ros.descriptions import Parameter as ParameterDescription
 from launch_ros.utilities import evaluate_parameters, make_namespace_absolute, prefix_namespace
 
 MAX_PARAM_FILE_BYTES = 1024 * 1024
+MAX_ENV_VALUE = 4096
+
+# The environment before the launch file ran (set by the child); the difference at the time
+# a Node is reached is what SetEnvironmentVariable & co. (or the file's own Python) changed.
+_BASE_ENV: Dict[str, str] = {}
+
+
+def set_base_env(env: Dict[str, str]) -> None:
+    _BASE_ENV.clear()
+    _BASE_ENV.update(env)
 
 
 def subst(context: Any, value: Any) -> Optional[str]:
@@ -93,35 +103,82 @@ def _process_warnings(node: Any, context: Any) -> List[str]:
     warnings = []
     description = getattr(node, 'process_description', None)
     if description is not None:
-        if getattr(description, 'env', None) or getattr(description, 'additional_env', None):
-            warnings.append('env_not_imported')
+        if getattr(description, 'env', None):
+            warnings.append('env_replaced')  # a whole replacement env is not carried over
         if _has_prefix(description, context):
             warnings.append('prefix_ignored')
     if _private(node, 'Node', 'ros_arguments'):
         warnings.append('ros_arguments_ignored')
+    if any(key not in os.environ for key in _BASE_ENV):
+        warnings.append('env_unset_not_carried')
     return warnings
 
 
-def extract_node(node: Any, context: Any, lifecycle: bool) -> Dict[str, Any]:
-    """Everything needed to start this Node on its own with ``ros2 run``."""
+def node_env(node: Any, context: Any) -> Dict[str, str]:
+    """Environment the launch file gives this node on top of the server's: what the launch
+    changed so far (SetEnvironmentVariable ...) plus the Node's own ``additional_env``."""
+    env = {k: v for k, v in os.environ.items() if _BASE_ENV and _BASE_ENV.get(k) != v}
+    description = getattr(node, 'process_description', None)
+    for key, value in getattr(description, 'additional_env', None) or []:
+        try:
+            env[perform_substitutions(context, key)] = perform_substitutions(context, value)
+        except Exception:  # unresolved substitution: leave it out (reported as a warning)
+            continue
+    return {k: v for k, v in env.items() if len(v) <= MAX_ENV_VALUE}
+
+
+def _respawn(node: Any, context: Any) -> Dict[str, Any]:
+    raw = _private(node, 'ExecuteLocal', 'respawn', False)
+    try:
+        from launch.utilities.type_utils import perform_typed_substitution
+        respawn = bool(perform_typed_substitution(context, raw, bool))
+    except Exception:  # older launch / plain bool
+        respawn = raw if isinstance(raw, bool) else str(subst(context, raw)).lower() == 'true'
+    delay = _private(node, 'ExecuteLocal', 'respawn_delay', None)
+    try:
+        delay = float(delay if isinstance(delay, (int, float)) else subst(context, delay)) \
+            if delay is not None else None
+    except Exception:  # unresolved substitution
+        delay = None
+    return {'respawn': respawn, 'respawn_delay': delay}
+
+
+def _required(node: Any) -> bool:
+    """``on_exit=Shutdown()`` (the classic "required node"): its exit ends the whole launch."""
+    from launch.actions import Shutdown
+    on_exit = _private(node, 'ExecuteLocal', 'on_exit', None)
+    items = on_exit if isinstance(on_exit, (list, tuple)) else [on_exit]
+    return any(isinstance(item, Shutdown) for item in items)
+
+
+def node_identity(node: Any, context: Any) -> Dict[str, Optional[str]]:
+    """package / executable / name / namespace exactly as the import computes them."""
     raw_name = _private(node, 'Node', 'node_name')
     raw_ns = _private(node, 'Node', 'node_namespace')
     namespace = make_namespace_absolute(prefix_namespace(
         context.launch_configurations.get('ros_namespace', None), subst(context, raw_ns)))
+    return {'package': subst(context, node.node_package),
+            'executable': subst(context, node.node_executable),
+            'name': subst(context, raw_name),
+            'namespace': namespace if namespace not in (None, '/') else None}
+
+
+def extract_node(node: Any, context: Any, lifecycle: bool) -> Dict[str, Any]:
+    """Everything needed to start this Node on its own with ``ros2 run``."""
     remaps = [list(pair) for pair in context.launch_configurations.get('ros_remaps', None) or []]
     remaps += [[subst(context, src), subst(context, dst)]
                for src, dst in _private(node, 'Node', 'remappings') or []]
     return {
-        'package': subst(context, node.node_package),
-        'executable': subst(context, node.node_executable),
-        'name': subst(context, raw_name),
-        'namespace': namespace if namespace not in (None, '/') else None,
+        **node_identity(node, context),
         'remaps': remaps,
         'args': [subst(context, a) for a in _private(node, 'Node', 'arguments') or []],
         'param_sources': param_sources(node, context),
         'lifecycle': lifecycle,
         'file': current_file(context),
         'warnings': _process_warnings(node, context),
+        'env': node_env(node, context),
+        'required': _required(node),
+        **_respawn(node, context),
     }
 
 

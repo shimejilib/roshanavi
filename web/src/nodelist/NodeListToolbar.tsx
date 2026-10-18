@@ -16,9 +16,10 @@ interface Props {
   onAction: (action: ControlAction) => void;
   onClear: () => void;
   onImport: () => void;
+  onDelete: () => void;
 }
 
-export function NodeListToolbar({ filter, onFilter, selectedCount, busy, onAction, onClear, onImport }: Props) {
+export function NodeListToolbar({ filter, onFilter, selectedCount, busy, onAction, onClear, onImport, onDelete }: Props) {
   return (
     <div className="toolbar" role="toolbar" aria-label={t('nodes.toolbar')}>
       <input
@@ -54,6 +55,9 @@ export function NodeListToolbar({ filter, onFilter, selectedCount, busy, onActio
           {t(`nodes.action.${action}`)}
         </button>
       ))}
+      <button type="button" className="danger" disabled={selectedCount === 0 || busy} onClick={onDelete} data-testid="nodes-bulk-delete">
+        {t('nodes.action.delete')}
+      </button>
       <button type="button" disabled={selectedCount === 0} onClick={onClear}>{t('nodes.clear')}</button>
       <button type="button" className="primary push-right" onClick={onImport} data-testid="nodes-import">
         {t('nodes.importOpen')}

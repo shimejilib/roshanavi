@@ -6,15 +6,26 @@
   the stream name.
 * :meth:`ProcessRunner.stop` escalates SIGINT -> SIGTERM -> SIGKILL on the
   group, then kills any descendant that escaped the group.
+* Linux: every child gets ``PR_SET_PDEATHSIG`` (SIGTERM), so a SIGKILLed server
+  does not leave its *direct* children behind (#12). The kernel sends that
+  signal when the *thread* that forked the child ends, not the process, so all
+  children are forked from one long-lived spawner thread (:func:`spawn`) --
+  never from a short-lived request / autostart / timer thread. Grandchildren
+  (the node under a ``ros2 run`` / ``ros2 launch`` wrapper) are not covered by
+  the kernel; they are recorded (:mod:`.proc_record`) and stopped by
+  ``ros2 run roshanavi cleanup`` or the leftover banner on the next start.
 """
 
+import ctypes
 import logging
 import os
 import signal
 import subprocess
+import sys
 import threading
 import time
-from typing import Callable, Dict, List, Optional, Sequence
+from concurrent.futures import ThreadPoolExecutor
+from typing import Any, Callable, Dict, List, Optional, Sequence
 
 import psutil
 
@@ -28,6 +39,60 @@ SIGTERM_TIMEOUT_SEC = 3.0
 KILL_TIMEOUT_SEC = 2.0
 POLL_SEC = 0.05
 READER_JOIN_SEC = 2.0
+
+
+_PR_SET_PDEATHSIG = 1
+PDEATH_SIGNAL = signal.SIGTERM
+
+
+def _load_prctl() -> Optional[Callable[..., int]]:
+    """libc ``prctl`` looked up once, before any fork (nothing is loaded in the child)."""
+    if not sys.platform.startswith('linux'):
+        return None
+    try:
+        return ctypes.CDLL(None, use_errno=True).prctl
+    except (OSError, AttributeError):
+        return None
+
+
+_PRCTL = _load_prctl()
+_SPAWN_LOCK = threading.Lock()
+_SPAWNER: Optional[ThreadPoolExecutor] = None
+
+
+def pdeathsig_preexec(parent_pid: int) -> Optional[Callable[[], None]]:
+    """``preexec_fn`` that makes the child get SIGTERM when its parent (thread) dies."""
+    if _PRCTL is None:
+        return None
+
+    def setup() -> None:
+        _PRCTL(_PR_SET_PDEATHSIG, int(PDEATH_SIGNAL), 0, 0, 0)
+        if os.getppid() != parent_pid:  # the server died between fork and prctl
+            os.kill(os.getpid(), PDEATH_SIGNAL)
+    return setup
+
+
+def _spawner() -> ThreadPoolExecutor:
+    global _SPAWNER
+    with _SPAWN_LOCK:
+        if _SPAWNER is None:
+            _SPAWNER = ThreadPoolExecutor(max_workers=1, thread_name_prefix='roshanavi-spawn')
+        return _SPAWNER
+
+
+def spawn(argv: Sequence[str], **kwargs: Any) -> subprocess.Popen:
+    """``subprocess.Popen`` on the long-lived spawner thread, with the parent-death signal.
+
+    ``PR_SET_PDEATHSIG`` fires when the forking *thread* exits; request handler threads
+    (anyio's pool retires idle threads), the autostart thread and auto-restart timers are
+    short-lived, so forking there would kill healthy children later.
+    """
+    kwargs.setdefault('preexec_fn', pdeathsig_preexec(os.getpid()))
+    try:
+        future = _spawner().submit(subprocess.Popen, list(argv), **kwargs)
+    except RuntimeError:  # interpreter shutting down: no new futures, fork here instead
+        return subprocess.Popen(list(argv), **kwargs)
+    return future.result()
 
 
 def group_alive(pgid: int) -> bool:
@@ -82,7 +147,7 @@ class ProcessRunner:
 
     def start(self) -> None:
         try:
-            self._proc = subprocess.Popen(
+            self._proc = spawn(
                 self.argv, cwd=self._cwd, env=self._env, stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
                 text=True, encoding='utf-8', errors='replace', bufsize=1)

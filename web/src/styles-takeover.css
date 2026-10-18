@@ -1,0 +1,6 @@
+/* Launch takeover / leftover banners under the top bar, and the node-list undo bar. */
+.app-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 6px 12px; }
+.app-banner .banner-actions { display: inline-flex; gap: 6px; margin-left: auto; }
+.takeover-report h4 { margin: 12px 0 4px; }
+.takeover-report ul { margin: 0 0 4px; padding-left: 20px; }
+.undo-bar { display: flex; align-items: center; gap: 10px; }

@@ -12,6 +12,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Union
 
+from .env import LOG_ENV
 from .errors import LauncherError
 from .logbuf import LogBuffer
 from .process import ProcessRunner
@@ -89,13 +90,20 @@ class Target:
             self.problem = None
             self._generation += 1
             generation = self._generation
-            runner = ProcessRunner(argv, self._env(), self._cwd, self.log,
+            runner = ProcessRunner(argv, self._spec_env(), self._cwd, self.log,
                                    on_exit=lambda code: self._on_exit(generation, code),
                                    timeouts=self._timeouts)
             runner.start()
             self._runner, self._state, self._exit_code = runner, 'running', None
             self._started_wall, self._stale_spec = time.time(), False
         LOG.info('target %s started (pid %s)', self.id, runner.pid)
+
+    def _spec_env(self) -> Dict[str, str]:
+        """The launcher's child environment plus the target's own ``env`` (validated when the
+        command was built; roshanavi's logging settings stay as they are)."""
+        env = self._env()
+        extra = getattr(self.spec, 'env', None) or {}
+        return {**env, **extra, **{k: env[k] for k in LOG_ENV if k in env}} if extra else env
 
     def stop(self) -> None:
         with self._lock:

@@ -66,6 +66,7 @@ def target_command(spec: TargetSpec, ctx: CommandContext) -> List[str]:
     ros2 = ros2_binary()
     if spec.kind == 'run':
         ctx.workspace.require_executable(spec.package, spec.executable)
+        validate.env_vars(spec.env)
         return [ros2, 'run', spec.package, spec.executable, *validate.run_args(spec.args),
                 *_ros_args(spec, ctx)]
     ctx.workspace.require_launch_file(spec.package, spec.launch_file)

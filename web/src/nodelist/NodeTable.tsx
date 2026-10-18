@@ -55,7 +55,7 @@ function RowView({ row, checked, onToggle, onLifecycle }: { row: NodeRow; checke
           <input
             type="checkbox"
             checked={checked}
-            disabled={reason !== null}
+            disabled={reason !== null && !row.target_id /* owned (e.g. invalid) rows can still be deleted */}
             onChange={() => onToggle(row.key)}
             aria-label={t('nodes.selectRow', { name: row.name })}
             aria-describedby={reason ? `why-${row.key}` : undefined}
