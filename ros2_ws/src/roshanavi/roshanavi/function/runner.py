@@ -37,12 +37,16 @@ class FunctionRunner:
         self._runtime = runtime
         self._publisher: Any = None
         self.core = FunctionCore(spec, loader, self._send)
-        self._publisher = runtime.create_publisher(
-            msgutil.resolve_type(self.core.output.type), spec.output.topic,
-            make_qos(**spec.output.qos.model_dump()))
+        # An empty topic is a port that is not wired yet (map wiring): no publisher / subscription.
+        if spec.output.topic:
+            self._publisher = runtime.create_publisher(
+                msgutil.resolve_type(self.core.output.type), spec.output.topic,
+                make_qos(**spec.output.qos.model_dump()))
         self._subscriptions: List[Any] = []
         qos = make_qos(**INPUT_QOS)
         for index, port in enumerate(self.core.inputs):
+            if not port.topic:
+                continue
             def callback(msg: Any, index: int = index) -> None:
                 self.core.on_message(index, msg)
             self._subscriptions.append(runtime.create_subscription(

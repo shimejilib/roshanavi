@@ -42,7 +42,8 @@ Publish = Callable[[int, int, Any], None]   # (method index, output index, messa
 
 
 def resolve_binding_ports(method: ClassMethodSpec) -> Tuple[List[Port], List[Port]]:
-    return ([Port(i.topic, *data_kinds.resolve(i.kind, i.type)) for i in method.inputs],
+    return ([Port(i.topic, *data_kinds.resolve(i.kind, i.type, receiving=True))
+             for i in method.inputs],
             [Port(o.topic, *data_kinds.resolve(o.kind, o.type)) for o in method.outputs])
 
 
@@ -220,8 +221,8 @@ class ClassCore:
             if value is not UNSET:
                 kwargs[p.name] = value
             elif p.required:
-                hint = f'パラメータ {p.name} を設定してください' if p.kind else \
-                    f'{p.name} は ROS のパラメータにできない型なので既定値が必要です'
+                hint = f'設定値 (パラメータ) {p.name} を設定してください' if p.kind else \
+                    f'{p.name} は ROS の設定値 (パラメータ) にできない型なので既定値が必要です'
                 raise _InitValueError(f'__init__ の引数 {p.name} の値がありません。{hint}')
         return cls(**kwargs)
 
@@ -364,6 +365,8 @@ class ClassCore:
 
     def _publish_one(self, binding: int, index: int, value: Any, stamp: Any) -> None:
         port = self.bindings[binding].outputs[index]
+        if not port.topic:  # this output is not wired yet (map wiring): nothing to send
+            return
         try:
             msg = data_kinds.from_python(port.kind, value, port.type, stamp)
         except data_kinds.KindError as exc:
@@ -423,7 +426,7 @@ class ClassCore:
         try:
             return self.executor.run(lambda: self._apply_job(changes), APPLY_TIMEOUT_SEC)
         except TimeoutError:
-            return False, 'クラスの処理が終わらないため、パラメータを反映できませんでした'
+            return False, 'クラスの処理が終わらないため、設定値 (パラメータ) を反映できませんでした'
 
     def _apply_job(self, changes: Dict[str, Any]) -> Tuple[bool, str]:
         s = self._s

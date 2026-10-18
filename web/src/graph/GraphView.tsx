@@ -40,7 +40,14 @@ export interface GraphViewProps {
   projectKey: string | null;
   /** Right-click menu (nodes, topics, edges, blank area). */
   renderMenu?: (anchor: MenuAnchor, close: () => void) => ReactNode;
+  /** Drawn over the map once cytoscape exists (map wiring: the ports). */
+  overlay?: (cy: Core) => ReactNode;
+  /** A wire (an edge that ends at a port) was tapped: its port key and where. */
+  onWireTap?: (wire: { port: string; topic: string; x: number; y: number }) => void;
 }
+
+// Optional element data that may disappear between frames (ports were unwired / changed).
+const OPTIONAL_DATA = ['sep', 'tep', 'port', 'pw', 'ph'] as const;
 
 interface Tooltip {
   x: number;
@@ -83,7 +90,12 @@ function applyPatch(cy: Core, prev: Map<string, Element>, next: Element[], pins:
   const patch = diffElements(prev, next);
   cy.batch(() => {
     if (patch.removed.length) cy.remove(byIds(cy, patch.removed));
-    for (const el of patch.updated) cy.getElementById(el.data.id).data(el.data);
+    for (const el of patch.updated) {
+      const target = cy.getElementById(el.data.id);
+      const gone = OPTIONAL_DATA.filter((key) => target.data(key) !== undefined && !(key in el.data));
+      if (gone.length) target.removeData(gone.join(' '));
+      target.data(el.data);
+    }
     if (patch.added.length) {
       // Start new vertices next to an existing neighbour so the layout animation reads as "grow".
       const added = cy.add(patch.added.map((el) => ({ group: el.group, data: { ...el.data } })));
@@ -108,6 +120,9 @@ export function GraphView(props: GraphViewProps) {
   const indexRef = useRef<Map<string, Element>>(new Map());
   const onSelectRef = useRef(props.onSelect);
   onSelectRef.current = props.onSelect;
+  const onWireTapRef = useRef(props.onWireTap);
+  onWireTapRef.current = props.onWireTap;
+  const [cyState, setCyState] = useState<Core | null>(null);
   const [tooltip, setTooltip] = useState<Tooltip | null>(null);
   const [menu, setMenu] = useState<MenuAnchor | null>(null);
   const pinsRef = useRef<Pins>(NO_PINS);
@@ -133,7 +148,11 @@ export function GraphView(props: GraphViewProps) {
     cy.on('tap', (evt: EventObject) => {
       if (evt.target === cy) onSelectRef.current(null);
       else if (evt.target.isNode()) onSelectRef.current(evt.target.id());
-      else onSelectRef.current(topicElementId((evt.target.data() as EdgeData).topic)); // edge -> its topic
+      else {
+        const data = evt.target.data() as EdgeData;
+        onSelectRef.current(topicElementId(data.topic)); // edge -> its topic
+        if (data.port) onWireTapRef.current?.({ port: data.port, topic: data.topic, x: evt.renderedPosition.x, y: evt.renderedPosition.y });
+      }
     });
     // A vertex the user moved stays where it was put until "整列し直す".
     cy.on('dragfree', 'node', (evt: EventObject) => {
@@ -153,7 +172,9 @@ export function GraphView(props: GraphViewProps) {
     });
     cy.on('tap viewport', () => setMenu(null));
     cyRef.current = cy;
+    setCyState(cy);
     return () => {
+      setCyState(null);
       cy.destroy();
       cyRef.current = null;
       indexRef.current = new Map();
@@ -227,6 +248,7 @@ export function GraphView(props: GraphViewProps) {
       <div ref={containerRef} className="graph-canvas" data-testid="graph-canvas" onContextMenu={(e) => e.preventDefault()} />
       <canvas ref={canvasRef} className="graph-particles" aria-hidden="true" />
       <MapOutline elements={props.elements} />
+      {cyState && props.overlay?.(cyState)}
       {menu && props.renderMenu?.(menu, () => setMenu(null))}
       {tooltip && (
         <div className="graph-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>

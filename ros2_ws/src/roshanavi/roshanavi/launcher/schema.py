@@ -113,9 +113,31 @@ class DummySpec(_Strict):
         return values
 
 
-def _check_kind(kind: Optional[str], type_name: str) -> None:
-    if kind is not None and not data_kinds.fits(kind, type_name):
+def _check_kind(kind: Optional[str], type_name: str, receiving: bool = False) -> None:
+    """``receiving`` (an input port): a type whose kind converts to ``kind`` is fine too
+    (an integer topic into a 数値 (小数) input, ``data_kinds.accepts``)."""
+    check = data_kinds.accepts if receiving else data_kinds.fits
+    if kind is not None and not check(kind, type_name):
         raise ValueError(f'type {type_name} does not carry data kind {kind!r}')
+
+
+def _check_ports(inputs: List[Any], outputs: List[Any]) -> None:
+    """Kinds / types of function and class node ports. An empty topic is a port that is not
+    wired yet (map wiring, docs/design/wiring.md): nothing is subscribed / published there."""
+    for port in [*inputs, *outputs]:
+        if port.kind == 'message' and not port.type:
+            raise ValueError(f'{port.topic or "(not wired)"}: kind "message" needs a "type"')
+    for port in inputs:
+        if port.type:
+            _check_kind(port.kind, port.type, receiving=True)
+    for port in outputs:
+        if port.type:
+            _check_kind(port.kind, port.type)
+
+
+def wired(topics: List[str]) -> List[str]:
+    """The topics of the ports that are wired (an empty topic = not wired yet)."""
+    return [topic for topic in topics if topic]
 
 
 ALIAS_PATTERN = r'^[a-z][a-z0-9_]{0,31}$'
@@ -232,7 +254,8 @@ RESERVED_MODULE_TOPS = ('roshanavi',)  # never re-import the tool's own package 
 
 
 class FunctionInput(_Strict):
-    topic: constr(min_length=1, max_length=256)
+    # '' = not wired yet (the port is shown on the map; nothing is subscribed / published).
+    topic: constr(max_length=256)
     # データの種類: what the function receives (``message``: the message as a dict).
     kind: KindName = 'string'
     # Explicit type: a compatible type of an existing topic (Float32 ...) or, for kind
@@ -274,16 +297,12 @@ class FunctionSpec(_Strict):
                 raise ValueError('call "periodic" takes no inputs')
             if values.get('rate_hz') is None:
                 raise ValueError('call "periodic" needs "rate_hz"')
-        topics = [i.topic for i in inputs]
+        topics = wired([i.topic for i in inputs])
         if len(set(topics)) != len(topics):
             raise ValueError(f'input topics must be unique: {topics}')
         if values['trigger'] != 'any' and values['trigger'] not in topics:
             raise ValueError('trigger must be "any" or one of the input topics')
-        for port in [*inputs, values['output']]:
-            if port.kind == 'message' and not port.type:
-                raise ValueError(f'{port.topic}: kind "message" needs a "type"')
-            if port.type:
-                _check_kind(port.kind, port.type)
+        _check_ports(inputs, [values['output']])
         return values
 
 
@@ -330,7 +349,7 @@ class ClassMethodSpec(_Strict):
                 raise ValueError('call "periodic" takes no inputs')
             if values.get('rate_hz') is None:
                 raise ValueError('call "periodic" needs "rate_hz"')
-        topics = [i.topic for i in inputs]
+        topics = wired([i.topic for i in inputs])
         if len(set(topics)) != len(topics):
             raise ValueError(f'input topics must be unique: {topics}')
         if values['trigger'] != 'any' and values['trigger'] not in topics:
@@ -343,11 +362,7 @@ class ClassMethodSpec(_Strict):
                 raise ValueError(f'output keys must be unique: {keys}')
         elif len(outputs) > 1:
             raise ValueError('several outputs need a key each (the method returns a dict)')
-        for port in [*inputs, *outputs]:
-            if port.kind == 'message' and not port.type:
-                raise ValueError(f'{port.topic}: kind "message" needs a "type"')
-            if port.type:
-                _check_kind(port.kind, port.type)
+        _check_ports(inputs, outputs)
         return values
 
 
@@ -381,8 +396,8 @@ class ClassSpec(_Strict):
         for action in actions:
             if action in HOOK_METHODS:
                 raise ValueError(f'{action} is called by roshanavi itself; it cannot be an action')
-        inputs = [i.topic for m in methods for i in m.inputs]
-        outputs = [o.topic for m in methods for o in m.outputs]
+        inputs = wired([i.topic for m in methods for i in m.inputs])
+        outputs = wired([o.topic for m in methods for o in m.outputs])
         if len(set(outputs)) != len(outputs):
             raise ValueError(f'output topics must be unique across methods: {outputs}')
         loops = sorted(set(inputs) & set(outputs))

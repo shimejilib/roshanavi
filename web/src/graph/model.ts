@@ -29,6 +29,9 @@ export interface NodeData {
   load: LoadLevel;
   /** The node's memory keeps growing (leak suspicion). */
   leak: boolean;
+  /** Nodes with つなぎ口 (map wiring): box size that fits the ports. */
+  pw?: number;
+  ph?: number;
 }
 
 export interface EdgeData {
@@ -48,6 +51,11 @@ export interface EdgeData {
   /** How `hz`/`bw` were obtained: per publisher (rates.py) or the topic total. */
   rateBasis: RateBasis | 'total';
   rateNote: string;
+  /** Map wiring: the edge ends at its port (cytoscape `source-endpoint` / `target-endpoint`). */
+  sep?: string;
+  tep?: string;
+  /** Map wiring: the key of the port this edge is the wire of. */
+  port?: string;
 }
 
 interface EdgeRate {
@@ -172,7 +180,64 @@ function qosBadEdges(diags: Diagnostic[]): Map<string, Diagnostic[]> {
   return bad;
 }
 
-function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, nowMs: number): EdgeData[] {
+/** Ports of a wireable node, in order (topic per port, '' = not wired), and their keys. */
+export interface PortSlots {
+  inputs: readonly string[];
+  outputs: readonly string[];
+  inputKeys?: readonly string[];
+  outputKeys?: readonly string[];
+  /** Port labels drawn inside the box (its width follows them). */
+  inputLabels?: readonly string[];
+  outputLabels?: readonly string[];
+}
+
+export const PORT_PITCH = 14;
+export const PORT_BOX_WIDTH = 46;
+const PORT_PAD = 8;
+const PORT_BOX_MIN_HEIGHT = 26;
+
+const LABEL_FONT_ASCII = 5.4; // px per character at the 9 px port label font
+const LABEL_FONT_WIDE = 9.2;
+const LABEL_GAP = 14;
+const BOX_MAX_WIDTH = 180;
+
+/** Rough width of a port label (no DOM: the model is pure). */
+export function labelWidth(text: string): number {
+  let w = 0;
+  for (const ch of text) w += ch.charCodeAt(0) < 0x2e80 ? LABEL_FONT_ASCII : LABEL_FONT_WIDE;
+  return w;
+}
+
+/** Box width that fits the labels of both sides. */
+export function portBoxWidth(slots: PortSlots): number {
+  const widest = (labels: readonly string[] | undefined) => Math.max(0, ...(labels ?? []).map(labelWidth));
+  const w = widest(slots.inputLabels) + widest(slots.outputLabels) + LABEL_GAP + 2 * PORT_PAD;
+  return Math.round(Math.min(BOX_MAX_WIDTH, Math.max(PORT_BOX_WIDTH, w)));
+}
+
+/** Box height that fits `n` ports on a side (at least the plain node height). */
+export function portBoxHeight(slots: PortSlots): number {
+  const n = Math.max(slots.inputs.length, slots.outputs.length, 1);
+  return Math.max(PORT_BOX_MIN_HEIGHT, n * PORT_PITCH + PORT_PAD);
+}
+
+/** Vertical position of port `index` of `count`, as a fraction of the box height (-0.5 .. 0.5). */
+export function portFraction(index: number, count: number): number {
+  return (index + 0.5) / Math.max(1, count) - 0.5;
+}
+
+function endpointOf(slots: PortSlots | undefined, dir: 'pub' | 'sub', topic: string): { at: string; key: string } | null {
+  if (!slots) return null;
+  const list = dir === 'pub' ? slots.outputs : slots.inputs;
+  const index = list.indexOf(topic);
+  if (index < 0) return null;
+  const x = dir === 'pub' ? '50%' : '-50%';
+  const y = `${(portFraction(index, list.length) * 100).toFixed(2)}%`;
+  const key = (dir === 'pub' ? slots.outputKeys : slots.inputKeys)?.[index] ?? '';
+  return { at: `${x} ${y}`, key };
+}
+
+function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, nowMs: number, ports: ReadonlyMap<string, PortSlots>): EdgeData[] {
   const bad = qosBadEdges(snap.diagnostics);
   const seen = new Set<string>();
   const edges: EdgeData[] = [];
@@ -185,6 +250,7 @@ function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, now
     const reasons = e.dir === 'sub' ? (bad.get(`${e.node}\u0000${e.topic}`) ?? []) : [];
     const nodeEl = nodeElementId(e.node);
     const topicEl = topicElementId(e.topic);
+    const end = endpointOf(ports.get(e.node), e.dir, e.topic);
     edges.push({
       id,
       source: e.dir === 'pub' ? nodeEl : topicEl,
@@ -201,6 +267,7 @@ function buildEdges(snap: GraphSnapshot, traffic: Map<string, TrafficEntry>, now
       qosReason: reasons.map((d) => qosReasonText(d)).join('\n'),
       rateBasis: rate.basis,
       rateNote: rate.note,
+      ...(end ? { [e.dir === 'pub' ? 'sep' : 'tep']: end.at, port: end.key } : {}),
     });
   }
   return edges;
@@ -225,10 +292,11 @@ export function buildElements(
   traffic: Map<string, TrafficEntry>,
   nowMs: number,
   resources: Readonly<Record<string, NodeBadge>> = {},
+  ports: ReadonlyMap<string, PortSlots> = new Map(),
 ): Element[] {
   // Endpoints can briefly reference nodes the node list does not have yet (graph race).
   const known = new Set(snap.nodes.map((n) => n.id));
-  const edges = buildEdges(snap, traffic, nowMs).filter((e) => known.has(e.node));
+  const edges = buildEdges(snap, traffic, nowMs, ports).filter((e) => known.has(e.node));
   const nodeBw = new Map<string, number>();
   for (const e of edges) nodeBw.set(e.node, (nodeBw.get(e.node) ?? 0) + e.bw);
   const warnTopics = new Set(warningDiagnostics(snap.diagnostics).map((d) => d.topic));
@@ -236,6 +304,7 @@ export function buildElements(
   const warnNodes = new Set(warningDiagnostics(snap.diagnostics).filter((d) => d.code === 'mine_no_input').flatMap((d) => d.nodes));
   const elements: Element[] = snap.nodes.map((n) => {
     const badge = n.job_id ? undefined : resources[n.id];
+    const slots = ports.get(n.id);
     return {
       group: 'nodes',
       data: {
@@ -249,6 +318,7 @@ export function buildElements(
         warn: warnNodes.has(n.id),
         load: loadLevel(badge?.cpu_pct),
         leak: badge?.leak?.suspect === true,
+        ...(slots ? { pw: portBoxWidth(slots), ph: portBoxHeight(slots) } : {}),
       },
     };
   });

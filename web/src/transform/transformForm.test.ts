@@ -81,8 +81,8 @@ describe('buildTransformSpec', () => {
 
   it.each([
     [{ name: '1bad' }, 'ノード名'],
-    [{ outputTopic: '/chatter' }, '入力トピックと同じ'],
-    [{ outputTopic: 'bad topic' }, '出力トピック'],
+    [{ outputTopic: '/chatter' }, '入力と同じ'],
+    [{ outputTopic: 'bad topic' }, '出力のチャンネル'],
     [{ outputType: 'nope' }, '出力の型'],
     [{ inputs: [{ topic: '/a', type: STRING, alias: 'now' }] }, '予約語'],
     [{ inputs: [{ topic: '/a', type: '', alias: 'msg' }] }, '型を指定'],

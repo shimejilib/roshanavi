@@ -71,7 +71,7 @@ def spec_from_cmd(index: int, cmd: Sequence[str]) -> TargetSpec:
     argv = list(cmd)
     if len(argv) < 4 or argv[0] != 'ros2' or argv[1] not in ('run', 'launch'):
         raise SetupError('cmd は ["ros2", "run", パッケージ, 実行ファイル, ...] か '
-                         '["ros2", "launch", パッケージ, launch ファイル, 引数:=値 ...] の形にしてください '
+                         '["ros2", "launch", パッケージ, 起動セット (launch ファイル), 引数:=値 ...] の形にしてください '
                          '(ほかのコマンドは起動しません)')
     kind, package, name, rest = argv[1], argv[2], argv[3], argv[4:]
     if kind == 'launch':
@@ -261,7 +261,7 @@ def _launcher_text(exc: LauncherError) -> str:
     code = getattr(exc, 'code', '')
     hint = {'unknown_package': 'パッケージが見つかりません (ビルド・source 済みか確認してください)',
             'unknown_executable': '実行ファイルが見つかりません',
-            'unknown_launch_file': 'launch ファイルが見つかりません'}.get(code)
+            'unknown_launch_file': '起動セット (launch ファイル) が見つかりません'}.get(code)
     return f'{hint}: {exc}' if hint else f'起動できません: {exc}'
 
 

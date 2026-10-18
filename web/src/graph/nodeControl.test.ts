@@ -55,7 +55,7 @@ describe('confirmText', () => {
     });
     const c = nodeControl(node({ id: '/a', role: 'dependency', target_id: 'talker' }), [tg]);
     expect(confirmText('stop', c, '/a')).toBe(
-      'このノードは launch ファイル demo.launch.py で起動されています。停止すると次の 2 個のノードも停止します: /a, /b',
+      'このノードは起動セット (launch ファイル) demo.launch.py で起動されています。停止すると次の 2 個のノードも停止します: /a, /b',
     );
     expect(confirmText('restart', c, '/a')).toContain('2 個のノード');
   });

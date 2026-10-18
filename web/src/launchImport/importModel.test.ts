@@ -43,7 +43,7 @@ describe('import model', () => {
   it('describes nodes, problems and reasons in plain language', () => {
     const n = node(0, { file_params: { ids: [1] }, lifecycle: true, spec: { ...node(0).spec, args: ['--x'] } });
     expect(nodeTitle(node(0, { fq_name: null }))).toBe('(名前なし) demo_nodes_cpp/talker');
-    expect(nodeFacts(n)).toEqual(['demo_nodes_cpp / talker', 'パラメータ 1 個', 'パラメータファイルに書き出す値 1 個', 'リマップ chatter → /c', '引数 --x', 'lifecycle ノード']);
+    expect(nodeFacts(n)).toEqual(['demo_nodes_cpp / talker', '設定値 (パラメータ) 1 個', '設定値のファイル (パラメータファイル) に書き出す値 1 個', '名前の付け替え (リマップ) chatter → /c', '引数 --x', 'lifecycle ノード']);
     expect(problemText(plan().nodes[1] as ImportNode)).toContain('そのパッケージにその実行ファイルがありません');
     expect(problemText(plan().nodes[2] as ImportNode)).toContain('すでに起動リストにあります');
     expect(reasonText('composable_container')).toContain('composable container');
@@ -57,7 +57,7 @@ describe('import model', () => {
     expect(commitRequest(p, 'whole', new Set([0]), 'mine').indices).toEqual([]);
     expect(importBlocker(p, 'nodes', new Set([0]))).toBeNull();
     expect(importBlocker(p, 'nodes', new Set())).toBe('取り込むノードを選んでください');
-    expect(importBlocker(p, 'whole', new Set())).toContain('パッケージの launch ファイルではない');
+    expect(importBlocker(p, 'whole', new Set())).toContain('パッケージの起動セット (launch ファイル) ではない');
     expect(importBlocker(plan({ missing_args: ['rate'] }), 'nodes', new Set([0]))).toContain('rate');
     expect(importBlocker(plan({ whole: { kind: 'launch' } }), 'whole', new Set())).toBeNull();
   });

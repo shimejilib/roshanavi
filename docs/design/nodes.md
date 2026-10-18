@@ -108,7 +108,7 @@
 | バイト列 (生データ) | `bytes` | `std_msgs/UInt8MultiArray` | `bytes` |
 | 専用の型 (詳細設定モード) | `message` | 指定した任意の型 | メッセージ全体の dict 表現 |
 
-- **対応表は 1 か所** (`roshanavi/data_kinds.py`): 種類 ↔ 型、インストールされている型の選択 (音声の代替)、既存の型 → 種類 (互換の型: `Float32` → 数値 (小数)、`Int8`〜`UInt64` → 整数、各種 `*MultiArray` → 数値の並び、`AudioData` → 音声、`example_interfaces/msg/String` などの example_interfaces の 1 項目の型 → 対応する種類 (Lyrical のデモの talker が使う)。型はそのまま使う)、Python の値との変換 (`to_python` / `from_python`、画像・音声はメディアのアダプタ [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4) 経由で変換は型ごとに 1 つ)、詳細設定モードの並び (`type_groups`)。入力ノード・変換ノード・関数ノード・メディアのアダプタ (`/api/media/types` の `data_kind`) が共有する。`GET /api/data-kinds` は `{kinds[{id, type, available, python}], type_kinds, common_types}`。表示名は UI の i18n (`i18n/messagesKinds.ts`)。
+- **対応表は 1 か所** (`roshanavi/data_kinds.py`): 種類 ↔ 型、インストールされている型の選択 (音声の代替)、既存の型 → 種類 (互換の型: `Float32` → 数値 (小数)、`Int8`〜`UInt64` → 整数、各種 `*MultiArray` → 数値の並び、`AudioData` → 音声、`example_interfaces/msg/String` などの example_interfaces の 1 項目の型 → 対応する種類 (Lyrical のデモの talker が使う)。型はそのまま使う)、Python の値との変換 (`to_python` / `from_python`、画像・音声はメディアのアダプタ [input-and-media.md#メディア](input-and-media.md#メディア-アダプタファイルソースブラウザ入力ビューア-p4) 経由で変換は型ごとに 1 つ)、詳細設定モードの並び (`type_groups`)。入力ノード・変換ノード・関数ノード・メディアのアダプタ (`/api/media/types` の `data_kind`) が共有する。`GET /api/data-kinds` は `{kinds[{id, type, available, python}], type_kinds, common_types, conversions}` (`conversions` は地図の配線で許す種類の変換、[wiring.md](wiring.md))。表示名は UI の i18n (`i18n/messagesKinds.ts`)。
 - 変換は厳密: 数値に `bool` や文字列は渡さない、整数は整数値の float まで、画像は uint8 で 2 次元か 3 チャンネル、音声は int16。合わないときは「出力の種類 int には int が必要ですが、関数は str を返しました」のように型名付きのエラー (`KindError`)。
 - **既存のトピックに送る場合は、型を選ばせない** (相手が決まっているため)。自動で検出し、「このトピックは 文字列 (std_msgs/String) です」のように、データの種類と ROS の型を併記する。上の表に無い型なら「専用の型: geometry_msgs/Twist」と表示し、テンプレートで入力させる。型が複数あるトピックはどれに合わせるかだけを選ぶ。既存の `String` のトピックを JSON として扱う選択は保つ。
 - 新しいトピックでは種類を選ぶ。ROS の型名は画面に出さない (E2E `datakind.spec.ts` で `std_msgs` が見えないことを確認)。
@@ -133,6 +133,8 @@ roshanavi で「＋ 関数・クラスノードを作る」→「関数」→ �
 | 複数入力 (`multi_input`、`trigger`) | 入力 2〜8 つ。各入力の最新値を入力の順に引数へ渡す (変換ノードと同じ結合ルール `transform/pipeline.Joiner`: 全部の入力が 1 回届くまで呼ばない、`trigger` は `any` か入力のトピック) |
 
 - 戻り値が `None` のときは送らない (条件付きで出したいとき用、`skipped` に数える)。
+- **つながっていない口** (地図の上での配線、[wiring.md](wiring.md)): 入力・出力のチャンネル名は空 (`''`) でもよい。空の入力は購読せず、空の出力には送らない (関数は呼ばれ、戻り値は `skipped` に数える)。空の口は重複・自己ループの検査から外し、`trigger` にはできない。クラスノードの口も同じ。コードの書き出しは全部の口がつながっているときだけ (409 `unwired_ports`)。
+- **入力口の変換**: 入力口は、種類が変換できる型のチャンネルも購読できる (`data_kinds.accepts`。整数のチャンネルを `kind: float` の口で受けると `float()` で渡す)。変換の表 (`CONVERSIONS`: 整数 → 小数、文字列 ↔ JSON) は地図の配線の互換性の規則 (`wire_compat`) と同じ。
 - 入力に種類 (`kind`) だけを書いて型 (`type`) を省いたときは、起動の時点で地図にあるそのトピックの型のうち、その種類を運べるものが 1 つだけならその型で購読する (`function/core.adopt_topic_types`。例: Lyrical のデモの `/chatter` は `example_interfaces/msg/String` なので、`kind: string` の `text_shout` もそれを購読する)。トピックがまだ無い・候補が複数なら種類の既定の型 (`std_msgs/msg/String` など)。書かれた型は常にそのまま使う。
 - 例外が起きたら、そのメッセージは送らず、ログと画面に「関数でエラーが起きました」と **ファイル:行番号 (関数名)** 付きで出す (利用者のパッケージ内でいちばん深いフレーム。ログは 5 秒に 1 行まで、抑えた件数を添える)。ノードは止めない。値の変換の失敗 (戻り値の型が合わない、届いた JSON が読めない) も同じ扱い。
 - 値の受け渡しは [nodes.md#データの種類](nodes.md#データの種類-ros-のメッセージ型を意識させないp55) の表 (入力側も同じ)。関数には ROS のメッセージではなく Python の値を渡す。詳細設定モードの「専用の型」では、メッセージ全体を dict で受け取り、dict で返す。画像・音声の出力には、呼び出しのきっかけになった入力の `header.stamp` を引き継ぐ (latency を測れるように。無ければいまの時刻)。

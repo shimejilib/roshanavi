@@ -58,7 +58,13 @@
 .error-panel-tour { position: fixed; right: 16px; bottom: 16px; z-index: 60; max-width: 340px; }
 
 /* driver.js turns pointer events back on for everything inside the highlighted element; keep the
-   few things that are click-through on purpose (particle layer, tooltips, hidden radio inputs). */
+   few things that are click-through on purpose (particle layer, tooltips, hidden radio inputs,
+   the wiring layer over the map: only its ports and buttons take clicks). */
 .driver-active .driver-active-element .graph-particles,
 .driver-active .driver-active-element .graph-tooltip,
-.driver-active .driver-active-element .segmented .seg input { pointer-events: none; }
+.driver-active .driver-active-element .segmented .seg input,
+.driver-active .driver-active-element .wire-layer,
+.driver-active .driver-active-element .wire-label,
+.driver-active .driver-active-element .wire-drag,
+.driver-active .driver-active-element .wire-hint,
+.driver-active .driver-active-element .wire-tip { pointer-events: none; }

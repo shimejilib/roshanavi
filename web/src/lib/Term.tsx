@@ -3,10 +3,10 @@
 
 import type { ReactNode } from 'react';
 import { t, type MessageKey } from '../i18n';
+import type { GlossaryId } from '../i18n/glossary';
 
-export type TermName =
-  | 'launch' | 'remap' | 'namespace' | 'parameter' | 'paramsFile' | 'node' | 'topic'
-  | 'msgType' | 'workspace' | 'rate' | 'qos' | 'package' | 'executable' | 'lifecycle';
+/** Every glossary term has a tooltip (i18n/glossary.ts is the one source). */
+export type TermName = GlossaryId;
 
 export function termHelp(term: TermName): string {
   return t(`term.${term}` as MessageKey);

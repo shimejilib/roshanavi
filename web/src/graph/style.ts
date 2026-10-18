@@ -109,6 +109,10 @@ export function stylesheet(p: Palette): StylesheetJson {
       style: { shape: 'round-rectangle', width: 34, height: 22, 'background-opacity': 0.85, 'border-color': '#000' },
     },
     ...roleRules(p),
+    // Map wiring: nodes with つなぎ口 are taller (one row per port), edges end at their port.
+    { selector: 'node[ph]', style: { width: 'data(pw)', height: 'data(ph)' } },
+    { selector: 'edge[sep]', style: { 'source-endpoint': 'data(sep)' } },
+    { selector: 'edge[tep]', style: { 'target-endpoint': 'data(tep)' } },
     {
       selector: 'node[kind = "topic"]',
       style: {

@@ -58,6 +58,12 @@ describe('function node form', () => {
     expect(error({ call: 'multi_input' })).toContain('2 つ以上');
   });
 
+  it('builds ports that are not wired yet (empty topics: wired on the map later)', () => {
+    const built = buildFunctionSpec(ready({ inputs: [{ topic: '', kind: 'string', type: '' }], output: { topic: '', kind: 'string', type: '' } }), []);
+    expect(built.ok && [built.value.inputs, built.value.output]).toEqual([[{ topic: '', kind: 'string' }], { topic: '', kind: 'string' }]);
+    expect(buildFunctionSpec(ready({ output: { topic: 'a b', kind: 'string', type: '' } }), []).ok).toBe(false);
+  });
+
   it('round-trips an existing spec and resizes rows per call mode', () => {
     const built = buildFunctionSpec(ready(), []);
     if (!built.ok) throw new Error(built.error);

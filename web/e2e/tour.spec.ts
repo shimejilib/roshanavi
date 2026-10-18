@@ -79,11 +79,18 @@ test('first launch asks once; later it is only in ⚙ 設定', async ({ page }) 
   await expect(page.getByTestId('tour-item-overview')).toHaveAttribute('data-done', 'false');
 });
 
-test('画面の見方: ten steps, nothing to operate; Esc pauses, a reload and 続ける resume', async ({ page }) => {
+test('画面の見方: eleven steps, nothing to operate; Esc pauses, a reload and 続ける resume', async ({ page }) => {
   await startFromSettings(page, 'overview');
   await onStep(page, '画面の見方');
-  expect(await progressOf(page)).toBe('1 / 10');
+  expect(await progressOf(page)).toBe('1 / 11');
   await next(page);
+  // The pub/sub primer (docs/design/wiring.md §5) opens on the map for this step only.
+  await onStep(page, 'しくみの 1 枚絵');
+  await expect(page.locator('.driver-active-element[data-tour="primer"]')).toHaveCount(1);
+  await expect(page.getByTestId('primer')).toContainText('名前付きのチャンネル (トピック)');
+  await shot(page, 'tour-primer');
+  await next(page);
+  await expect(page.getByTestId('primer')).toHaveCount(0);
   await onStep(page, '通信マップ');
   await expect(page.locator('.driver-active-element[data-tour="map"]')).toHaveCount(1);
   await shot(page, 'tour-overview');
@@ -108,7 +115,7 @@ test('画面の見方: ten steps, nothing to operate; Esc pauses, a reload and �
     await onStep(page, title);
   }
   await next(page);
-  await onStep(page, 'トピック別 / ノード別');
+  await onStep(page, 'チャンネル別 / ノード別');
   await expect(page.getByTestId('tab-traffic')).toHaveAttribute('aria-selected', 'true'); // switched by the tour
   await next(page);
   await onStep(page, 'ノード一覧');
@@ -130,7 +137,7 @@ test('はじめての入力ノード: kind → /hello → value → create → c
   await onStep(page, 'データの種類');
   await expect(mark(page, 'input-type-kind')).toHaveValue('string');
   await next(page);
-  await onStep(page, 'トピック名');
+  await onStep(page, 'チャンネル名');
   await mark(page, 'input-topic').fill('/hello');
   await onStep(page, '送る中身');
   await shot(page, 'tour-first-input');
@@ -141,7 +148,7 @@ test('はじめての入力ノード: kind → /hello → value → create → c
   await expect(page.getByTestId('graph-outline').locator('[data-id="n:/dummy_hello"]')).toHaveCount(1);
   await page.waitForTimeout(1500); // the map's layout animation
   await clickElement(page, 'n:/dummy_hello');
-  await onStep(page, 'トピックをクリック');
+  await onStep(page, 'チャンネルをクリック');
   await clickElement(page, 't:/hello');
   await onStep(page, '流れているデータ');
   await expect(page.getByTestId('echo-body')).toContainText('hello', { timeout: 15_000 });
@@ -192,9 +199,9 @@ test('関数ノードを作る: shout on /chatter → /shouted, the echo is uppe
   await onStep(page, '関数を選ぶ');
   await expect(mark(page, 'function-name').locator('option')).toContainText(['shout(text: str) -> str']);
   await mark(page, 'function-name').selectOption('shout');
-  await onStep(page, '入力のトピック');
+  await onStep(page, '入力のチャンネル');
   await mark(page, 'function-input-0-topic').fill('/chatter');
-  await onStep(page, '出力のトピック');
+  await onStep(page, '出力のチャンネル');
   await mark(page, 'function-output-topic').fill('/shouted');
   await shot(page, 'tour-function-node');
   await onStep(page, '作成');
@@ -215,7 +222,7 @@ test('シナリオを記録する: record → save → run → passed → clean 
   await mark(page, 'tab-scenarios').click();
   await onStep(page, '記録して作る');
   await mark(page, 'scn-record-open').click();
-  await onStep(page, '見張るトピック');
+  await onStep(page, '見張るチャンネル');
   await mark(page, 'scn-watch-/tour_out').check();
   await onStep(page, '記録を始める');
   await mark(page, 'scn-rec-start').click();

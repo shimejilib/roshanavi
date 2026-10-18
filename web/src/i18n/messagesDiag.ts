@@ -8,7 +8,7 @@ export const diagJa = {
   'diag.quiet.no_subscriber': '受信なし',
   'diag.quiet.no_publisher': '送信なし',
   'diag.similar_names':
-    '{published} (送信) と {subscribed} (受信) は名前が似ていて、つながっていません。打ち間違いやリマップ漏れではありませんか?',
+    '{published} (送信) と {subscribed} (受信) は名前が似ていて、つながっていません。打ち間違いや名前の付け替え (リマップ) 漏れではありませんか?',
   'diag.subscriber_lost': 'さっきまで {who} が {topic} を受信していましたが、いなくなりました',
   'diag.publisher_lost': 'さっきまで {who} が {topic} に送信していましたが、いなくなりました',
   'diag.mine_no_input': '開発中のノード {node} の入力 {topic} に送信元がいません',

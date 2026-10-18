@@ -212,15 +212,17 @@ function methodProblem(m: MethodForm, inputsOf: readonly string[]): string | nul
   for (const row of used) {
     const bad = checkPort(row);
     if (bad) return bad;
-    if (inputsOf.includes(normalizeTopic(row.topic))) return t('function.error.sameTopic');
+    if (row.topic.trim() && inputsOf.includes(normalizeTopic(row.topic))) return t('function.error.sameTopic');
   }
-  const topics = used.map((o) => normalizeTopic(o.topic));
+  const topics = used.map((o) => normalizeTopic(o.topic)).filter(Boolean);
   if (new Set(topics).size !== topics.length) return t('class.error.outputDup', { method: m.method });
   return null;
 }
 
+/** Outputs that become ports: a dict key, a topic, or (one plain output) a kind with no topic
+ *  yet = an output port that is wired on the map later (docs/design/wiring.md). */
 function filledOutputs(m: MethodForm): OutputRow[] {
-  return m.outputs.filter((o) => (m.dict ? o.key.trim() !== '' || o.topic.trim() !== '' : o.topic.trim() !== ''));
+  return m.outputs.filter((o) => (m.dict ? o.key.trim() !== '' || o.topic.trim() !== '' : o.topic.trim() !== '' || o.kind !== ''));
 }
 
 function problem(form: ClassForm): string | null {
@@ -228,12 +230,12 @@ function problem(form: ClassForm): string | null {
   if (!form.module || !form.className) return t('class.error.module');
   const bound = form.methods.filter((m) => m.use === 'topic');
   if (bound.length === 0 && !form.methods.some((m) => m.use === 'action')) return t('class.error.nothing');
-  const everyInput = bound.flatMap((m) => m.inputs.map((r) => normalizeTopic(r.topic)));
+  const everyInput = bound.flatMap((m) => m.inputs.map((r) => normalizeTopic(r.topic))).filter(Boolean);
   for (const m of bound) {
     const bad = methodProblem(m, everyInput);
     if (bad) return bad;
   }
-  const outputs = bound.flatMap((m) => filledOutputs(m).map((o) => normalizeTopic(o.topic)));
+  const outputs = bound.flatMap((m) => filledOutputs(m).map((o) => normalizeTopic(o.topic))).filter(Boolean);
   if (new Set(outputs).size !== outputs.length) return t('class.error.outputDupAll');
   return null;
 }

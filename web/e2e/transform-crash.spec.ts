@@ -62,7 +62,7 @@ test('clicking a multi-input transform, its output topic and its edges never bla
   await page.goto('/');
   await expect(page.getByTestId('ws-status')).toHaveAttribute('data-status', 'open');
   // The lifecycle transition_event input is an internal topic: show those too.
-  await page.getByLabel('内部トピック・内部ノードを隠す', { exact: false }).uncheck();
+  await page.getByLabel('内部チャンネル (トピック)・内部ノードを隠す', { exact: false }).uncheck();
   const outline = page.getByTestId('graph-outline');
   await expect(outline.locator(`[data-id="n:/${ID}"]`)).toHaveCount(1, { timeout: 30_000 });
   await expect(outline.locator('[data-id="t:/output_test"]')).toHaveCount(1, { timeout: 30_000 });
@@ -92,7 +92,7 @@ test('clicking a multi-input transform, its output topic and its edges never bla
   await page.getByTestId('tab-traffic').click();
   // `*/transition_event` is folded away by default (like /rosout): show the folded topics too.
   await expect(page.getByTestId('expand-/lc_talker/transition_event')).toHaveCount(0);
-  await page.getByLabel('/rosout などの内部トピックも表示').check();
+  await page.getByLabel('/rosout などの内部チャンネル (トピック) も表示').check();
   for (const topic of ['/output_test', '/lc_talker/transition_event', '/chatter']) {
     await page.getByTestId(`expand-${topic}`).click();
     await page.waitForTimeout(300);

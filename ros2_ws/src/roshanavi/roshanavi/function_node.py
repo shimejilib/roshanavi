@@ -95,9 +95,11 @@ def run(config_path: str, stop: threading.Event) -> int:
             runner.core.report(loader.problem)
         watcher = Watcher(loader, runner.core.on_reload)
         watcher.start()
-        LOG.info('function %s: %s -> %s (%s)', spec.function,
-                 ', '.join(p.topic for p in runner.core.inputs) or f'every {1 / spec.rate_hz:g} s',
-                 spec.output.topic, spec.call)
+        # An empty topic is a port that is not wired yet (map wiring, docs/design/wiring.md).
+        inputs = ', '.join(p.topic or '(not wired)' for p in runner.core.inputs) \
+            if runner.core.inputs else f'every {1 / float(spec.rate_hz or 1):g} s'
+        LOG.info('function %s: %s -> %s (%s)', spec.function, inputs,
+                 spec.output.topic or '(not wired)', spec.call)
         status.write(runner.core.snapshot())
         while not stop.wait(STATUS_PERIOD_SEC):
             status.write(runner.core.snapshot())

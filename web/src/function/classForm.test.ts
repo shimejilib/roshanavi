@@ -96,7 +96,8 @@ describe('class node form', () => {
     };
     expect(error(withInput(ready({ name: '1x' }), '/in'))).toContain('ノード名');
     expect(error({ ...withInput(ready(), '/in'), className: '' })).toContain('モジュールとクラス');
-    expect(error(ready())).toContain('トピック');                                  // the input topic is empty
+    expect(error(ready())).toBe('');                    // an empty input topic = a port wired on the map later
+    expect(error(withInput(ready(), 'bad topic'))).toContain('bad topic');      // a malformed name is refused
     expect(error(updateMethod(ready(), 'process', { inputs: [{ topic: '/in', kind: '', type: '' }] }))).toContain('データの種類');
     expect(error(withInput(ready(), '/moving_average_out'))).toContain('同じ');
     const nothing = { ...ready(), methods: ready().methods.map((m) => ({ ...m, use: 'none' as const })) };

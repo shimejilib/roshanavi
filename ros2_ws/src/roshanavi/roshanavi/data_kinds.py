@@ -147,9 +147,20 @@ def fits(kind_id: str, type_name: str) -> bool:
     return kind_of_type(normalized) == kind_id or (kind is not None and normalized in kind.types)
 
 
+def accepts(kind_id: str, type_name: str) -> bool:
+    """True when an *input* port of ``kind_id`` can subscribe to ``type_name``: it fits, or the
+    type's kind converts to the port's kind (an integer topic into a 数値 (小数) input, wiring)."""
+    if fits(kind_id, type_name):
+        return True
+    sender = kind_of_type(type_name)
+    return sender is not None and (sender, kind_id) in CONVERSIONS
+
+
 def resolve(kind_id: Optional[str], type_name: Optional[str] = None,
-            installed: Callable[[str], bool] = _installed) -> Tuple[str, str]:
-    """``(kind, type)`` for a port: an explicit type wins (it must fit the kind)."""
+            installed: Callable[[str], bool] = _installed,
+            receiving: bool = False) -> Tuple[str, str]:
+    """``(kind, type)`` for a port: an explicit type wins (it must fit the kind; an input port
+    (``receiving``) may also take a type that converts to its kind, :func:`accepts`)."""
     if kind_id in (None, '', MESSAGE_KIND):
         if not type_name:
             raise KindError('type_required', 'kind "message" needs a ROS message type')
@@ -158,9 +169,49 @@ def resolve(kind_id: Optional[str], type_name: Optional[str] = None,
     if not type_name:
         return kind_id, ros_type(kind_id, installed)
     normalized = _normalize(type_name)
-    if not fits(kind_id, normalized):
+    if not (accepts if receiving else fits)(kind_id, normalized):
         raise KindError('kind_type_mismatch', f'type {normalized} is not a {kind_id!r} type')
     return kind_id, normalized
+
+
+# ---- wiring compatibility (map wiring, docs/design/wiring.md) ------------------------------------
+# A wire from a sender of kind A (a topic, an output port) into a receiver of kind B (an input
+# port, a topic) that is allowed with a conversion; the value is the note code the UI explains.
+# The web UI has the same rules (web/src/wiring/compat.ts); both are tested against
+# test/data/wire_compat_cases.json.
+CONVERSIONS: Dict[Tuple[str, str], str] = {
+    ('int', 'float'): 'int_to_float',        # 3 -> 3.0: nothing is lost
+    ('string', 'json'): 'string_to_json',    # same ROS type; text that is not JSON is dropped
+    ('json', 'string'): 'json_to_string',    # the JSON text as it is
+}
+# Refused pairs with their own reason (everything else that differs is ``kind_mismatch``).
+REFUSALS: Dict[Tuple[str, str], str] = {
+    ('float', 'int'): 'float_to_int',        # the decimals would be lost
+}
+
+
+def wire_compat(sender_kind: Optional[str], sender_type: Optional[str],
+                receiver_kind: Optional[str], receiver_type: Optional[str]) -> Tuple[str, str]:
+    """Can a sender (kind / type, either may be unknown) be wired into a receiver?
+
+    Returns ``('same', '')``, ``('convert', <note>)`` or ``('refuse', <reason>)``. A side
+    without a kind is described by its type (``kind_of_type``; None = 専用の型). 専用の型 on
+    either side only matches the same ROS type. Nothing known on one side (a topic that does
+    not exist yet) is always ``same``: the receiver decides the type.
+    """
+    s_kind = sender_kind or (kind_of_type(sender_type) if sender_type else None)
+    r_kind = receiver_kind or (kind_of_type(receiver_type) if receiver_type else None)
+    if (s_kind is None and not sender_type) or (r_kind is None and not receiver_type):
+        return 'same', ''
+    if MESSAGE_KIND in (s_kind, r_kind) or s_kind is None or r_kind is None:
+        if sender_type and receiver_type and _normalize(sender_type) == _normalize(receiver_type):
+            return 'same', ''
+        return 'refuse', 'type_mismatch'
+    if s_kind == r_kind:
+        return 'same', ''
+    if (s_kind, r_kind) in CONVERSIONS:
+        return 'convert', CONVERSIONS[(s_kind, r_kind)]
+    return 'refuse', REFUSALS.get((s_kind, r_kind), 'kind_mismatch')
 
 
 def catalog(installed: Callable[[str], bool] = _installed) -> Dict[str, Any]:
@@ -171,7 +222,9 @@ def catalog(installed: Callable[[str], bool] = _installed) -> Dict[str, Any]:
         kinds.append({'id': kind.id, 'type': chosen, 'available': installed(chosen),
                       'python': kind.python})
     return {'kinds': kinds, 'type_kinds': dict(sorted(_COMPAT.items())),
-            'common_types': list(COMMON_TYPES)}
+            'common_types': list(COMMON_TYPES),
+            'conversions': [{'from': a, 'to': b, 'note': note}
+                            for (a, b), note in CONVERSIONS.items()]}
 
 
 def type_groups(types: Sequence[str], workspace_packages: Sequence[str]) -> List[Dict[str, Any]]:

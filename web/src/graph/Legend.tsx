@@ -7,7 +7,7 @@ interface Swatch {
   color: string;
 }
 
-export function Legend({ palette }: { palette: Palette }) {
+export function Legend({ palette, onPrimer }: { palette: Palette; onPrimer?: () => void }) {
   const items: Swatch[] = [
     { key: 'graph.legend.mine', className: 'sw-node', color: palette.roles.mine },
     { key: 'graph.legend.dependency', className: 'sw-node', color: palette.roles.dependency },
@@ -31,6 +31,15 @@ export function Legend({ palette }: { palette: Palette }) {
           {t(item.key)}
         </li>
       ))}
+      <li>
+        <span className="swatch wire-legend-dot" aria-hidden="true" />
+        {t('wiring.legend.ports')}
+      </li>
+      {onPrimer && (
+        <li>
+          <button type="button" className="small legend-primer" onClick={onPrimer} data-testid="legend-primer">{t('wiring.legend.primer')}</button>
+        </li>
+      )}
     </ul>
   );
 }

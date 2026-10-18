@@ -107,12 +107,15 @@ def validate_function(spec: FunctionSpec, workspace_root: Any) -> None:
     validate.target_id(spec.id)
     validate.node_name(spec.name)
     validate.namespace(spec.namespace)
+    # An empty topic is a port that is not wired yet (map wiring, docs/design/wiring.md).
     for inp in spec.inputs:
-        _absolute_topic(inp.topic)
-    _absolute_topic(spec.output.topic)
-    if spec.output.topic in {inp.topic for inp in spec.inputs}:
-        raise LauncherError('invalid_topic', f'output topic {spec.output.topic} is also an '
-                            'input (the node would receive its own output)')
+        if inp.topic:
+            _absolute_topic(inp.topic)
+    if spec.output.topic:
+        _absolute_topic(spec.output.topic)
+        if spec.output.topic in {inp.topic for inp in spec.inputs}:
+            raise LauncherError('invalid_topic', f'output topic {spec.output.topic} is also an '
+                                'input (the node would receive its own output)')
     resolve_module(workspace_root, spec.module)
 
 
@@ -124,7 +127,8 @@ def validate_class(spec: ClassSpec, workspace_root: Any) -> None:
     validate.namespace(spec.namespace)
     for method in spec.methods:
         for port in [*method.inputs, *method.outputs]:
-            _absolute_topic(port.topic)
+            if port.topic:  # empty: not wired yet
+                _absolute_topic(port.topic)
     resolve_module(workspace_root, spec.module)
 
 

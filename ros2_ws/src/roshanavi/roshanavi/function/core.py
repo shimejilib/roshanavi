@@ -40,7 +40,7 @@ def adopt_input_types(inputs: Sequence[Any],
     std_msgs/msg/String the kind ``string`` would pick). Others are returned as they are."""
     adopted = []
     for port in inputs:
-        if port.type is None and port.kind not in (None, data_kinds.MESSAGE_KIND):
+        if port.topic and port.type is None and port.kind not in (None, data_kinds.MESSAGE_KIND):
             fitting = [t for t in topic_types(port.topic) if data_kinds.fits(port.kind, t)]
             if len(fitting) == 1:
                 port = port.model_copy(update={'type': fitting[0]})
@@ -72,7 +72,8 @@ def adopt_class_topic_types(spec: ClassSpec,
 
 def resolve_ports(spec: FunctionSpec) -> Tuple[List[Port], Port]:
     """Input / output ports with the ROS type each kind resolves to (data_kinds)."""
-    inputs = [Port(i.topic, *data_kinds.resolve(i.kind, i.type)) for i in spec.inputs]
+    inputs = [Port(i.topic, *data_kinds.resolve(i.kind, i.type, receiving=True))
+              for i in spec.inputs]
     out = spec.output
     return inputs, Port(out.topic, *data_kinds.resolve(out.kind, out.type))
 
@@ -183,7 +184,7 @@ class FunctionCore:
                 self.report(Problem('call', describe(exc), where, missing_module_of(
                     exc, resolved.package.top if resolved else None)))
                 return
-        if result is None:
+        if result is None or not self.output.topic:  # nothing to send / output not wired yet
             self._count('skipped')
             return
         try:

@@ -1,0 +1,130 @@
+/* Map wiring (docs/design/wiring.md): ports over the cytoscape map, the wire being dragged,
+   the wiring dialog, the call-timing diagram and the pub/sub primer. */
+
+:root {
+  --wire-in: #4f46e5;
+  --wire-out: #db2777;
+  --wire-ok: #2563eb;
+  --wire-bad: #dc2626;
+  --wire-open-fill: #ffffff;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --wire-in: #a5b4fc;
+    --wire-out: #f9a8d4;
+    --wire-ok: #60a5fa;
+    --wire-bad: #f87171;
+    --wire-open-fill: #111827;
+  }
+}
+
+.wire-layer { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.wire-layer[data-dragging] { cursor: crosshair; }
+.wire-node { display: contents; }
+
+.wire-port {
+  position: absolute; left: 0; top: 0; width: 16px; height: 16px; margin: -8px 0 0 -8px; padding: 0;
+  border: 0; background: transparent; pointer-events: auto; cursor: grab; touch-action: none;
+  display: flex; align-items: center; justify-content: center;
+}
+.wire-port:active { cursor: grabbing; }
+.wire-dot {
+  width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--wire-in); background: var(--wire-in);
+  box-shadow: 0 0 0 1.5px var(--surface); transition: transform 120ms ease-out;
+}
+.wire-port.out .wire-dot { border-color: var(--wire-out); background: var(--wire-out); }
+.wire-port.open .wire-dot { background: var(--wire-open-fill); }
+.wire-port:hover .wire-dot, .wire-port:focus-visible .wire-dot { transform: scale(1.45); }
+.wire-port:focus-visible { outline: none; }
+.wire-port:focus-visible .wire-dot { box-shadow: 0 0 0 2px var(--surface), 0 0 0 4px var(--accent); }
+.wire-port.faded { opacity: 0.15; }
+.wire-label {
+  position: absolute; top: 50%; transform: translateY(-50%); white-space: nowrap; pointer-events: none;
+  font-size: calc(9px * var(--wire-zoom, 1)); line-height: 1; color: #fff; text-shadow: 0 0 2px rgb(0 0 0 / 0.65);
+}
+.wire-port.in .wire-label { left: 17px; }
+.wire-port.out .wire-label { right: 17px; }
+.wire-layer[data-zoom='small'] .wire-label, .wire-layer[data-zoom='tiny'] .wire-label { display: none; }
+.wire-layer[data-zoom='tiny'] .wire-dot { width: 6px; height: 6px; border-width: 1px; }
+
+.wire-actions {
+  position: absolute; left: 0; top: 0; pointer-events: auto; display: flex; gap: 2px;
+  margin-top: -2px; translate: -50% -100%;
+}
+.wire-action { font-size: 10px; padding: 0 5px; line-height: 16px; border-radius: 8px; }
+.wire-layer[data-zoom='tiny'] .wire-actions { display: none; }
+
+.wire-handle {
+  position: absolute; left: 0; top: 0; width: 18px; height: 18px; margin: -9px 0 0 -9px; padding: 0;
+  border-radius: 50%; border: 1.5px solid var(--wire-in); background: var(--surface); color: var(--wire-in);
+  font-size: 12px; line-height: 1; pointer-events: auto; cursor: grab; touch-action: none; display: none;
+  align-items: center; justify-content: center;
+}
+.wire-handle:hover { background: var(--wire-in); color: var(--surface); }
+
+.wire-drag { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+.wire-drag line { stroke-width: 2.5; stroke-linecap: round; }
+.wire-drag line.ok { stroke: var(--wire-ok); }
+.wire-drag line.bad { stroke: var(--wire-bad); stroke-dasharray: 6 5; }
+.wire-hint, .wire-tip, .wire-toolbar, .wire-prompt, .wire-notice, .wire-busy {
+  position: absolute; pointer-events: auto; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); box-shadow: 0 4px 16px rgb(0 0 0 / 0.15); font-size: 12px;
+}
+.wire-hint { pointer-events: none; max-width: 340px; padding: 4px 8px; z-index: 3; }
+.wire-hint.ok { border-color: var(--wire-ok); }
+.wire-hint.bad { border-color: var(--wire-bad); color: var(--error); }
+.wire-tip { pointer-events: none; right: 8px; top: 8px; max-width: 360px; padding: 6px 10px; display: grid; gap: 2px; }
+.wire-toolbar { display: flex; align-items: center; gap: 6px; padding: 4px 6px; z-index: 3; }
+.wire-prompt { display: grid; gap: 6px; padding: 8px; z-index: 3; min-width: 260px; }
+.wire-prompt input { font-family: var(--mono); }
+.wire-notice { left: 50%; bottom: 52px; translate: -50% 0; max-width: min(720px, 90%); padding: 6px 10px; display: flex; gap: 8px; align-items: flex-start; z-index: 3; }
+.wire-busy { left: 50%; top: 8px; translate: -50% 0; padding: 2px 8px; }
+
+/* wiring dialog */
+.wire-dialog { width: min(560px, 94vw); }
+.wire-options { list-style: none; margin: 6px 0; padding: 4px; max-height: 320px; overflow: auto; border: 1px solid var(--border); border-radius: var(--radius); }
+.wire-options:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.wire-option { display: grid; gap: 1px; padding: 5px 8px; border-radius: 4px; cursor: pointer; }
+.wire-option.focused { background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 3px 0 0 var(--accent); }
+.wire-option.disabled { cursor: not-allowed; color: var(--muted); }
+.wire-option.refuse .wire-option-detail { color: var(--error); }
+.wire-option.convert .wire-option-label { color: var(--warn); }
+.wire-option-label { font-family: var(--mono); font-size: 12px; }
+.wire-confirm input { width: 100%; font-family: var(--mono); }
+
+/* call timing (呼ばれ方) */
+.timing-box { display: grid; gap: 6px; padding: 8px 10px; border: 1px dashed var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.timing-box svg { max-width: 100%; height: auto; }
+.timing-box .timing-sentence { font-weight: 600; }
+.timing-switch { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.timing-svg text { font-size: 11px; fill: var(--text); }
+.timing-svg .in { fill: var(--surface); stroke: var(--wire-in); stroke-width: 1.5; }
+.timing-svg .fn { fill: color-mix(in srgb, var(--wire-out) 25%, var(--surface)); stroke: var(--wire-out); stroke-width: 1.5; }
+.timing-svg .calls { stroke: var(--wire-ok); stroke-width: 2; fill: none; }
+.timing-svg .waits { stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 4 3; fill: none; }
+.timing-svg .clock { fill: none; stroke: var(--wire-out); stroke-width: 1.5; }
+
+/* legend entry */
+.legend .wire-legend-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--wire-in); box-shadow: 10px 0 0 var(--wire-out); margin-right: 10px; }
+.legend .legend-primer { font-size: 11px; padding: 0 6px; }
+
+/* pub/sub primer (しくみの 1 枚絵) */
+.primer-card {
+  position: absolute; z-index: 4; left: 50%; top: 50%; translate: -50% -50%; width: min(640px, calc(100% - 32px));
+  max-height: calc(100% - 24px); overflow: auto; padding: 14px 18px; display: grid; gap: 8px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; box-shadow: 0 12px 40px rgb(0 0 0 / 0.22);
+}
+.primer-head { display: flex; align-items: flex-start; gap: 8px; }
+.primer-head h3 { flex: 1; font-size: 15px; line-height: 1.4; }
+.primer-svg { width: 100%; height: auto; }
+.primer-node { fill: color-mix(in srgb, var(--wire-out) 22%, var(--surface)); stroke: var(--wire-out); stroke-width: 1.5; }
+.primer-node-text { font-size: 13px; font-weight: 600; fill: var(--text); }
+.primer-node-sub { font-size: 10px; fill: var(--muted); }
+.primer-topic { fill: color-mix(in srgb, var(--wire-in) 14%, var(--surface)); stroke: var(--wire-in); stroke-width: 2; }
+.primer-topic-name { font-family: var(--mono); font-size: 14px; font-weight: 600; fill: var(--text); }
+.primer-topic-sub { font-size: 10px; fill: var(--muted); }
+.primer-arrow { fill: none; stroke: var(--wire-ok); stroke-width: 2; }
+.primer-arrowhead { fill: var(--wire-ok); }
+.primer-verb { font-size: 11px; fill: var(--wire-ok); font-weight: 600; }
+.primer-points { margin: 0; padding-left: 1.4em; display: grid; gap: 4px; font-size: 13px; line-height: 1.5; }
+.primer-points li::marker { font-weight: 700; color: var(--wire-out); }

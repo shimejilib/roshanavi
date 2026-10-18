@@ -55,13 +55,16 @@ class ClassRunner:
         runtime.node.add_on_set_parameters_callback(self._on_set)
         self._declaring = False
         for binding in core.bindings:
+            # An empty topic is a port that is not wired yet (map wiring): no publisher.
             self._publishers.append([
                 runtime.create_publisher(msgutil.resolve_type(port.type), port.topic,
-                                         make_qos(**out.qos.model_dump()))
+                                         make_qos(**out.qos.model_dump())) if port.topic else None
                 for port, out in zip(binding.outputs, binding.spec.outputs)])
         qos = make_qos(**INPUT_QOS)
         for b, binding in enumerate(core.bindings):
             for i, port in enumerate(binding.inputs):
+                if not port.topic:
+                    continue
                 def callback(msg: Any, b: int = b, i: int = i) -> None:
                     core.on_message(b, i, msg)
                 self._subscriptions.append(runtime.create_subscription(
@@ -107,7 +110,7 @@ class ClassRunner:
             actual = ros_value(node.get_parameter(param.name).value)
             return UNSET if actual is None else class_params.to_python(kind, actual, param.name)
         except Exception as exc:  # a bad override (--ros-args -p) or an unusable value
-            self.core.report(Problem('param', f'パラメータ {param.name} を使えません: {exc}', None))
+            self.core.report(Problem('param', f'設定値 (パラメータ) {param.name} を使えません: {exc}', None))
             return value
 
     def _resync_params(self, declarations: List[Tuple[InitParam, Any]]) -> None:
@@ -155,5 +158,6 @@ class ClassRunner:
         self.core.close()     # the instance's close() / shutdown(), on the worker, bounded
         for publishers in self._publishers:
             for pub in publishers:
-                self._runtime.destroy_publisher(pub)
+                if pub is not None:
+                    self._runtime.destroy_publisher(pub)
         self._publishers = []

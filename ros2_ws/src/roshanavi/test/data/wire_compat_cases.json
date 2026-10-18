@@ -1,0 +1,25 @@
+{
+  "comment": "Map wiring: can a sender (topic / output port) be wired into a receiver (input port / topic)? Shared by test/test_wiring.py and web/src/wiring/compat.test.ts so both sides keep the same rules (docs/design/wiring.md). kind null = unknown (described by type); type null = unknown.",
+  "cases": [
+    {"sender": {"kind": "string", "type": "std_msgs/msg/String"}, "receiver": {"kind": "string", "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": "std_msgs/msg/String"}, "receiver": {"kind": "string", "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": "example_interfaces/msg/String"}, "receiver": {"kind": "string", "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": "std_msgs/msg/Float32"}, "receiver": {"kind": "float", "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": "std_msgs/msg/Int32"}, "receiver": {"kind": "float", "type": null}, "expect": ["convert", "int_to_float"]},
+    {"sender": {"kind": "int", "type": null}, "receiver": {"kind": "float", "type": null}, "expect": ["convert", "int_to_float"]},
+    {"sender": {"kind": "float", "type": null}, "receiver": {"kind": "int", "type": null}, "expect": ["refuse", "float_to_int"]},
+    {"sender": {"kind": null, "type": "std_msgs/msg/String"}, "receiver": {"kind": "json", "type": null}, "expect": ["convert", "string_to_json"]},
+    {"sender": {"kind": "json", "type": null}, "receiver": {"kind": "string", "type": null}, "expect": ["convert", "json_to_string"]},
+    {"sender": {"kind": null, "type": "sensor_msgs/msg/Image"}, "receiver": {"kind": "string", "type": null}, "expect": ["refuse", "kind_mismatch"]},
+    {"sender": {"kind": "string", "type": null}, "receiver": {"kind": "image", "type": null}, "expect": ["refuse", "kind_mismatch"]},
+    {"sender": {"kind": "bool", "type": null}, "receiver": {"kind": "int", "type": null}, "expect": ["refuse", "kind_mismatch"]},
+    {"sender": {"kind": null, "type": "geometry_msgs/msg/Twist"}, "receiver": {"kind": "string", "type": null}, "expect": ["refuse", "type_mismatch"]},
+    {"sender": {"kind": null, "type": "geometry_msgs/msg/Twist"}, "receiver": {"kind": "message", "type": "geometry_msgs/Twist"}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": "geometry_msgs/msg/Pose"}, "receiver": {"kind": "message", "type": "geometry_msgs/msg/Twist"}, "expect": ["refuse", "type_mismatch"]},
+    {"sender": {"kind": "message", "type": "std_msgs/msg/String"}, "receiver": {"kind": null, "type": "std_msgs/msg/String"}, "expect": ["same", ""]},
+    {"sender": {"kind": "string", "type": null}, "receiver": {"kind": null, "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": null, "type": null}, "receiver": {"kind": "image", "type": null}, "expect": ["same", ""]},
+    {"sender": {"kind": "image", "type": null}, "receiver": {"kind": null, "type": "sensor_msgs/msg/Image"}, "expect": ["same", ""]},
+    {"sender": {"kind": "string", "type": null}, "receiver": {"kind": null, "type": "std_msgs/msg/Float64"}, "expect": ["refuse", "kind_mismatch"]}
+  ]
+}

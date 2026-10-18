@@ -15,7 +15,7 @@ describe('bulk plan', () => {
     expect(plan.alsoStopped).toEqual(['/listener']);
     const text = bulkConfirmText(plan);
     expect(text).toContain('次の 2 個を停止します');
-    expect(text).toContain('launch talker_listener_launch.py: /listener, /talker');
+    expect(text).toContain('起動セット talker_listener_launch.py: /listener, /talker');
     expect(text).toContain('選択していない次の 1 個のノードも一緒に止まります: /listener');
   });
 

@@ -1,4 +1,13 @@
 import { useMemo, useState } from 'react';
+import { useDataKinds } from '../datakind/useDataKinds';
+import { PortOverlay } from '../wiring/PortOverlay';
+import { buildNodePorts, portLayouts } from '../wiring/ports';
+import { useArgNames } from '../wiring/useArgNames';
+import { useWiring } from '../wiring/useWiring';
+import type { SelectedWire } from '../wiring/WireBits';
+import { PubSubPrimer } from '../wiring/PubSubPrimer';
+import { stepOf } from '../tour/engine';
+import { useTour } from '../tour/TourProvider';
 import type { Diagnostic } from '../api/types';
 import { ErrorBoundary } from '../lib/ErrorBoundary';
 import { t } from '../i18n';
@@ -59,9 +68,19 @@ export function GraphTab({ active }: { active: boolean }) {
     () => (live.graph ? isolateSnapshot(filterSnapshot(live.graph, { query, hideHidden }), isolation) : null),
     [live.graph, query, hideHidden, isolation],
   );
+  // Map wiring (docs/design/wiring.md): ports of the nodes roshanavi runs, from their specs.
+  const catalog = useDataKinds();
+  const argNames = useArgNames(live.targets);
+  const wiring = useWiring(live.targets);
+  const [selectedWire, setSelectedWire] = useState<SelectedWire | null>(null);
+  const [primerOpen, setPrimerOpen] = useState(false);
+  const tour = useTour();
+  const primerInTour = Boolean(tour.def && tour.run && tour.run.status === 'running' && tour.def.id === 'overview' && stepOf(tour.def, tour.run).id === 'primer');
+  const nodePorts = useMemo(() => buildNodePorts(wiring.targets, filtered, argNames), [wiring.targets, filtered, argNames]);
+  const slots = useMemo(() => portLayouts(nodePorts), [nodePorts]);
   const elements = useMemo(
-    () => (filtered ? buildElements(filtered, live.traffic, live.receivedAt || Date.now(), live.resources?.nodes) : []),
-    [filtered, live.traffic, live.receivedAt, live.resources],
+    () => (filtered ? buildElements(filtered, live.traffic, live.receivedAt || Date.now(), live.resources?.nodes, slots) : []),
+    [filtered, live.traffic, live.receivedAt, live.resources, slots],
   );
   const diagnostics = useMemo(
     () => [...(live.graph?.diagnostics ?? []), ...(live.resources?.diagnostics ?? [])],
@@ -120,12 +139,18 @@ export function GraphTab({ active }: { active: boolean }) {
             fitSignal={fitSignal}
             layoutSignal={layoutSignal}
             projectKey={projectKey}
+            onWireTap={setSelectedWire}
+            overlay={(cy) => (
+              <PortOverlay cy={cy} nodes={nodePorts} targets={wiring.targets} topics={filtered?.topics ?? []} catalog={catalog} wiring={wiring}
+                selected={selectedWire} onCloseSelected={() => setSelectedWire(null)} />
+            )}
             renderMenu={(anchor, close) => (
               <MapMenu key={`${anchor.x}:${anchor.y}`} anchor={anchor} buildable={buildable} commands={commands} onClose={close} />
             )}
           />
           </ErrorBoundary>
-          <Legend palette={palette} />
+          <Legend palette={palette} onPrimer={() => setPrimerOpen(true)} />
+          {(primerOpen || primerInTour) && <PubSubPrimer inTour={primerInTour} onClose={() => setPrimerOpen(false)} />}
         </div>
         <DiagnosticsPanel diagnostics={diagnostics} onFocus={focusDiagnostic} />
       </div>

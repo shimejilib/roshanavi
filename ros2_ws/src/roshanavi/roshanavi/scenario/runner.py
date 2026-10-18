@@ -363,7 +363,7 @@ class ScenarioRunner:
             elif buf is not None and buf.subscribed_at is not None \
                     and buf.subscribed_at > self._t_begin + 0.5:
                 found.append({'code': 'subscribed_late', 'topic': name, 'message':
-                              f'{name} は途中で現れたトピックなので、購読を始めたのが '
+                              f'{name} は途中で現れたチャンネル (トピック) なので、購読を始めたのが '
                               f'{buf.subscribed_at - self._t_begin:.1f} 秒後でした。'})
         try:
             found += graph_hints(collect(self.ctx.runtime), inputs, outputs)
@@ -420,7 +420,7 @@ class ScenarioRunner:
                 raise StepError(f'{spec.topic} は複数の型 ({", ".join(types)}) で使われています。'
                                 'type で 1 つ選んでください。')
             if self.ctx.clock() >= deadline:
-                raise StepError(f'{spec.topic} の型が分かりません (まだ誰も使っていないトピックです)。'
+                raise StepError(f'{spec.topic} の型が分かりません (まだ誰も使っていないチャンネル (トピック) です)。'
                                 'type (ROS の型) か kind (データの種類) を書いてください。')
             self._tick()
             time.sleep(0.1)

@@ -81,11 +81,23 @@ export function InputRows({ call, inputs, trigger, argName, idPrefix, triggerTes
   );
 }
 
+/** 「チャンネルは地図で線を引いてつなぐ」: empty every topic (ports that are wired on the map later). */
+export function MapLaterButton({ onClick, testId }: { onClick: () => void; testId: string }) {
+  return (
+    <p className="row wrap small">
+      <button type="button" className="small" onClick={onClick} data-testid={testId}>{t('wiring.form.mapLater')}</button>
+      <span className="muted">{t('wiring.form.mapLaterHelp')}</span>
+    </p>
+  );
+}
+
 export function FunctionPortsFields({ form, info, topicTypes, onChange }: Props) {
   const argName = (index: number) => info?.params[index]?.name ?? `#${index + 1}`;
+  const clearTopics = () => onChange({ ...form, inputs: form.inputs.map((r) => ({ ...r, topic: '', type: '' })), output: { ...form.output, topic: '', type: '' }, trigger: 'any' });
   return (
     <>
       <TopicDatalist id="function-topics" topicTypes={topicTypes} />
+      <MapLaterButton onClick={clearTopics} testId="function-map-later" />
       {form.call !== 'periodic' && (
         <fieldset className="function-ports">
           <legend>{t('function.inputs')} <Term term="topic" /></legend>

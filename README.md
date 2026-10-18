@@ -24,6 +24,7 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | 入力ノード | 文字列・数値・画像・動画・音声・ブラウザのマイク/カメラを、常駐するダミーノードとして送る |
 | 変換ノード | 「トピック A を受けて B に出す」ノードを、式を書くだけで作る (未完成のノードの代役にも) |
 | 関数・クラスノード | 普通の Python の関数やクラス (状態・パラメータ・リセット付き) を、そのまま ROS ノードとして動かす。置き場所・ひな形・依存の入れ方は [利用ガイド: 自分のコードを関数・クラスノードにする](docs/guide/user-code.md) |
+| 線でつないで作る | 関数・クラス・変換・入力ノードの「つなぎ口」から、地図の上でチャンネル (トピック) へ線を引いてつなぐ (種類が合わない線は理由付きで断る、キーボードでも操作可)。言葉は用語集で統一 (チャンネル (トピック) など)。[利用ガイド: 線でつないで作る](docs/guide/wiring.md) |
 | 録画・再生 | bag に録って、次から同じ入力で再現 |
 | シナリオ | 「入力したら、○秒以内にこう出る」を記録して、UI と CLI で自動判定 |
 | リソース監視 | ノードごとの CPU・メモリ (地図にバッジ)、PC 全体の CPU・メモリ・ディスク・ネットワーク・GPU、外部との接続先、メモリリークの疑いと UDP 受信バッファ溢れの診断 (この PC のみ) |
@@ -97,6 +98,7 @@ cd roshanavi && docker compose up -d --build lab demo
 | [docs/design/security.md](docs/design/security.md) | 安全対策 (式評価、パス検査、サブプロセス、launch のサンドボックス、Host/Origin 検査) |
 | [docs/design/scenarios.md](docs/design/scenarios.md) | シナリオと記録モード |
 | [docs/design/resources.md](docs/design/resources.md) | リソース監視 (CPU・GPU・メモリ・ディスク・ネットワーク)、メモリリーク検出 |
+| [docs/design/wiring.md](docs/design/wiring.md) | 地図の上での配線 (つなぎ口・種類の互換性・反映)、用語集と言葉の総点検、pub/sub の 1 枚絵 |
 | **設計済み・未実装** | |
 | [docs/planned/remote-access.md](docs/planned/remote-access.md) | 別マシンからのアクセス (デバイスのペアリングと権限) |
 | **開発・運用** | |

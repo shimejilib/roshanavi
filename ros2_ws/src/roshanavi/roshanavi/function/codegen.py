@@ -8,7 +8,7 @@ no control characters).
 """
 
 import os
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple
 
 from ..launcher import command
 from ..launcher.dummy_config import has_control_chars, write_atomic
@@ -283,8 +283,16 @@ def export_code(spec: FunctionSpec, workspace: str, directory: str) -> Dict[str,
     # The node name becomes the file name and is written into the code: validate it again
     # (a spec loaded from a project file may be registered as invalid).
     command.validate_function(spec, workspace)
+    require_wired([*spec.inputs, spec.output])
     source = generate(spec, workspace)
     return write_source(directory, f'{spec.name}_node.py', source)
+
+
+def require_wired(ports: Sequence[Any]) -> None:
+    """Generated code subscribes / publishes every port: each one needs a topic (409)."""
+    if any(not port.topic for port in ports):
+        raise LauncherError('unwired_ports', 'connect every input and output to a topic before '
+                            'exporting the code (some are not wired yet)', 409)
 
 
 def write_source(directory: str, filename: str, source: str) -> Dict[str, str]:

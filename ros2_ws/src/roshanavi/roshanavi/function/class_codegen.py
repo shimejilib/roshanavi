@@ -23,7 +23,7 @@ from . import class_params
 from .class_modules import list_classes
 from .class_params import UNSET
 from .codegen import HELPERS_IMAGE, MARKER_PREFIX, class_names, input_expr, output_lines, \
-    write_source
+    require_wired, write_source
 from .class_core import resolve_binding_ports
 from .modules import resolve_module
 
@@ -482,4 +482,5 @@ def export_code(spec: ClassSpec, workspace: str, directory: str,
     # The node name becomes the file name and is written into the code: validate it again
     # (a spec loaded from a project file may be registered as invalid).
     command.validate_class(spec, workspace)
+    require_wired([port for m in spec.methods for port in [*m.inputs, *m.outputs]])
     return write_source(directory, f'{spec.name}_node.py', generate(spec, workspace, lifecycle))

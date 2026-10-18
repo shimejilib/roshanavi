@@ -38,6 +38,7 @@
 **操作**
 - ノードやトピックをクリックすると、上流・下流の経路を強調し、それ以外を薄くする (フォーカスモード)。右ペインに詳細 (統計、エコー、注入、ログ) を出す。
 - 名前フィルタ、`/rosout` 等の非表示トグル、一時停止 (スナップショットを固定して観察する)。
+- **線でつなぐ** ([wiring.md](wiring.md)): roshanavi が動かす関数・クラス・変換・入力ノードには、左に入力口・右に出力口 (つなぎ口) が出る。チャンネル (トピック) から入力口へ、出力口からチャンネル・空いているところ (新しいチャンネル) へドラッグしてつなぐ。キーボードでも (つなぎ口を Tab で選んで Enter)。外部・ランチャーのノードは、どのチャンネルを使うかがコードで決まっているので口を出さない。
 
 **計測の限界 (UI に明記する)**
 - 帯域や Hz は、送信側は送信ノードごとの実測 (C++ 計測ノード, [measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)。Python の経路ではトピック単位)。subscriber ごとに実際に届いた量は、外部からは測れない (理論値, [map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b))。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) を有効にすると、同じ PC のノードはトレースで受信・処理を実測する。
@@ -209,6 +210,15 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - シナリオのステップ `resources` / `mem_growth` の表示と編集 (ノード名と上限の欄) は `editSteps.ts`。
 - i18n: `i18n/messagesResources.ts`。スタイル: `styles-resources.css`。スクリーンショット: [`resources-tab.png`](../images/resources-tab.png)、[`resources-map.png`](../images/resources-map.png)、[`resources-scenario.png`](../images/resources-scenario.png) (`e2e/resources.spec.ts`)。
 
+## 実装メモ (地図の上での配線, #47)
+設計と決定は [wiring.md](wiring.md)。ここは画面の部品だけ。
+- `web/src/wiring/`: `ports.ts` (つなぎ口のモデル、純関数)、`compat.ts` (種類の互換性。バックエンドの `data_kinds.wire_compat` と同じ規則)、`edit.ts` (仕様を書き換えた新しいコピーを作る。断る理由もここ)、`drop.ts` (離した先の判定と結果)、`keyboard.ts` (キーボードの手順)、`timing.ts` / `CallTiming.tsx` (呼ばれ方)、`useWiring.ts` (保存 → 再起動 → 知らせ)、`useArgNames.ts` (引数名)、`PortOverlay.tsx` (地図に重ねるつなぎ口・取っ手・仮の線・ツールチップ・知らせ)、`WireDialog.tsx` (つなぐ先の一覧)、`WireBits.tsx` (選んだ線の操作、新しいチャンネルの名前)、`PubSubPrimer.tsx` (1 枚絵)。
+- 地図 (`graph/GraphView.tsx`) は `overlay` (cytoscape ができたら重ねる部品) と `onWireTap` (つなぎ口に付いた線のクリック) を受け取る。`graph/model.ts` はつなぎ口のあるノードに `pw` / `ph` (箱の大きさ)、線に `sep` / `tep` (端の位置) と `port` (どの口の線か) を付ける。
+- 作成画面: 「チャンネルは地図で線を引いてつなぐ (ここは空にする)」(`function-map-later` / `class-map-later`)、呼ばれ方の図 (`function-timing`、`class-method-<m>-timing`)。チャンネルが空の口は「つながっていない口」として保存する。
+- 凡例: 「● つなぎ口」と「しくみの 1 枚絵」ボタン (`legend-primer`)。
+- 文言: `i18n/messagesWiring.ts`。用語集: `i18n/glossary.ts` ([wiring.md#4](wiring.md#4-言葉の総点検))。スタイル: `styles-wiring.css`。
+- スクリーンショット (`e2e/wiring.spec.ts`): [`wiring-map.png`](../images/wiring-map.png)、[`wiring-drag.png`](../images/wiring-drag.png)、[`wiring-refused.png`](../images/wiring-refused.png)、[`wiring-keyboard.png`](../images/wiring-keyboard.png)、[`wiring-timing.png`](../images/wiring-timing.png)、[`wiring-class.png`](../images/wiring-class.png)、[`wiring-primer.png`](../images/wiring-primer.png)。
+
 ## 実装メモ (アプリ内チュートリアル)
 ROS を知らない人の最初の一歩のために、画面の一部を強調して吹き出しで「ここを押してください」と案内する (Issue #41)。詳しい説明は文書へ誘導する (オフラインでは GitHub の文書に届かないため、文書名はリポジトリ内のパスで短く示すだけ)。
 
@@ -239,7 +249,7 @@ ROS を知らない人の最初の一歩のために、画面の一部を強調�
 
 | ツアー | 手順 | 種類 | 作るもの (終了時に片づける) |
 |---|---|---|---|
-| 画面の見方 | 10 | 見る | なし (地図・凡例・診断・最終更新・トラフィックのタブと「トピック別/ノード別」・ノード一覧・⚙ 設定) |
+| 画面の見方 | 11 | 見る | なし (pub/sub の 1 枚絵 ([wiring.md#5](wiring.md#5-pubsub-の-1-枚絵))・地図・凡例・診断・最終更新・トラフィックのタブと「トピック別/ノード別」・ノード一覧・⚙ 設定) |
 | はじめての入力ノード | 10 | やる | ユーザーが作った入力ノード (開始後に増えた `/hello` の入力ノード。「残して終わる」も選べる) |
 | 届かない原因を見つけて直す | 9 | やる | `tour_qos_pub` (BEST_EFFORT の入力ノード) と `tour_qos_sub` (`demo_nodes_cpp` の listener。ROS の既定の RELIABLE で購読) を API で作る |
 | 関数ノードを作る | 9 | やる | ユーザーが作った関数ノード (`/shouted` を出す)。`/chatter` に送り手がいなければ `tour_chatter_src` を作る |
@@ -249,6 +259,6 @@ ROS を知らない人の最初の一歩のために、画面の一部を強調�
 - 「シナリオを記録する」はデモの `/chatter` / `/shouted` を使わず専用のトピックを使う (デモの talker の流れが記録に混ざらない)。保存したシナリオの結果が前回の同名の結果のまま画面に残っていても数えないよう、開始時の最後の実行の id を控える。
 - 「関数ノードを作る」はデモの `text_shout` (同じ `/shouted` を出す関数ノード) と同じ出力トピックだが、開始前から在ったものは数えない。
 
-**スクリーンショット** (`e2e/tour.spec.ts` が書く。各ツアーの途中の 1 手順): [`tour-welcome.png`](../images/tour-welcome.png)、[`tour-overview.png`](../images/tour-overview.png)、[`tour-first-input.png`](../images/tour-first-input.png)、[`tour-qos-fix.png`](../images/tour-qos-fix.png)、[`tour-function-node.png`](../images/tour-function-node.png)、[`tour-scenario.png`](../images/tour-scenario.png)、[`tour-dark.png`](../images/tour-dark.png)。
+**スクリーンショット** (`e2e/tour.spec.ts` が書く。各ツアーの途中の 1 手順): [`tour-welcome.png`](../images/tour-welcome.png)、[`tour-overview.png`](../images/tour-overview.png)、[`tour-first-input.png`](../images/tour-first-input.png)、[`tour-qos-fix.png`](../images/tour-qos-fix.png)、[`tour-function-node.png`](../images/tour-function-node.png)、[`tour-scenario.png`](../images/tour-scenario.png)、[`tour-dark.png`](../images/tour-dark.png)、[`tour-primer.png`](../images/tour-primer.png) (1 枚絵の手順)。
 
 **新しいツアー・手順を足すとき**: `tours/<name>.ts` に手順を書き、`tours/index.ts` に登録し、`tour.<名前>.<手順>.title|body` の文言を足す。必要な要素に `data-tour` を付ける。vitest (文言・目印の検査) と E2E (`e2e/tour.spec.ts`: 画面に出ている指示のとおりに最後まで操作し、終了後に作ったものが無いことまで確かめる) を足す。ツアーが作るものの id は `tour_` で始める。

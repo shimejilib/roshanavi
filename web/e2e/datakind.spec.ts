@@ -26,7 +26,7 @@ test('create an input node of kind 文字列 without seeing any ROS type', async
   await page.getByTestId('create-input').click();
   const dialog = page.getByTestId('create-input-dialog');
   await dialog.getByTestId('input-topic').fill(TOPIC);
-  await expect(dialog).toContainText('新しいトピックです');
+  await expect(dialog).toContainText('新しいチャンネル (トピック) です');
   const kind = dialog.getByTestId('input-type-kind');
   await expect(kind.locator('option')).toContainText(['文字列', '数値 (小数)', '整数', 'ON / OFF', '数値の並び', 'JSON (複数の値をまとめて)', '画像', '音声', 'バイト列 (生データ)']);
   // A number shows a value field, no YAML; then back to text.
@@ -53,7 +53,7 @@ test('create an input node of kind 文字列 without seeing any ROS type', async
   // The same topic now exists: the dialog shows what it carries instead of a picker.
   await page.getByTestId('create-input').click();
   await page.getByTestId('create-input-dialog').getByTestId('input-topic').fill(TOPIC);
-  await expect(page.getByTestId('input-type-detected')).toContainText('このトピックは 文字列 (std_msgs/String) です', { timeout: 10_000 });
+  await expect(page.getByTestId('input-type-detected')).toContainText('このチャンネル (トピック) は 文字列 (std_msgs/String) です', { timeout: 10_000 });
   await expect(page.getByTestId('input-type-kind')).toHaveCount(0);
   await page.keyboard.press('Escape');
 });

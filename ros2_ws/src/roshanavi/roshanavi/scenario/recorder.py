@@ -126,7 +126,7 @@ class ScenarioRecorder:
     def _type_of(self, topic: str) -> str:
         types = dict(self._runtime.topic_names_and_types()).get(topic)
         if not types:
-            raise RecordError('not_found', f'{topic} が見つかりません (いま誰も使っていないトピックです)',
+            raise RecordError('not_found', f'{topic} が見つかりません (いま誰も使っていないチャンネル (トピック) です)',
                               404)
         if len(types) != 1:
             raise RecordError('unsupported', f'{topic} は複数の型で使われています: {", ".join(types)}')
@@ -135,9 +135,9 @@ class ScenarioRecorder:
     def start(self, watch: Sequence[str]) -> Dict[str, Any]:
         topics = list(dict.fromkeys(watch))
         if not topics:
-            raise RecordError('invalid_request', '確かめたい出力トピックを 1 つ以上選んでください')
+            raise RecordError('invalid_request', '確かめたい出力のチャンネル (トピック) を 1 つ以上選んでください')
         if len(topics) > MAX_WATCH:
-            raise RecordError('invalid_request', f'見張るトピックは {MAX_WATCH} 個までです')
+            raise RecordError('invalid_request', f'見張るチャンネル (トピック) は {MAX_WATCH} 個までです')
         for topic in topics:
             validate_topic(topic)
         types = {t: self._type_of(t) for t in topics}

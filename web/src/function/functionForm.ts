@@ -80,10 +80,11 @@ export function portSpec(row: FnPortRow): FunctionPortSpec {
   return { topic: normalizeTopic(row.topic), kind: row.kind as PortKind, ...(row.type ? { type: row.type } : {}) };
 }
 
+/** An empty topic is a port that is not wired yet: it is wired on the map later (docs/design/wiring.md). */
 export function checkPort(row: FnPortRow): string | null {
   const topic = normalizeTopic(row.topic);
-  if (!TOPIC_RE.test(topic)) return t('function.error.topic', { topic: row.topic || '—' });
-  if (!row.kind) return t('function.error.kind', { topic });
+  if (topic && !TOPIC_RE.test(topic)) return t('function.error.topic', { topic: row.topic });
+  if (!row.kind) return t('function.error.kind', { topic: topic || t('wiring.port.unwiredShort') });
   return null;
 }
 
@@ -97,7 +98,7 @@ function problem(form: FunctionForm): string | null {
     if (bad) return bad;
   }
   const out = normalizeTopic(form.output.topic);
-  if (form.inputs.some((row) => normalizeTopic(row.topic) === out)) return t('function.error.sameTopic');
+  if (out && form.inputs.some((row) => normalizeTopic(row.topic) === out)) return t('function.error.sameTopic');
   return null;
 }
 

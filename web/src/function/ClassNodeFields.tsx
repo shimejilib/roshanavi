@@ -5,8 +5,11 @@ import type { ClassInfo, ClassMethodInfo } from '../api/classTypes';
 import type { CallMode } from '../api/functionTypes';
 import { t, tDynamic, type MessageKey } from '../i18n';
 import { Term } from '../lib/Term';
+import { normalizeTopic } from '../input/inputForm';
+import { CallTiming } from '../wiring/CallTiming';
+import { formTiming, triggerChoices } from '../wiring/timing';
 import { MAX_OUTPUT_ROWS, parameterArgs, setDict, setMethodCall, setMethodUse, updateMethod, type ClassForm, type MethodForm, type MethodUse, type OutputRow } from './classForm';
-import { InputRows, PortRow, TopicDatalist } from './FunctionPortsFields';
+import { InputRows, MapLaterButton, PortRow, TopicDatalist } from './FunctionPortsFields';
 
 const CALLS: CallMode[] = ['on_message', 'periodic', 'multi_input'];
 const DATALIST = 'class-topics';
@@ -80,6 +83,7 @@ function OutputRows({ m, node, topicTypes, onChange }: { m: MethodForm; node: st
 function BoundMethod({ m, info, node, topicTypes, onChange }: { m: MethodForm; info: ClassMethodInfo; node: string; topicTypes: ReadonlyMap<string, string[]>; onChange: (m: MethodForm) => void }) {
   const id = `class-method-${m.method}`;
   const argName = (index: number) => info.params[index]?.name ?? `#${index + 1}`;
+  const timingInputs = m.inputs.map((row, i) => ({ name: argName(i), topic: normalizeTopic(row.topic) }));
   return (
     <div className="class-method-body">
       <div className="row wrap">
@@ -96,6 +100,8 @@ function BoundMethod({ m, info, node, topicTypes, onChange }: { m: MethodForm; i
           <input value={m.rateHz} inputMode="decimal" onChange={(e) => onChange({ ...m, rateHz: e.target.value })} data-testid={`${id}-rate`} />
         </label>
       )}
+      <CallTiming timing={formTiming('class', m.call, m.rateHz, timingInputs, m.trigger)} triggers={triggerChoices(timingInputs)}
+        trigger={m.trigger} onTrigger={(trigger) => onChange({ ...m, trigger })} testId={`${id}-timing`} />
       {m.call !== 'periodic' && (
         <fieldset className="function-ports">
           <legend>{t('function.inputs')} <Term term="topic" /></legend>
@@ -142,6 +148,9 @@ export function ClassNodeFields({ form, info, topicTypes, onChange }: Props) {
       <fieldset className="class-methods" data-testid="class-methods">
         <legend>{t('class.methods')}</legend>
         <p className="muted small">{t('class.methodsHelp')}</p>
+        <MapLaterButton testId="class-map-later" onClick={() => onChange({ ...form, methods: form.methods.map((m) => ({
+          ...m, inputs: m.inputs.map((r) => ({ ...r, topic: '', type: '' })), outputs: m.outputs.map((o) => ({ ...o, topic: '', type: '' })), trigger: 'any',
+        })) })} />
         {info.methods.length === 0 && <p className="muted small">{t('class.noMethods')}</p>}
         <ul className="plain-list">
           {form.methods.map((m) => {

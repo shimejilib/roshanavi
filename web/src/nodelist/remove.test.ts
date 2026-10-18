@@ -15,10 +15,10 @@ describe('node-list delete plan', () => {
     expect(only.alsoStopped).toEqual(['/listener']);
     const text = removeConfirmText(only);
     expect(text).toContain('次の 1 件を roshanavi から削除します');
-    expect(text).toContain('launch talker_listener_launch.py (launch): /listener, /talker — 動いています。削除すると止まります');
+    expect(text).toContain('起動セット talker_listener_launch.py (起動セット (launch ファイル)): /listener, /talker — 動いています。削除すると止まります');
     expect(text).toContain('一緒に止まるノード (1): /listener');
-    expect(text).toContain('ソースコード・パッケージ・パラメータファイル・録画は消えません');
-    expect(text).toContain('launch ファイルを取り込み直すと戻ってきます');
+    expect(text).toContain('ソースコード・パッケージ・設定値のファイル (パラメータファイル)・録画は消えません');
+    expect(text).toContain('起動セットを取り込み直すと戻ってきます');
     expect(text).toContain('10 秒間は「元に戻す」');
   });
 

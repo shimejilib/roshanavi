@@ -9,6 +9,9 @@ import type { Target } from '../api/types';
 import { t, type MessageKey } from '../i18n';
 import { Term } from '../lib/Term';
 import { useAppState } from '../state/AppState';
+import { normalizeTopic } from '../input/inputForm';
+import { CallTiming } from '../wiring/CallTiming';
+import { formTiming, triggerChoices } from '../wiring/timing';
 import { useLive } from '../state/LiveProvider';
 import { applyFunction, buildFunctionSpec, defaultFunctionForm, formFromFunction, rowsFor, type FunctionForm } from './functionForm';
 import { FunctionPortsFields } from './FunctionPortsFields';
@@ -85,6 +88,7 @@ export function FunctionMode({ topic, editing, preselect, refreshKey = 0 }: Prop
     setPendingFn('');
     if (moduleInfo.info.functions.some((f) => f.name === pendingFn)) pickFunction(pendingFn);
   }
+  const timingInputs = form.inputs.map((row, i) => ({ name: fnInfo?.params[i]?.name ?? `#${i + 1}`, topic: normalizeTopic(row.topic) }));
   const setCall = (call: CallMode) => setForm((prev) => ({ ...prev, call, inputs: rowsFor(call, prev.inputs, fnInfo?.params.length) }));
 
   const submit = async () => {
@@ -106,7 +110,7 @@ export function FunctionMode({ topic, editing, preselect, refreshKey = 0 }: Prop
       } else {
         await api.addFunction(built.value, true);
       }
-      select({ kind: 'topic', id: built.value.output.topic });
+      if (built.value.output.topic) select({ kind: 'topic', id: built.value.output.topic }); // '' = wired on the map later
       closeDialog();
     } catch (err) {
       setError(describeError(err));
@@ -174,6 +178,8 @@ export function FunctionMode({ topic, editing, preselect, refreshKey = 0 }: Prop
               <input value={form.rateHz} inputMode="decimal" onChange={(e) => update({ rateHz: e.target.value })} data-testid="function-rate" />
             </label>
           )}
+          <CallTiming timing={formTiming('function', form.call, form.rateHz, timingInputs, form.trigger)} triggers={triggerChoices(timingInputs)}
+            trigger={form.trigger} onTrigger={(trigger) => update({ trigger })} testId="function-timing" />
         </fieldset>
         <FunctionPortsFields form={form} info={fnInfo} topicTypes={topicTypes} onChange={setForm} />
         <label className="check">

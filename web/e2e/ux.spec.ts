@@ -31,7 +31,7 @@ test('blank-area menu -> create an input node on a new topic -> it appears on th
 
   const dialog = page.getByTestId('create-input-dialog');
   await dialog.getByTestId('input-topic').fill('/e2e_new_topic');
-  await expect(dialog).toContainText('新しいトピックです');
+  await expect(dialog).toContainText('新しいチャンネル (トピック) です');
   await dialog.getByTestId('input-name').fill(INPUT_ID);
   await dialog.getByTestId('input-content-expression').check();
   await dialog.getByTestId('input-rate').fill('2');
