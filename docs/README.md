@@ -4,7 +4,10 @@
 
 ## guide — 利用ガイド
 
-- [guide/README.md](guide/README.md): 使う人向けの説明の章の一覧。[guide/wiring.md](guide/wiring.md): 線でつないで作る (つなぎ口から線を引く、つなげない組み合わせ、キーボード)。[guide/user-code.md](guide/user-code.md): 自分のコードを関数・クラスノードにする (置き場所 A/B/C、ひな形、依存 ①②、つまずき、サブモジュール)。[guide/takeover.md](guide/takeover.md): 既存の launch ファイルごと roshanavi で動かす (`--launch`、2 つの動かし方、launch ファイルの変更、強制終了の後始末、削除)。
+- [guide/README.md](guide/README.md): 使う人向けの説明の章の一覧 (ここから読む)。各章は「手順 → うまくいかないとき → 仕組みを知りたい人へ (design への案内)」の順。
+- [guide/getting-started.md](guide/getting-started.md): はじめての起動 (Docker)、タブの役割、地図の読み方、診断、チュートリアル。[guide/inputs.md](guide/inputs.md): 入力ノード・お試し送信・メディア・マイク/カメラ・録画。[guide/user-code.md](guide/user-code.md): 自分のコードを関数・クラスノードにする (置き場所 A/B/C、ひな形、依存 ①②、つまずき、サブモジュール)。[guide/wiring.md](guide/wiring.md): 線でつないで作る。
+- [guide/takeover.md](guide/takeover.md): 既存の launch ファイルごと roshanavi で動かす (`--launch`)。[guide/docker-integration.md](guide/docker-integration.md): Docker のプロジェクトに入れる (Dockerfile・compose の例、注意点)。[guide/observe.md](guide/observe.md): 手を入れずに見るだけ。
+- [guide/scenarios.md](guide/scenarios.md): シナリオの記録・実行・CI・launch_pytest・リソースのチェック。[guide/measure.md](guide/measure.md): トラフィックの読み方、詳細計測モード、リソース、メモリリーク検出の精度と限界、規模と負荷の限界。[guide/install.md](guide/install.md): 自分のワークスペースに入れる。[guide/remote-ssh.md](guide/remote-ssh.md): 別のマシンから SSH で見る。
 
 ## overview — 全体像
 

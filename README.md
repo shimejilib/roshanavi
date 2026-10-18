@@ -18,7 +18,7 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | トラフィック | ノード × トピック × 向きごとの Hz・帯域・取りこぼし・遅延。C++ 計測ノードで送信元ごとに実測 |
 | 詳細計測モード | ROS 2 組み込みのトレース (LTTng) で、受信数・処理数・コールバックの処理時間を実測。ソースの変更は不要 |
 | ランチャー | 自分のノードと依存ノードの起動・停止・ログ・ビルド。既存の launch ファイルを分解して取り込み、ノード一覧で一括 ON/OFF |
-| launch の引き取り | `ros2 run roshanavi server --launch <パッケージ> <launch ファイル>` で、今の launch ファイルのノードを roshanavi が起動し、1 つずつ止める・再起動・ログ。launch ファイルの変更も検出 ([利用ガイド: 既存の launch ファイルごと roshanavi で動かす](docs/guide/takeover.md)) |
+| launch の引き取り | `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>` で、今の launch ファイルのノードを roshanavi が起動し、1 つずつ止める・再起動・ログ。launch ファイルの変更も検出 ([利用ガイド: 既存の launch ファイルごと roshanavi で動かす](docs/guide/takeover.md)) |
 | 入力ノード | 文字列・数値・画像・動画・音声・ブラウザのマイク/カメラを、常駐するダミーノードとして送る |
 | 変換ノード | 「トピック A を受けて B に出す」ノードを、式を書くだけで作る (未完成のノードの代役にも) |
 | 関数・クラスノード | 普通の Python の関数やクラス (状態・パラメータ・リセット付き) を、そのまま ROS ノードとして動かす。置き場所・ひな形・依存の入れ方は [利用ガイド: 自分のコードを関数・クラスノードにする](docs/guide/user-code.md) |
@@ -27,7 +27,7 @@ ROS 2 の確認・テストの道具 (`ros2 topic hz/echo/pub`、rqt_graph、rqt
 | シナリオ | 「入力したら、○秒以内にこう出る」を記録して、UI と CLI で自動判定 |
 | リソース監視 | ノードごとの CPU・メモリ (地図にバッジ)、PC 全体の CPU・メモリ・ディスク・ネットワーク・GPU、外部との接続先、メモリリークの疑いと UDP 受信バッファ溢れの診断 (この PC のみ) |
 | チュートリアル | 画面の見方・入力ノード・QoS の直し方・関数ノード・シナリオを、画面上で操作を案内しながら学べる (⚙ 設定からいつでも) |
-| 中継パイプラインのサンプル | 受け取って次に送る C++ ノード (処理時間・大きさ・頻度・取りこぼしを調整) を、直列・分岐・合流・格子の形と 3 / 20 / 200 ノードの規模で生成して、別プロセスでも composable container でも動かせる ([nodes.md](docs/design/nodes.md#中継パイプライン-source--relay--sink51)) |
+| 中継パイプラインのサンプル | 受け取って次に送る C++ ノード (処理時間・大きさ・頻度・取りこぼしを調整) を、直列・分岐・合流・格子の形と 3 / 20 / 200 ノードの規模で生成して、別プロセスでも composable container でも動かせる ([利用ガイド: 測る (性能)](docs/guide/measure.md#6-性能-規模と負荷の限界)) |
 
 ![関数ノードの作成](docs/images/function-dialog.png)
 
@@ -51,84 +51,37 @@ cd roshanavi && docker compose up -d --build lab demo
 
 ## 使い方・組み込み方
 
+詳しい手順は [利用ガイド](docs/guide/README.md) の各章にあります。
+
 | やりたいこと | 方法 | 説明 |
 |---|---|---|
-| 自分のワークスペースで使う | ワークスペースの `src/` に入れてビルドし、`ros2 run roshanavi app` で起動する | [docs/project/distribution.md](docs/project/distribution.md) (ビルド済みの画面の同梱など、手順の整備は進行中) |
-| 既存の起動セット (launch ファイル) ごと動かす | `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>`。roshanavi が今の launch ファイルのノードを起動し、ノードごとに止める・再起動する・ログを見る・計測するができる | [docs/guide/takeover.md](docs/guide/takeover.md) |
-| Docker で動いている既存のプロジェクトに入れる | 既存のイメージの上に roshanavi を重ねたコンテナを 1 つ足し、`--launch` で今の launch ファイルを引き取る | [docs/design/integration.md](docs/design/integration.md) |
-| 動いているシステムを、手を入れずに見るだけ | 同じ ROS のネットワーク (ドメイン ID) で roshanavi を起動する。地図・トラフィック・エコー・入力ノード・シナリオが使える (ノードの停止や詳細計測はできない) | [docs/design/integration.md](docs/design/integration.md) |
-| 自分の Python のコードをノードにする | 普通の関数・クラスを「関数・クラスノード」にし、地図の上で線をつなぐ | [docs/guide/user-code.md](docs/guide/user-code.md)、[docs/guide/wiring.md](docs/guide/wiring.md) |
-| テストや CI に組み込む | 画面で記録したシナリオを `ros2 run roshanavi scenario run <ファイル> --junit 結果.xml` で実行する。launch_pytest からも呼べる | [docs/design/scenarios.md](docs/design/scenarios.md)、[examples/launch_pytest/](examples/launch_pytest/) |
-| 別のマシンから見る | SSH のポート転送 (`ssh -L 6871:localhost:6871 …`) | [docs/guide/remote-ssh.md](docs/guide/remote-ssh.md) |
+| まず画面を見て回る | Docker で起動して、チュートリアルをたどる | [はじめての起動と画面の見方](docs/guide/getting-started.md) |
+| 入力を流す | 入力ノード・お試し送信で、文字・画像・動画・音声・マイク・カメラを流す。録画して再現する | [入力を流す](docs/guide/inputs.md) |
+| 自分の Python のコードをノードにする | 普通の関数・クラスを「関数・クラスノード」にし、地図の上で線をつなぐ | [自分のコードを関数・クラスノードにする](docs/guide/user-code.md)、[線でつないで作る](docs/guide/wiring.md) |
+| 既存の起動セット (launch ファイル) ごと動かす | `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>`。ノードごとに止める・再起動・ログ・計測ができる | [既存の起動セットごと動かす](docs/guide/takeover.md) |
+| Docker で動いている既存のプロジェクトに入れる | 既存のイメージの上に roshanavi を重ねたコンテナを 1 つ足し、`--launch` で引き取る | [Docker で動いている既存のプロジェクトに入れる](docs/guide/docker-integration.md) |
+| 動いているシステムを、手を入れずに見るだけ | 同じ ROS のネットワーク (ドメイン ID) で起動する。ノードの停止や詳細計測はできない | [動いているシステムを見るだけ](docs/guide/observe.md) |
+| テストや CI に組み込む | 画面で記録したシナリオを `ros2 run roshanavi scenario run <ファイル> --junit 結果.xml` で実行。launch_pytest からも呼べる | [シナリオで確かめる・テストに組み込む](docs/guide/scenarios.md) |
+| 通信量・処理時間・CPU・メモリを測る | トラフィック、詳細計測モード、リソースタブ | [測る](docs/guide/measure.md) |
+| 自分のワークスペースで使う | `src/` に入れてビルドし、`ros2 run roshanavi app` で起動する (Web 画面の作り方など、手順は整備中) | [自分のワークスペースに入れる](docs/guide/install.md) |
+| 別のマシンから見る | SSH のポート転送 (`ssh -L 6871:localhost:6871 …`) | [別のマシンから見る (SSH)](docs/guide/remote-ssh.md) |
 
 ## 計測の精度と限界
 
-### リソース監視とメモリリークの検出
+- **メモリリークの検出**: 「一定の速さで、減速せずに、長く増え続けるメモリ」だけを疑いとして出します。一度だけの増加・頭打ち・一瞬のスパイクは出しません。ゆっくりした漏れは検出まで時間がかかり (揺れが ±6 MB のプロセスで 0.05 MB/分なら約 6 時間)、**どのコードが漏らしているかは分かりません**。
+- **見えるのは、roshanavi が動いている PC のプロセスだけ**です (CPU・メモリ・リーク)。別の PC や別のコンテナのノードは見えません。詳細計測モードも同じ PC、roshanavi より後に起動したノードが対象で、Python のノードは受信数だけです。
+- **規模と負荷**: 80 ノード (128 トピック) まで地図は 1 秒周期のまま、200 ノードでは更新が遅れます。計測ノードの CPU は流量に比例し、メッセージが約 85 KB より大きいとバイト数が、小さいと件数が効きます。4K × 30 Hz のような重いデータは計測を切るか詳細計測モードで。
+- 受信側ノードの Hz は、詳細計測モードを使わないときは「理論値」(届くはずの量) です。
 
-ノードごとの CPU・メモリを地図にバッジで出し、「リソース」タブで PC 全体 (CPU・メモリ・ディスク・ネットワーク・GPU) とプロセス一覧を見られます。roshanavi 自身のプロセスは「roshanavi 自身」という別枠に並びます。**監視できるのは roshanavi が動いている PC のプロセスだけです。**
-
-メモリが増え続けるプロセスは、リーク検出が見つけます。「リーク」を **一定の速さで、減速せずに、長く増え続けるメモリ** と定義し、1 分ごとの中央値から、10 分・1 時間・6 時間の 3 つの時間スケールで同時に判定します。
-
-- 診断パネルに出るのは **リークの疑い**: 「`/detector` のメモリが毎分 0.3 MB で 2 時間増え続けています (減速なし)」のように、速さと継続時間を数値で出します。
-- **様子見 (増加中・収束しつつある)** は、リソースタブにだけ出ます: 一度だけの増加の直後や、バッファが埋まって頭打ちになる途中です。
-- 誤検出しないパターン (単体テストで確認): 一度だけの段差、頭打ち (バッファが埋まる)、一瞬のスパイク、揺れだけで増えていない場合 (24 時間の実行 400 回で 0 回)。
-
-**検出できる速さと、検出までの時間** (合成データで実際に検出できた最小の速さ。かっこは検出までの時間の中央値 / 最大):
-
-| 時間スケール | 判定できる最短時間 | 揺れが小さい (±1 MB) | 揺れがふつう (±6 MB) | 揺れが大きい (±20 MB) |
-|---|---|---|---|---|
-| 10 分 | 17 分 | 0.5 MB/分 (17 分 / 17 分) | 1 MB/分 (173 分 / 425 分) | 3 MB/分 (173 分 / 425 分) |
-| 1 時間 | 59 分 | 0.07 MB/分 (76 分 / 261 分) | 0.3 MB/分 (106 分 / 416 分) | 1 MB/分 (105 分 / 347 分) |
-| 6 時間 | 347 分 (約 6 時間) | 0.01 MB/分 (437 分 / 637 分) | 0.05 MB/分 (347 分 / 381 分) | 0.15 MB/分 (347 分 / 381 分) |
-
-最小の速さ ≈ メモリの自然な揺れ ÷ 観察時間です。遅いリークほど検出は遅くなりますが、見逃しにくくなります (3 MB/分なら 17 分、揺れがふつうのプロセスの 0.1 MB/分は約 6 時間で検出)。測り方と数字の根拠は [docs/design/resources.md](docs/design/resources.md#メモリリークの見せ方-leakpy-45) にあります。
-
-**限界**
-- 見ているのは RSS (実際に使っている物理メモリ) です。言語のアロケータが解放したメモリを OS に返さないと、リークでなくても減りません。
-- 揺れに埋もれる小さな漏れは、観察時間が短いうちは検出できません (表のとおり)。ゆっくり埋まるバッファは、最初の 20〜40 分ほどリークの疑いに見えることがあります (埋まれば消えます)。
-- **どのコードが漏らしているかは分かりません**。原因の特定は各言語のプロファイラ (Python の tracemalloc / memray、C++ の valgrind / heaptrack など) を使ってください。
-- 同じ PC のプロセスだけが対象です (他の PC や別コンテナのノードは見えません)。
-
-### 性能 (規模と負荷の限界)
-中継パイプラインのサンプルで実測した、この PC (Docker・24 コア・ほかの処理も動いている共用機) での目安です。詳しい表と測り方は [docs/design/measurement.md](docs/design/measurement.md#規模と負荷の限界-51)。
-
-- **ノード数**: 80 ノード (128 トピック) まで、地図の更新は 1 秒周期のまま (フレームの遅れ p95 ≲ 100 ms)。200 ノード (360 トピック) では 1 フレームが約 1.5 MB になり、更新が 1.4〜1.6 秒おきに遅れ、server が 1 コアの 5〜7 割を使います。
-- **通信量**: C++ 計測ノードの CPU は流量に比例します。20 ノードで全トピック合計 約 1.6 万通/秒、または 1 MiB×30 Hz の 4 本の列 (約 500 MB/秒) で 1 コア近く。roshanavi の server は 20 ノードで 12% 以下、80 ノードで 26〜32%。
-- **先に詰まるのは ROS 側**: 20 ノードで 送信元 1 つあたり 300 Hz まで、メッセージ 1 MiB まで欠落なし。composable container (1 スレッド) は処理が重い段の合計が 1 コア分を超えると崩れます (`component_container_mt` で解消)。1 ノード 1 プロセスで 200 ノードは、この PC の Fast DDS では発見が成立せず動きませんでした (container なら動く)。
-- **画像・点群など重いトピックを計測に入れたとき** ([詳細](docs/design/measurement.md#重いデータの計測の限界-51)): probe の CPU は「毎秒の件数」と「毎秒の合計バイト数」の両方で決まり、**メッセージが約 85 KB より大きいとバイト数 (コピー) が、小さいと件数が効きます** (目安は 1 件あたり約 0.12 ms + 1 MB あたり約 1.4 ms)。**同じ PC で Fast DDS の共有メモリが使えれば**、1 トピック約 150 MB/秒 (1080p × 30 Hz、100 万点の点群 × 10 Hz) まで、計測を入れても計測される側の遅延は 1〜3 ms しか増えません。共有メモリが使えず UDP だけの構成では大きいメッセージの負担が約 2 倍になるので、目安は約 100 MB/秒まで。4K × 30 Hz (約 750 MB/秒) などはどちらでも壊れる (購読側が 2〜6 割取りこぼす) ので、計測を切るか詳細計測モードを使ってください。
-- **詳細計測モード (トレース)** を入れても取りこぼしは出ませんでした。server + トレースの CPU は 20 ノードで 23〜115%。
+表と数字の根拠は [利用ガイド: 測る](docs/guide/measure.md) にあります。
 
 ## ドキュメント
 
-| ドキュメント | 内容 |
-|---|---|
-| **使い方** | |
-| [docs/guide/README.md](docs/guide/README.md) | 利用ガイド (章の一覧)。最初の章は [自分のコードを関数・クラスノードにする](docs/guide/user-code.md) |
-| **まず読むもの** | |
-| [docs/overview/vision.md](docs/overview/vision.md) | 出発点、対象ユーザー、ノード開発者の利用の流れ、ゴールと非ゴール |
-| [docs/overview/architecture.md](docs/overview/architecture.md) | 技術選定、リポジトリ構成、全体の仕組み |
-| [docs/overview/roadmap.md](docs/overview/roadmap.md) | フェーズと進み具合 |
-| **機能ごとの設計 (実装済み)** | |
-| [docs/design/map-and-traffic.md](docs/design/map-and-traffic.md) | 通信マップ、トラフィック、診断 |
-| [docs/design/measurement.md](docs/design/measurement.md) | C++ 計測ノード、詳細計測 (トレース)、ベンチマーク結果 |
-| [docs/design/input-and-media.md](docs/design/input-and-media.md) | お試し送信、メディア注入、ブラウザ取り込み、録画 |
-| [docs/design/nodes.md](docs/design/nodes.md) | 入力ノード、変換ノード、関数ノード、クラスノード、データの種類 |
-| [docs/design/user-code.md](docs/design/user-code.md) | 関数・クラスノードのコードの置き場所 (A/B/C)、見つからない理由、ひな形、依存ライブラリ |
-| [docs/design/launcher.md](docs/design/launcher.md) | ランチャー、プロジェクトファイル、パラメータ、lifecycle、launch の取り込み |
-| [docs/design/ui.md](docs/design/ui.md) | 画面構成、右クリックメニュー、ノード一覧 |
-| [docs/design/api.md](docs/design/api.md) | REST / WebSocket API |
-| [docs/design/security.md](docs/design/security.md) | 安全対策 (式評価、パス検査、サブプロセス、launch のサンドボックス、Host/Origin 検査) |
-| [docs/design/scenarios.md](docs/design/scenarios.md) | シナリオと記録モード |
-| [docs/design/resources.md](docs/design/resources.md) | リソース監視 (CPU・GPU・メモリ・ディスク・ネットワーク)、メモリリーク検出 |
-| [docs/design/wiring.md](docs/design/wiring.md) | 地図の上での配線 (つなぎ口・種類の互換性・反映)、用語集と言葉の総点検、pub/sub の 1 枚絵 |
-| **設計済み・未実装** | |
-| [docs/planned/remote-access.md](docs/planned/remote-access.md) | 別マシンからのアクセス (デバイスのペアリングと権限) |
-| **開発・運用** | |
-| [docs/project/testing.md](docs/project/testing.md) | テスト方針、テストの実行方法、テスト項目一覧 |
-| [docs/project/dependencies.md](docs/project/dependencies.md) | 依存関係 (用途・ライセンス・rosdep キー) |
-| [docs/project/distribution.md](docs/project/distribution.md) | 配布形態とインストール |
-
-docs 全体の案内は [docs/README.md](docs/README.md) にもあります。既知の課題と今後の予定は GitHub Issues で管理しています。
+- **[利用ガイド](docs/guide/README.md)**: 使い方の章の一覧 (最初に読むもの)
+- 全体像: [vision](docs/overview/vision.md) (出発点・対象ユーザー)、[architecture](docs/overview/architecture.md) (技術選定・構成)、[roadmap](docs/overview/roadmap.md) (進み具合)
+- 機能ごとの設計 ([docs/design/](docs/design/)): [map-and-traffic](docs/design/map-and-traffic.md)、[measurement](docs/design/measurement.md)、[input-and-media](docs/design/input-and-media.md)、[nodes](docs/design/nodes.md)、[user-code](docs/design/user-code.md)、[launcher](docs/design/launcher.md)、[integration](docs/design/integration.md)、[ui](docs/design/ui.md)、[api](docs/design/api.md)、[security](docs/design/security.md)、[scenarios](docs/design/scenarios.md)、[resources](docs/design/resources.md)、[wiring](docs/design/wiring.md)
+- 開発・運用: [testing](docs/project/testing.md)、[dependencies](docs/project/dependencies.md)、[distribution](docs/project/distribution.md)。設計済み・未実装: [remote-access](docs/planned/remote-access.md)、[integration](docs/planned/integration.md)
+- 索引: [docs/README.md](docs/README.md)。既知の課題と今後の予定は GitHub Issues で管理しています。
 
 ## 開発
 

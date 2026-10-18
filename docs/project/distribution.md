@@ -25,7 +25,7 @@ roshanavi はノード (DDS の参加者) でもあるが、次の機能は **�
 source ~/ros2_ws/install/setup.bash
 ros2 run roshanavi app          # ブラウザが開く
 ```
-観察だけ (グラフ・トラフィック) なら、同じ ROS_DOMAIN_ID の別 PC からも動く。独自型は Hz・帯域までで、中身の表示はできない (UI で案内する)。
+観察だけ (グラフ・トラフィック) なら、同じ ROS_DOMAIN_ID の別 PC からも動く。独自型は、その型のパッケージが roshanavi 側の環境に無いと『未対応の型』になり、Hz・帯域も中身も測れない (計測ノードも型の情報が無いと購読できないため)。UI で案内する。
 
 ## 2. 配布形態
 
@@ -59,3 +59,9 @@ ros2 run roshanavi app          # ブラウザが開く
 ## 6. 複数 PC 構成
 - roshanavi は開発 PC で動かす。ロボット PC のノードも、同じドメインなら地図とトラフィックに現れる。
 - ランチャーとリソース監視は、roshanavi が動いている PC のみ (他 PC の対応は Lv2 の将来課題)。
+
+## 7. 文書サイト
+OSS として公開するときに、`docs/` を **MkDocs (Material テーマ) で GitHub Pages に公開**する。
+- `docs/` が唯一の原本のまま。サイト用に文書をコピーしたり、別の場所に書き直したりしない。`mkdocs.yml` の `nav` で `docs/guide/` の章を先頭に並べ (利用者が最初に読むもの)、`docs/overview/`、`docs/design/`、`docs/project/` を後ろに置く。
+- ビルドは GitHub Actions で行い、`docs/` や `mkdocs.yml` が変わったら更新する。リンクは今の相対リンク (見出しのアンカーを含む) のまま動くようにする。
+- **GitHub Wiki は使わない**: コード (ブランチ・リリース) とは別のリポジトリで版が揃わないため。また、無料プランでは非公開リポジトリで使えない。
