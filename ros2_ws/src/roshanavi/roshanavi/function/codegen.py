@@ -122,7 +122,8 @@ def _periodic_args(spec: FunctionSpec, workspace: str) -> str:
 def generate(spec: FunctionSpec, workspace: str) -> str:
     inputs, output = resolve_ports(spec)
     resolved = resolve_module(workspace, spec.module)
-    ros_package = resolved.package.ros_package
+    # scope B / C code is not in a ROS package: the steps name a placeholder package
+    ros_package = resolved.package.ros_package or 'my_ros_package'
     types = sorted({p.type for p in [*inputs, output]})
     classes = class_names(types)
     kinds = {p.kind for p in [*inputs, output]}

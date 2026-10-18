@@ -4,23 +4,29 @@ import { useEffect, useState } from 'react';
 import { api, describeError } from '../api/client';
 import type { ModuleEntry, ModuleInfo } from '../api/functionTypes';
 
-export function useFunctionModules(): { modules: ModuleEntry[]; error: string | null } {
+/** The module list of every scope; read again whenever `refreshKey` changes (scope B / C edited,
+ * a package was scaffolded). */
+export function useFunctionModules(refreshKey = 0): { modules: ModuleEntry[]; error: string | null } {
   const [modules, setModules] = useState<ModuleEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
     api
       .functionModules()
-      .then((body) => !cancelled && setModules(body.modules))
+      .then((body) => {
+        if (cancelled) return;
+        setModules(body.modules);
+        setError(null);
+      })
       .catch((err: unknown) => !cancelled && setError(describeError(err)));
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [refreshKey]);
   return { modules, error };
 }
 
-export function useModuleInfo(module: string): { info: ModuleInfo | null; error: string | null } {
+export function useModuleInfo(module: string, refreshKey = 0): { info: ModuleInfo | null; error: string | null } {
   const [info, setInfo] = useState<ModuleInfo | null>(null);
   const [error, setError] = useState<string | null>(null);
   useEffect(() => {
@@ -35,6 +41,6 @@ export function useModuleInfo(module: string): { info: ModuleInfo | null; error:
     return () => {
       cancelled = true;
     };
-  }, [module]);
+  }, [module, refreshKey]);
   return { info, error };
 }

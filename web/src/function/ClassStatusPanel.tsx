@@ -7,6 +7,7 @@ import type { ActionRecord, ClassSpec, ClassStatus } from '../api/classTypes';
 import type { Target } from '../api/types';
 import { t, tDynamic } from '../i18n';
 import { formatClock } from '../lib/format';
+import { DependencyPanel } from './DependencyPanel';
 
 export function classStatusOf(target: Target): ClassStatus | null {
   const status = target.function_status;
@@ -96,6 +97,7 @@ export function ClassStatusPanel({ target }: { target: Target }) {
           {spec.actions.map((method) => <ActionButton key={method} target={target} method={method} record={status.actions[method]} />)}
         </ul>
       )}
+      <DependencyPanel module={spec.module} environment={status.environment} notices={status.notices} problem={status.problem} lastError={status.last_error} />
     </section>
   );
 }

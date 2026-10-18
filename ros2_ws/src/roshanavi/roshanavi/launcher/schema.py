@@ -5,6 +5,7 @@ workspace (package/executable exist, paths contained) are checked by
 :mod:`.command` when a target is registered or started.
 """
 
+import sys
 from typing import Any, Dict, List, Literal, Optional, Union
 
 from .. import data_kinds
@@ -384,6 +385,48 @@ class ClassSpec(_Strict):
         return values
 
 
+# ---- where function / class node code comes from (docs/design/user-code.md) ---------------------
+MAX_CODE_PATHS = 20
+MAX_INSTALLED_MODULES = 50
+
+
+# A code path: any directory path without control characters (checked further when used).
+CODE_PATH_PATTERN = r'^[^\x00-\x1f\x7f]{1,1024}\Z'
+CodePath = constr(regex=CODE_PATH_PATTERN)
+InstalledModule = constr(regex=MODULE_PATTERN)
+
+
+def _unique_code_settings(values: Dict[str, Any]) -> Dict[str, Any]:
+    for key in ('code_paths', 'installed_modules'):
+        items = values.get(key) or []
+        if len(set(items)) != len(items):
+            raise ValueError(f'{key} has the same entry twice')
+        if any(not str(item).strip() for item in items):
+            raise ValueError(f'{key} has an empty entry')
+    for module in values.get('installed_modules') or []:
+        top = module.split('.')[0]
+        if top in RESERVED_MODULE_TOPS:
+            raise ValueError('roshanavi itself cannot be an installed module of a function node')
+        # Libraries the user installed, not the standard library: a node that calls e.g.
+        # os.system with whatever arrives on a topic would run anyone's command.
+        if top in getattr(sys, 'stdlib_module_names', ()):
+            raise ValueError(f'{module!r} is part of the Python standard library; '
+                             'installed_modules are for libraries you installed (pip / apt)')
+    return values
+
+
+class CodeSettings(_Strict):
+    """``PUT /api/functions/locations``: scope B (code_paths) and C (installed_modules)."""
+
+    code_paths: List[CodePath] = Field(default_factory=list, max_items=MAX_CODE_PATHS)
+    installed_modules: List[InstalledModule] = Field(default_factory=list,
+                                                     max_items=MAX_INSTALLED_MODULES)
+
+    @root_validator(skip_on_failure=True)
+    def _unique(cls, values: Dict[str, Any]) -> Dict[str, Any]:
+        return _unique_code_settings(values)
+
+
 class ProjectSpec(_Strict):
     version: Literal[1] = PROJECT_VERSION
     targets: List[TargetSpec] = Field(default_factory=list, max_items=100)
@@ -393,6 +436,10 @@ class ProjectSpec(_Strict):
     classes: List[ClassSpec] = Field(default_factory=list, max_items=100)
     watch_topics: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
                                                                      max_items=200)
+    # Opt-in places for function / class node code besides the workspace (scope B / C).
+    code_paths: List[CodePath] = Field(default_factory=list, max_items=MAX_CODE_PATHS)
+    installed_modules: List[InstalledModule] = Field(default_factory=list,
+                                                     max_items=MAX_INSTALLED_MODULES)
 
     @root_validator(skip_on_failure=True)
     def _unique_ids(cls, values: Dict[str, Any]) -> Dict[str, Any]:
@@ -404,7 +451,7 @@ class ProjectSpec(_Strict):
                 raise ValueError(f'duplicate id {item.id!r} (ids must be unique across '
                                  'targets, dummies, transforms, functions and classes)')
             seen.add(item.id)
-        return values
+        return _unique_code_settings(values)
 
 
 def param_text(value: ParamValue) -> str:

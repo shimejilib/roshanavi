@@ -48,6 +48,11 @@ roshanavi/
       transform/       # 変換ノード (docs/design/nodes.md): compute (式) / pipeline (間引き・遅延・結合) / runner (ROS) / preview
       transform_node.py # エントリ: `ros2 run roshanavi transform --config <yaml>`
       server_transforms.py # 変換ノード・試算・プロジェクトの切り替えの REST
+      function/        # 関数・クラスノード (docs/design/nodes.md): core / class_core (ノードの中) / loader (import・ホットリロード) /
+                       #   scopes・installed・modules・signatures (置き場所 A/B/C と静的な一覧) / code_report (見つからない理由) /
+                       #   scaffold (ひな形) / dependencies・node_env・python_env (依存と Python) / codegen (docs/design/user-code.md)
+      function_node.py # エントリ: `ros2 run roshanavi function --config <yaml>` (関数ノード・クラスノード)
+      server_functions.py # 関数・クラスノード、コードの場所・ひな形・依存の案内の REST
       sample_media.py  # パーセプションデモ用のサンプル動画・音声を ffmpeg で生成 (初回のみ)
       heavy_types.py   # 大きい型 (画像・点群) の一覧
       injector.py      # 注入ジョブ管理

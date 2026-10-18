@@ -21,24 +21,32 @@ not ``importlib.reload`` and not a process restart.
   can never load a stale ``.pyc``, and nothing is written into the source tree.
 
 Limits: module-level state starts over on each reload; C extensions and
-modules outside the user's package are not reloaded.
+modules outside the user's package are not reloaded. Installed modules (scope C,
+docs/design/user-code.md) are imported normally from the node's Python environment and are
+never reloaded (reinstall, then restart the node).
 """
 
 import importlib
+import importlib.machinery
 import importlib.util
 import inspect
 import os
 import sys
 import tempfile
 import threading
+import time
 import traceback
 from dataclasses import dataclass
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from ..launcher.errors import LauncherError
+from . import node_env
 from .modules import ResolvedModule, resolve_module
+from .scopes import SCOPE_INSTALLED, CodeLocations
+from .signatures import imports_of, parse_source
 
 POLL_SEC = 0.5
+SLOW_IMPORT_SEC = 1.0   # 「モジュールの読み込み時に時間がかかっています」
 
 
 @dataclass(frozen=True)
@@ -49,9 +57,13 @@ class Problem:
     #                    'param' | 'action' | 'close')
     message: str
     location: Optional[str]
+    missing_module: Optional[str] = None   # ModuleNotFoundError of a dependency (not the user's)
 
     def to_dict(self) -> Dict[str, Any]:
-        return {'kind': self.kind, 'message': self.message, 'location': self.location}
+        out = {'kind': self.kind, 'message': self.message, 'location': self.location}
+        if self.missing_module:
+            out['missing_module'] = self.missing_module
+        return out
 
     def text(self) -> str:
         return f'{self.location}: {self.message}' if self.location else self.message
@@ -80,6 +92,16 @@ def user_location(exc: BaseException, package_dir: str, base_dir: str) -> Option
     return None
 
 
+def missing_module_of(exc: BaseException, own_top: Optional[str]) -> Optional[str]:
+    """The dependency a ModuleNotFoundError is about (``numpy``), or None (the user's own
+    package or another error). Follows one ``raise ImportError(...) from`` wrapper."""
+    for candidate in (exc, exc.__cause__, exc.__context__):
+        if isinstance(candidate, ModuleNotFoundError) and candidate.name:
+            name = candidate.name
+            return None if own_top and name.split('.')[0] == own_top else name
+    return None
+
+
 def describe(exc: BaseException) -> str:
     text = str(exc)
     return f'{type(exc).__name__}: {text}' if text else type(exc).__name__
@@ -88,8 +110,9 @@ def describe(exc: BaseException) -> str:
 class FunctionLoader:
     member_label = 'function'   # what is looked up in the module (class nodes: 'class')
 
-    def __init__(self, workspace: str, module: str, function: str):
-        self.workspace = os.path.realpath(workspace)
+    def __init__(self, workspace: Union[str, CodeLocations], module: str, function: str):
+        self.locations = CodeLocations.of(workspace)
+        self.workspace = os.path.realpath(self.locations.workspace)
         self.module = module
         self.function_name = function
         self.function: Optional[Callable[..., Any]] = None
@@ -99,6 +122,9 @@ class FunctionLoader:
         self.problem: Optional[Problem] = None
         self._stamps: Dict[str, Tuple[int, int]] = {}
         self._lock = threading.Lock()
+        self.import_seconds: Optional[float] = None
+        self.environment: Dict[str, Any] = {'python': node_env.python_info()}
+        self.notices: List[Dict[str, Any]] = []
         sys.dont_write_bytecode = True
         sys.pycache_prefix = tempfile.mkdtemp(prefix='roshanavi-function-pyc-')
 
@@ -108,20 +134,10 @@ class FunctionLoader:
                 if name == top or name.startswith(top + '.')}
 
     def _import(self, resolved: ResolvedModule) -> Callable[..., Any]:
-        top = resolved.package.top
-        init = os.path.join(resolved.package.path, '__init__.py')
-        spec = importlib.util.spec_from_file_location(
-            top, init, submodule_search_locations=[resolved.package.path])
-        if spec is None or spec.loader is None:
-            raise ImportError(f'cannot load package {top} from {resolved.package.path}')
-        package = importlib.util.module_from_spec(spec)
-        sys.modules[top] = package
-        spec.loader.exec_module(package)
-        module = package if resolved.module == top else importlib.import_module(resolved.module)
-        loaded_from = os.path.realpath(getattr(module, '__file__', '') or '')
-        if loaded_from != resolved.file:  # never run code from anywhere else
-            raise ImportError(f'{resolved.module} was loaded from {loaded_from}, '
-                              f'not {resolved.file}')
+        if resolved.scope == SCOPE_INSTALLED:
+            module = importlib.import_module(resolved.module)  # the node's own environment
+        else:
+            module = self._import_source(resolved)
         function = getattr(module, self.function_name, None)
         if function is None:
             raise AttributeError(f'{resolved.module} has no {self.member_label} '
@@ -129,54 +145,115 @@ class FunctionLoader:
         self._check_member(function, resolved.module)
         return function
 
+    def _import_source(self, resolved: ResolvedModule) -> Any:
+        top = resolved.package.top
+        init = os.path.join(resolved.package.path, '__init__.py')
+        spec = importlib.util.spec_from_file_location(
+            top, init, submodule_search_locations=[resolved.package.path])
+        if spec is None or spec.loader is None:
+            raise ImportError(f'cannot load package {top} from {resolved.package.path}')
+        package = importlib.util.module_from_spec(spec)
+        setattr(package, USER_MARK, True)
+        sys.modules[top] = package
+        spec.loader.exec_module(package)
+        module = package if resolved.module == top else importlib.import_module(resolved.module)
+        loaded_from = os.path.realpath(getattr(module, '__file__', '') or '')
+        if loaded_from != resolved.file:  # never run code from anywhere else
+            raise ImportError(f'{resolved.module} was loaded from {loaded_from}, '
+                              f'not {resolved.file}')
+        return module
+
     def _check_member(self, member: Any, module: str) -> None:
-        if not inspect.isfunction(member):
+        # builtin: a function of an extension module (scope C, typed by hand)
+        if not (inspect.isfunction(member) or inspect.isbuiltin(member)):
             raise TypeError(f'{module}.{self.function_name} is not a function')
 
     def load(self) -> Callable[..., Any]:
         """(Re)import; on failure the previous function and modules stay (raises LoadError)."""
         with self._lock:
             try:
-                resolved = resolve_module(self.workspace, self.module)
+                resolved = resolve_module(self.locations, self.module)
             except LauncherError as exc:
                 self.problem = Problem('import', str(exc), None)
                 self._stamps = {path: _stamp(path) for path in self._stamps}  # no retry loop
                 raise LoadError(self.problem) from exc
+            if resolved.scope == SCOPE_INSTALLED and self.function is not None:
+                return self.function   # installed modules are not reloaded
             top = resolved.package.top
-            saved = self._package_modules(top)
+            saved = self._package_modules(top) if resolved.scope != SCOPE_INSTALLED else {}
+            if saved and not _same_package(saved.get(top), resolved):
+                self.problem = Problem('import', f'the name {top!r} is already used inside the '
+                                       'node (a library roshanavi imports); rename your package',
+                                       None)
+                raise LoadError(self.problem)
             for name in saved:
                 del sys.modules[name]
             importlib.invalidate_caches()
+            started = time.monotonic()
             try:
                 function = self._import(resolved)
             except BaseException as exc:  # SystemExit / anything raised by user code at import
                 if isinstance(exc, KeyboardInterrupt):
                     raise
-                for name in list(self._package_modules(top)):
-                    del sys.modules[name]
-                sys.modules.update(saved)
+                if resolved.scope != SCOPE_INSTALLED:
+                    for name in list(self._package_modules(top)):
+                        del sys.modules[name]
+                    sys.modules.update(saved)
                 self.problem = Problem('import', describe(exc),
                                        user_location(exc, resolved.package.path,
-                                                     resolved.package.base_dir))
-                self._watch(resolved)
+                                                     resolved.package.base_dir),
+                                       missing_module_of(exc, top))
+                self._after_load(resolved, time.monotonic() - started)
                 raise LoadError(self.problem) from exc
             self.function, self.resolved = function, resolved
             self.signature = _signature(function)
             self.loads += 1
             self.problem = None
-            self._watch(resolved)
+            self._after_load(resolved, time.monotonic() - started)
             return function
+
+    def _after_load(self, resolved: ResolvedModule, seconds: float) -> None:
+        self.import_seconds = round(seconds, 3)
+        self._watch(resolved)
+        self.environment = environment_of(resolved, self.workspace)
+        self.notices = self._notices(resolved, seconds)
+
+    def _notices(self, resolved: ResolvedModule, seconds: float) -> List[Dict[str, Any]]:
+        notices: List[Dict[str, Any]] = []
+        if seconds >= SLOW_IMPORT_SEC:
+            notices.append({'code': 'slow_import', 'seconds': round(seconds, 1)})
+        if resolved.scope == SCOPE_INSTALLED:
+            notices.append({'code': 'no_hot_reload_installed'})
+        if resolved.kind == 'extension':
+            notices.append({'code': 'extension_module'})
+        files = self.watched_files
+        if any('rclpy' in _imports(path) for path in files if path.endswith('.py')):
+            notices.append({'code': 'imports_rclpy'})
+        extensions = sorted(os.path.basename(p) for p in files
+                            if p.endswith(tuple(importlib.machinery.EXTENSION_SUFFIXES)))
+        if extensions and resolved.scope != SCOPE_INSTALLED:
+            notices.append({'code': 'extension_no_reload', 'files': extensions[:10]})
+        return notices
 
     # ---- watching ---------------------------------------------------------------
     def _watch(self, resolved: ResolvedModule) -> None:
-        root = os.path.join(os.path.realpath(resolved.package.path), '')
+        if resolved.scope == SCOPE_INSTALLED:
+            self._stamps = {}   # installed modules are not reloaded
+            return
+        pkg_dir = os.path.join(resolved.package.path, '')
+        real_dir = os.path.join(os.path.realpath(resolved.package.path), '')
+        root = os.path.join(resolved.package.root, '') if resolved.package.root else real_dir
         files = {resolved.file, os.path.realpath(os.path.join(resolved.package.path,
                                                               '__init__.py'))}
         for mod in self._package_modules(resolved.package.top).values():
             path = getattr(mod, '__file__', None)
-            if path and os.path.realpath(path).startswith(root):
-                files.add(os.path.realpath(path))
-        self._stamps = {path: _stamp(path) for path in sorted(files)}
+            if not path:
+                continue
+            real = os.path.realpath(path)
+            # siblings of the same package (also an inward symlink to elsewhere in the root)
+            if (real.startswith(real_dir) or path.startswith(pkg_dir)) and real.startswith(root):
+                files.add(real)
+        self._stamps = {path: _stamp(path) for path in sorted(f for f in files if f)}
 
     @property
     def watched_files(self) -> List[str]:
@@ -189,9 +266,41 @@ class FunctionLoader:
     def location_of_function(self) -> Optional[str]:
         if self.function is None or self.resolved is None:
             return None
-        code = self.function.__code__
+        code = getattr(self.function, '__code__', None)
+        if code is None:  # a builtin of an extension module
+            return _relative(self.resolved.file or '', self.resolved.package.base_dir)
         return f'{_relative(code.co_filename, self.resolved.package.base_dir)}:' \
                f'{code.co_firstlineno}'
+
+
+def environment_of(resolved: ResolvedModule, workspace: str) -> Dict[str, Any]:
+    """The interpreter, and requirements.txt next to the code compared with what is installed."""
+    package = resolved.package
+    if resolved.scope == SCOPE_INSTALLED:
+        directories: List[str] = []
+    else:
+        # A: the ROS package's directory; B: the registered directory; both: the package's parent
+        directories = [d for d in (package.source if package.ros_package else package.root,
+                                   package.base_dir) if d]
+    return {'python': node_env.python_info(), 'scope': resolved.scope,
+            'loaded_from': resolved.file,
+            'requirements': node_env.check_requirements(directories, workspace)}
+
+
+def _imports(path: str) -> List[str]:
+    try:
+        return imports_of(parse_source(path))
+    except LauncherError:
+        return []
+
+
+USER_MARK = '__roshanavi_user_package__'
+
+
+def _same_package(module: Any, resolved: ResolvedModule) -> bool:
+    """``sys.modules[top]`` is a user package a loader imported from source (an earlier load),
+    not a library of the node with the same name (that one must never be replaced)."""
+    return module is None or bool(getattr(module, USER_MARK, False))
 
 
 def _stamp(path: str) -> Tuple[int, int]:

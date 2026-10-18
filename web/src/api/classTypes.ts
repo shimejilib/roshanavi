@@ -1,5 +1,6 @@
 // Class nodes (クラスノード, docs/design/nodes.md): a plain Python class run as a ROS node.
 
+import type { CodeNotice, NodeEnvironment } from './codeTypes';
 import type { PortKind } from '../datakind/kinds';
 import type { CallMode, FunctionPortSpec, FunctionProblem } from './functionTypes';
 import type { Qos } from './types';
@@ -100,4 +101,7 @@ export interface ClassStatus {
   /** The last time the instance was created again (`reset`) or its state carried over (`kept`). */
   notice: { kind: 'reset' | 'kept'; reason: 'reload' | 'param'; at: number } | null;
   hooks: Record<string, boolean>;
+  environment?: NodeEnvironment;
+  notices?: CodeNotice[];
+  import_seconds?: number | null;
 }

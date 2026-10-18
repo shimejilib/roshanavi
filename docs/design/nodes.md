@@ -140,7 +140,8 @@ roshanavi で「＋ 関数・クラスノードを作る」→「関数」→ �
 
 **実行と安全**
 - 関数は独立したノードのプロセス (`ros2 run roshanavi function --config <yaml>`、設定は `{function: <FunctionSpec>, workspace: <root>, status_file?: <path>}`) で動く。**roshanavi のサーバーの中では実行も import もしない**。サーバーはモジュールの一覧と関数のシグネチャを **`ast` の静的解析だけ** で作る (`function/modules.py`: トップレベルの公開 `def`、引数・注釈・既定値の有無・戻り値の注釈・docstring の最初の段落・行番号。注釈から種類を推す: `str` → 文字列、`np.ndarray` → 画像 …)。
-- **import できる範囲** (`modules.resolve_module`): `<workspace>/src` の ROS パッケージ (package.xml) の直下にある Python パッケージ (`__init__.py` のあるディレクトリ) のモジュールだけ。モジュール名は `[A-Za-z_][A-Za-z0-9_]*` の最大 8 段。解決したファイルの realpath が `<workspace>/src` とその Python パッケージの内側で通常ファイルであること (外向き symlink は拒否)。`roshanavi` 自身は拒否。data_dir は使わない。import は `sys.path` を触らず、パッケージの `__init__.py` から `spec_from_file_location` で読み、import 後に `__file__` が解決したファイルと一致することを確かめる。利用者自身のコードなので、信頼の水準は自分でノードを起動するのと同じ (サンドボックスはしない)。
+- **コードの置き場所・見つからない理由・ひな形・依存ライブラリ**は [user-code.md](user-code.md) (A: ワークスペースの ROS パッケージ、B: 登録した場所 `code_paths:`、C: インストール済みのモジュール `installed_modules:`)。以下は A の規則 (B・C は同じ考え方で根が違う)。
+- **import できる範囲** (`modules.resolve_module`): `<workspace>/src` の ROS パッケージ (package.xml) の直下にある Python パッケージ (`__init__.py` のあるディレクトリ) のモジュールだけ。モジュール名は `[A-Za-z_][A-Za-z0-9_]*` の最大 8 段。解決したファイルの realpath が `<workspace>/src` の内側で通常ファイルであること (内向きの symlink は使え、外向きは拒否。以前は Python パッケージの内側に限っていた)。標準ライブラリやノードが使うライブラリと同じ名前のパッケージは読まない ([user-code.md#2](user-code.md#2-置き場所-探す範囲))。`roshanavi` 自身は拒否。data_dir は使わない。import は `sys.path` を触らず、パッケージの `__init__.py` から `spec_from_file_location` で読み、import 後に `__file__` が解決したファイルと一致することを確かめる。利用者自身のコードなので、信頼の水準は自分でノードを起動するのと同じ (サンドボックスはしない)。
 - 追加・変更の時点 (`command.validate_function`) でモジュールが解決できなければ 404 `unknown_module`。起動後に import が失敗したときはプロセスを終わらせず、状態 `import_error` で待ち、ファイルが直ったら読み込む。
 
 **ホットリロード (決定: プロセス内で新しく import し直す)** (`function/loader.py`)

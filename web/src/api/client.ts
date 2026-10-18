@@ -20,6 +20,7 @@ import { topicPath } from '../lib/topics';
 import type { KindCatalog, TypeGroup } from '../datakind/kinds';
 import type { ActionRecord, ClassSpec } from './classTypes';
 import type { FunctionSpec, ModuleEntry, ModuleInfo } from './functionTypes';
+import type { CodeLocationsReport, CodeSettings, DependencyHint, ScaffoldResult } from './codeTypes';
 import type {
   BuildStatus,
   DataFile,
@@ -144,6 +145,15 @@ export const api = {
   functionModule: (name: string) => request<ModuleInfo>('GET', `/api/functions/module?name=${encodeURIComponent(name)}`),
   addFunction: (spec: FunctionSpec, start = true) => request<Target>('POST', `/api/functions${start ? '?start=true' : ''}`, spec),
   updateFunction: (spec: FunctionSpec) => request<Target>('PUT', `/api/functions/${enc(spec.id)}`, spec),
+  codeLocations: (refresh = false) =>
+    request<CodeLocationsReport>('GET', `/api/functions/locations${refresh ? '?refresh=true' : ''}`),
+  putCodeLocations: (settings: CodeSettings) => request<CodeLocationsReport>('PUT', '/api/functions/locations', settings),
+  scaffold: (name: string) => request<ScaffoldResult>('POST', '/api/functions/scaffold', { name }),
+  dependencyHint: (missing: string, module?: string) =>
+    request<DependencyHint>(
+      'GET',
+      `/api/functions/dependency?missing=${encodeURIComponent(missing)}${module ? `&module=${encodeURIComponent(module)}` : ''}`,
+    ),
   exportFunctionCode: (id: string, directory: string) =>
     request<{ file: string; command: string }>('POST', `/api/functions/${enc(id)}/export-code`, { directory }),
   addClass: (spec: ClassSpec, start = true) => request<Target>('POST', `/api/classes${start ? '?start=true' : ''}`, spec),

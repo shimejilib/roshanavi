@@ -495,3 +495,32 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | S-20 | E2E: MovingAverage をクラスノードとして作る | 「クラス」→ モジュール → クラス (シグネチャ付き) → `window` は既定値 5 を 3 に → `process` は「トピックにつなぐ」、`reset` は「操作メソッド」→ 作成 → 地図の役割 function、`classes:` に保存 → 数を送ると平均 → 右クリック「reset を呼ぶ」→ 次の値が単独の平均になる → 右ペインのボタンと「最後の呼び出し」。スクリーンショット [`class-node-dialog.png`](../images/class-node-dialog.png) | ✅ |
 | S-21 | E2E: 作り直しの通知 | `Counter` のパラメータを変えると右ペインに「状態をリセットしました」、現在値が更新される | ✅ |
 | S-22 | Lyrical での実行 | 上の単体・実ノードのテストが Lyrical (rclpy 10、Python 3.14、pydantic 2) でも通る。`LifecycleNode` の API (`create_lifecycle_publisher`、`on_configure` ほか) は Jazzy と同じ | ✅ |
+
+### T. 自分のコードを関数・クラスノードにする (置き場所・ひな形・依存)
+
+仕様は [user-code.md](../design/user-code.md)。状況 U1〜U7 の実際のディレクトリ構成を、テストの中で作る (`test/user_code_fixtures.py`: ament_python / ament_cmake_python / flat / src レイアウト / pip が残すのと同じ dist-info 付きの site ディレクトリ / venv (`--system-site-packages --without-pip`) / 拡張モジュール (cc でビルド) / git のサブモジュール (git で作る))。単体は `test_user_code_scopes.py`・`test_user_code_report.py`・`test_user_code_loader.py`・`test_user_code_deps.py`・`test_user_code_scaffold.py`、実ノードと API は `test_user_code_ros.py` (と `test_user_code_scaffold.py` の最後)、画面のロジックは `function/codeLocations.test.ts`、E2E は `web/e2e/usercode.spec.ts`。
+
+| ID | 項目 | 期待結果 | 状態 |
+|---|---|---|---|
+| T-01 | A: ament_python と ament_cmake_python (unit) | `<pkg>/<pkg>/`、`ament_python_install_package(${PROJECT_NAME})`、`PACKAGE_DIR python/<名前>` のモジュールが一覧・解決・関数の一覧に出る (`scope: workspace`、ワークスペースからの相対パス) | ✅ |
+| T-02 | B: flat / src / フォルダ自体がパッケージ (unit + 実ノード) | 登録しなければ出ない。登録すると一覧に出て (`scope: code_path`、実際の絶対パス)、相対パスはワークスペースから。src レイアウトの関数ノードが相対 import 付きで動き、**同じパッケージの別ファイル**を保存すると読み直す。flat のクラスノードが動く | ✅ |
+| T-03 | C: インストール済み・名前空間パッケージ・editable・拡張モジュール (unit + 実ノード) | dist-info 付きのパッケージとその下のモジュール、2 か所に分かれた名前空間パッケージ (それ自体は選べない)、setuptools の editable (`MAPPING`) を import せずに見つける。path finder と同じ順 (パッケージ → .so → .py、名前空間は最後)。拡張モジュールだけのものは `listable: false` で関数名を手入力し、実ノードで動く (`HI!!`)。インストール済みは読み直さない (通知) | ✅ |
+| T-04 | 名前の衝突 (unit) | A と B、B と C で同じ名前ならソース側 (A → B → C の順) を使い、理由に `name_collision`、C は `shadowed`。標準ライブラリ・ノードが使う名前 (`json`、`numpy`) のパッケージは読まない。pytest が読み込み済みの `pluggy` と同じ名前の B のパッケージはノードの中で拒否 | ✅ |
+| T-05 | シンボリックリンク (unit) | A・B とも、根の内側を指すもの (別のパッケージのファイル) は使え、外を指すもの (ファイル・パッケージのフォルダ) は一覧にも解決にも出ない。理由に `outside_symlink` | ✅ |
+| T-06 | サーバーは import しない (unit) | A・B・C のモジュールと `__init__.py` の先頭でファイルを書く仕掛けが、一覧・説明・「コードの場所」のどれでも動かない | ✅ |
+| T-07 | 見つからない理由の全部 (unit) | `__init__.py` が無い、名前空間パッケージ (A・B)、package.xml の隣の .py、package.xml の無いフォルダ、構文エラー (ファイル・行・内容)、関数もクラスも無い (`if __name__` の中の名前付き)、`_` で始まる名前だけ、外向きのリンク、登録したフォルダが消えた・空、登録したモジュールが無い。理由以外のものは出ない。`.git` (ディレクトリもサブモジュールのファイルも) は辿らない | ✅ |
+| T-08 | git のサブモジュール (unit、git で fixture を作る) | `--recurse-submodules` 無しで clone したワークスペースは「中身がありません」とコマンド `git submodule update --init --recursive` と実行する場所。同期済みは普通の ROS パッケージとして一覧に出る。B の中のサブモジュールも同じ。`.gitmodules` の `path` が外を指しても無視。PATH から git を外しても動く (git を実行しない) | ✅ |
+| T-09 | コードの場所の登録の検査 (unit + API) | `/`・`/usr`・ホーム・data フォルダ (中・それを含む)・`.git` の中・制御文字・空・存在しないフォルダを拒否 (`invalid_code_path`)。プロジェクトファイルに `code_paths:` / `installed_modules:` を保存・読み込み (空なら書かない)、重複・21 個以上・不正なモジュール名・`roshanavi`・**標準ライブラリ (`os`、`subprocess`、`builtins`)** を拒否 (pydantic 1 / 2) | ✅ |
+| T-10 | ひな形 (unit) | 8 つのファイル、package.xml に依存の例 (コメントの中に `--` が無く XML として読める)、関数 `convert(text: str) -> str` とクラス `Processor` が静的に一覧できる。名前の規則 16 通りを拒否、既にあるフォルダ (リンクも) は上書きせず 409、ROS パッケージ・Python パッケージの名前と重なれば 409、途中で書けなくなったら作ったものだけを消して 403 | ✅ |
+| T-11 | ひな形 → そのまま動く → ビルド → テスト (実ノード) | 作った直後に (ビルドなしで) 関数ノードとして `HI…`、クラスノードとして `No.1 …` (通し番号が増える)、`colcon build --packages-select` が通り site-packages に入る、生成した pytest が README の手順 (`cd src/<名前> && python3 -m pytest test`) でもワークスペースの根からでも 2 件通る | ✅ |
+| T-12 | 足りないライブラリ (unit + 実ノード) | 読み込み時・呼び出し時・`raise ... from` の `ModuleNotFoundError` に `missing_module`、自分のパッケージの中のモジュールが無いときは付けない。実ノード: OpenCV を import するモジュールは `import_error` で場所と `missing_module: cv2`、requirements.txt の照合、直して保存すると動く (numpy は rclpy 自身が使うため、ROS 2 のノードで欠けることは無い) | ✅ |
+| T-13 | rosdep の対応づけ (unit、rosdep のデータベース付き) | `numpy` → `python3-numpy`、`cv2` → `python3-opencv` (apt)、無いもの → `not_found` → venv の手順。HOME を空にすると `unavailable` (`no_database`) で未確認の候補と両方の手順、rosdep が無ければ `rosdep_missing`、時間切れ。pip のキーは使わない。結果はキャッシュ。実行するのは `rosdep resolve` だけ (pip は実行しない) | ✅ |
+| T-14 | 案内の中身 (unit + API) | ワークスペースのパッケージなら `package.xml` の実際のパス・足す 1 行・既に書いてあるか (コメントは数えない)・`rosdep install --from-paths <実際のパス>`。B なら package.xml は無く apt の 1 行、requirements.txt があれば `pip install -r <実際のパス>`、pip の名前が違えばそう書く、venv の中なら `<その python> -m pip install` | ✅ |
+| T-15 | requirements.txt の照合 (unit + 実ノード) | 名前の正規化、足りないもの・版が合わないもの・入っているもの、`-r`・URL・この環境向けでない行は確かめない。packaging が無いときは入っているかだけ。読み込みに失敗したときも照合する | ✅ |
+| T-16 | venv で動かす (実ノード) | venv (`--system-site-packages`) が有効な環境の ProcessManager は `ros2 run --prefix <venv>/bin/python3` で起動し、venv にだけ入れたライブラリを関数ノードが使える。ノードの状態に venv の Python、照合で venv のライブラリが入っている。C の場所の解決もノードの Python の検索パスで行う (サーバーの `sys.path` には無い)。venv が無ければコマンドは今までどおり | ✅ |
+| T-17 | 通知 (unit) | 読み込みに 1.1 秒 → `slow_import`、rclpy を import → `imports_rclpy`、パッケージの中の .so → `extension_no_reload`、作成画面ではモジュールの `skipped` (`_` / async / `if __name__`) と rclpy の通知 | ✅ |
+| T-18 | API と安全の検査 (API) | `locations` の GET / PUT (保存、不正は 4xx)、`modules` の `scope`、`scaffold` 201 → 409 → 不正な名前 400、作った関数と B のモジュールが API から起動して動く、`dependency`。新しいルートも Host / Content-Type の検査の内側 (403 / 415) | ✅ |
+| T-19 | 画面のロジック (vitest) | パッケージ名・フォルダ・モジュール名の検査、追加・削除 (元を変えない)、すべての理由と通知に文がある (`{}` が残らない)、設計の表どおりの文、置き場所の文、範囲ごとのグループ、requirements の要約、rosdep の手順 (書いてある / オフライン / package.xml なし / キーなし) | ✅ |
+| T-20 | E2E: 理由 → ひな形 → 書き換え → 出力が変わる | `__init__.py` の無いフォルダに理由と実際のパス、置き場所、Python。不正な名前は断られ、`e2e_logic` を作ると関数が選ばれた状態 → `/chatter` で `HELLO WORLD` → テストが `logic.py` を書き換えると `edited: Hello World`。OpenCV を使う関数ノードの右ペインに ① `python3-opencv` と ② venv。スクリーンショット [`user-code-locations.png`](../images/user-code-locations.png)・[`user-code-scaffold.png`](../images/user-code-scaffold.png)・[`user-code-dependency.png`](../images/user-code-dependency.png) | ✅ |
+| T-21 | Lyrical での実行 | T の単体・実ノード・API のテストが Lyrical (Python 3.14、pydantic 2) でも通る (77 件) | ✅ |
+

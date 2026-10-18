@@ -16,6 +16,7 @@ import { functionJa } from './messagesFunction';
 import { scenarioJa } from './messagesScenario';
 import { tourJa } from './messagesTour';
 import { resourcesJa } from './messagesResources';
+import { codeJa } from './messagesCode';
 
 export const ja = {
   ...mapJa,
@@ -33,6 +34,7 @@ export const ja = {
   ...scenarioJa,
   ...tourJa,
   ...resourcesJa,
+  ...codeJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

@@ -12,13 +12,19 @@ import { useAppState } from '../state/AppState';
 import { useLive } from '../state/LiveProvider';
 import { applyFunction, buildFunctionSpec, defaultFunctionForm, formFromFunction, rowsFor, type FunctionForm } from './functionForm';
 import { FunctionPortsFields } from './FunctionPortsFields';
+import { FUNCTION_NAME_RE } from './codeLocations';
 import { FunctionStatusPanel } from './FunctionStatusPanel';
+import { ModuleNotes, ModuleSelect } from './ModuleSelect';
 import { useFunctionModules, useModuleInfo } from './useFunctionModules';
 
 interface Props {
   topic?: string;
   /** The function node being edited (undefined: create). */
   editing?: Target;
+  /** Choose this module (and function) when the dialog opens (after 「ひな形を作る」). */
+  preselect?: { module: string; fn?: string };
+  /** Changes when the code locations changed: the module list is read again. */
+  refreshKey?: number;
 }
 
 const CALLS: CallMode[] = ['on_message', 'periodic', 'multi_input'];
@@ -50,15 +56,22 @@ function ExportCode({ id }: { id: string }) {
   );
 }
 
-export function FunctionMode({ topic, editing }: Props) {
+export function FunctionMode({ topic, editing, preselect, refreshKey = 0 }: Props) {
   const { closeDialog, select } = useAppState();
   const { live } = useLive();
-  const [form, setForm] = useState<FunctionForm>(() => (editing ? formFromFunction(editing.spec as FunctionSpec) : defaultFunctionForm(topic)));
+  const [form, setForm] = useState<FunctionForm>(() => {
+    if (editing) return formFromFunction(editing.spec as FunctionSpec);
+    const initial = defaultFunctionForm(topic);
+    return preselect ? { ...initial, module: preselect.module } : initial;
+  });
   const [nameTouched, setNameTouched] = useState(Boolean(editing));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const modules = useFunctionModules();
-  const moduleInfo = useModuleInfo(form.module);
+  const [pendingFn, setPendingFn] = useState(editing ? '' : (preselect?.fn ?? ''));
+  const modules = useFunctionModules(refreshKey);
+  const moduleInfo = useModuleInfo(form.module, refreshKey);
+  const listable = moduleInfo.info?.listable !== false;
+  const manualError = !listable && form.fn && !FUNCTION_NAME_RE.test(form.fn) ? t('code.manualInvalid') : null;
   const fnInfo = moduleInfo.info?.functions.find((f) => f.name === form.fn);
   const topicTypes = useMemo(() => new Map((live.graph?.topics ?? []).map((tp) => [tp.name, tp.types])), [live.graph]);
   const update = (patch: Partial<FunctionForm>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -67,9 +80,18 @@ export function FunctionMode({ topic, editing }: Props) {
     const info = moduleInfo.info?.functions.find((f) => f.name === name);
     setForm((prev) => (info ? applyFunction(prev, info, nameTouched) : { ...prev, fn: name }));
   };
+  // After 「ひな形を作る」: the module's listing arrives after the dialog switched; pick the function once.
+  if (pendingFn && moduleInfo.info?.module === form.module) {
+    setPendingFn('');
+    if (moduleInfo.info.functions.some((f) => f.name === pendingFn)) pickFunction(pendingFn);
+  }
   const setCall = (call: CallMode) => setForm((prev) => ({ ...prev, call, inputs: rowsFor(call, prev.inputs, fnInfo?.params.length) }));
 
   const submit = async () => {
+    if (manualError) {
+      setError(manualError);
+      return;
+    }
     const built = buildFunctionSpec(form, live.targets.map((tg) => tg.id), editing?.id);
     if (!built.ok) {
       setError(built.error);
@@ -100,22 +122,28 @@ export function FunctionMode({ topic, editing }: Props) {
         <div className="row wrap">
           <label>
             {t('function.module')}
-            <select value={form.module} onChange={(e) => update({ module: e.target.value, fn: '' })} disabled={Boolean(editing)} data-testid="function-module" data-tour="function-module">
-              <option value="">{t('function.moduleChoose')}</option>
-              {modules.modules.map((m) => <option key={m.module} value={m.module}>{m.module}</option>)}
-            </select>
+            <ModuleSelect value={form.module} modules={modules.modules} onChange={(module) => update({ module, fn: '' })} disabled={Boolean(editing)} testId="function-module" data-tour="function-module" />
             {modules.modules.length === 0 && !modules.error && <span className="muted small">{t('function.noModules')}</span>}
             {modules.error && <span className="error-text small">{modules.error}</span>}
           </label>
-          <label>
-            {t('function.function')}
-            <select value={form.fn} onChange={(e) => pickFunction(e.target.value)} disabled={!moduleInfo.info} data-testid="function-name" data-tour="function-name">
-              <option value="">{t('function.functionChoose')}</option>
-              {(moduleInfo.info?.functions ?? []).map((f) => <option key={f.name} value={f.name}>{f.signature}</option>)}
-            </select>
-            {moduleInfo.info && moduleInfo.info.functions.length === 0 && <span className="muted small">{t('function.noFunctions')}</span>}
-            {moduleInfo.error && <span className="error-text small" role="alert">{moduleInfo.error}</span>}
-          </label>
+          {listable ? (
+            <label>
+              {t('function.function')}
+              <select value={form.fn} onChange={(e) => pickFunction(e.target.value)} disabled={!moduleInfo.info} data-testid="function-name" data-tour="function-name">
+                <option value="">{t('function.functionChoose')}</option>
+                {(moduleInfo.info?.functions ?? []).map((f) => <option key={f.name} value={f.name}>{f.signature}</option>)}
+              </select>
+              {moduleInfo.info && moduleInfo.info.functions.length === 0 && <span className="muted small">{t('function.noFunctions')}</span>}
+              {moduleInfo.error && <span className="error-text small" role="alert">{moduleInfo.error}</span>}
+            </label>
+          ) : (
+            <label>
+              {t('code.manualFunction')}
+              <input value={form.fn} onChange={(e) => update({ fn: e.target.value.trim() })} disabled={Boolean(editing)} data-testid="function-name-manual" />
+              <span className="muted small">{t('code.notListable')}</span>
+              {manualError && <span className="error-text small" role="alert">{manualError}</span>}
+            </label>
+          )}
         </div>
         {fnInfo && (
           <p className="function-signature small" data-testid="function-signature">
@@ -124,6 +152,7 @@ export function FunctionMode({ topic, editing }: Props) {
             {fnInfo.doc && <span className="muted"> — {fnInfo.doc}</span>}
           </p>
         )}
+        <ModuleNotes info={moduleInfo.info} />
         <label>
           <span>{t('function.name')} <Term term="node" /></span>
           <input value={form.name} onChange={(e) => { update({ name: e.target.value }); setNameTouched(true); }} disabled={Boolean(editing)} data-testid="function-node-name" />

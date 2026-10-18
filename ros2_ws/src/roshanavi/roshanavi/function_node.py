@@ -9,7 +9,9 @@ publishes what it returns. ``None`` publishes nothing; an exception is logged
 with file:line and the node keeps running. Saving the module file reloads the
 function (``function/loader.py``).
 
-The config is ``{function: <FunctionSpec>, workspace: <root>, status_file?: <path>}``.
+The config is ``{function: <FunctionSpec>, workspace: <root>, status_file?: <path>,
+code_paths?: [...], installed_modules?: [...]}`` (the last two: the project's opt-in code
+locations, docs/design/user-code.md).
 Exit codes: 2 = bad config, 1 = cannot start (unknown message type ...),
 0 = stopped by SIGINT / SIGTERM. A module that does not import yet is not an
 exit: the node waits for the file to be fixed and reports the error.
@@ -27,6 +29,7 @@ from .function.class_loader import ClassLoader
 from .function.class_runner import ClassRunner
 from .function.loader import FunctionLoader, LoadError, Watcher
 from .function.runner import FunctionRunner, StatusFile
+from .function.scopes import CodeLocations
 from .launcher.schema import ClassSpec
 from .launcher.dummy_config import load_function_config
 from .launcher.errors import LauncherError
@@ -57,6 +60,14 @@ def _install_signals(stop: threading.Event) -> None:
     signal.signal(signal.SIGTERM, handler)
 
 
+def locations_of(config: dict) -> CodeLocations:
+    """Scope A (the workspace) and the project's scope B / C; installed modules are looked up
+    on this process's own ``sys.path`` (it is the node's interpreter)."""
+    code = config['code']
+    return CodeLocations(workspace=config['workspace'], code_paths=tuple(code.code_paths),
+                         installed_modules=tuple(code.installed_modules))
+
+
 def run(config_path: str, stop: threading.Event) -> int:
     try:
         config = load_function_config(config_path)
@@ -66,7 +77,7 @@ def run(config_path: str, stop: threading.Event) -> int:
     if isinstance(config['spec'], ClassSpec):
         return run_class(config, stop)
     spec, status = config['spec'], StatusFile(config.get('status_file'))
-    loader = FunctionLoader(config['workspace'], spec.module, spec.function)
+    loader = FunctionLoader(locations_of(config), spec.module, spec.function)
     try:
         loader.load()
         LOG.info('loaded %s.%s%s from %s', spec.module, spec.function, loader.signature,
@@ -106,7 +117,7 @@ def run(config_path: str, stop: threading.Event) -> int:
 def run_class(config: dict, stop: threading.Event) -> int:
     """A class node: one instance of the user's class, methods bound to topics (class_core)."""
     spec, status = config['spec'], StatusFile(config.get('status_file'))
-    loader = ClassLoader(config['workspace'], spec.module, spec.class_name)
+    loader = ClassLoader(locations_of(config), spec.module, spec.class_name)
     try:
         loader.load()
         LOG.info('loaded %s.%s%s from %s', spec.module, spec.class_name, loader.signature,

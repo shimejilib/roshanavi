@@ -42,7 +42,10 @@
 | POST | `/api/inject/{job_id}/persist` | 注入ジョブを恒久ダミーノードにして起動 `{name, namespace?, autostart, stop_job}` |
 | POST | `/api/dummies/export` | launch ファイル + 設定 YAML を書き出す `{directory, ids[]}` (P5: 変換ノードも) |
 | POST / PUT | `/api/transforms[?start=true]`, `/api/transforms/{id}` | 変換ノードの登録 / 更新 (`TransformSpec`, [nodes.md#変換ノード](nodes.md#変換ノード-p5)) |
-| GET | `/api/functions/modules`, `/api/functions/module?name=` | 関数・クラスノード用: ワークスペースの Python モジュール一覧 / 1 つのモジュールの関数 (`functions[]`) とクラス (`classes[]`) を `ast` の静的解析だけで返す (利用者のコードは import しない。[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)、[nodes.md#クラスノード](nodes.md#クラスノード-状態を持つ処理をそのままノードにする)) |
+| GET | `/api/functions/modules`, `/api/functions/module?name=` | 関数・クラスノード用: 使えるモジュールの一覧 (A ワークスペース / B 登録した場所 / C インストール済み。各 `scope`・`source`・`listable`) / 1 つのモジュールの関数 (`functions[]`) とクラス (`classes[]`)、候補にならなかった名前 (`skipped[]`)、通知 (`notices[]`) を `ast` の静的解析だけで返す (利用者のコードは import しない。[nodes.md#関数ノード](nodes.md#関数ノード-ふつうの関数をそのままノードにするp55)、[nodes.md#クラスノード](nodes.md#クラスノード-状態を持つ処理をそのままノードにする)、[user-code.md](user-code.md)) |
+| GET / PUT | `/api/functions/locations[?refresh=true]` | 「コードの場所」: 範囲ごとに見つかったもの、見つからない理由 (`problems[{code, path?, file?, line?, …}]`)、ここに置けば見つかる場所 (`place_here[]`)、ノードを動かす Python (`python`)、設定 (`settings`)。PUT `{code_paths, installed_modules}` で B / C を変える (新しく足したフォルダを検査。400 / 404 `invalid_code_path`、プロジェクトファイルに自動保存) ([user-code.md#7](user-code.md#7-api-と画面)) |
+| POST | `/api/functions/scaffold` | 「ひな形を作る」`{name}` → 201 `{package, directory, module, function, class_name, files[]}`。400 `invalid_package_name`、409 `file_exists` / `name_taken`、403 `not_writable` |
+| GET | `/api/functions/dependency?missing=&module=` | 足りないライブラリの入れ方: rosdep キー (`rosdep resolve` で確かめた apt のキー、確かめられないときは `unavailable` と候補)・`package.xml` に足す 1 行・`rosdep install` のコマンド、または venv の手順。pip は実行しない |
 | POST / PUT | `/api/functions[?start=true]`, `/api/functions/{id}` | 関数ノードの登録 / 更新 (`FunctionSpec`)。404 `unknown_module` |
 | POST | `/api/functions/{id}/export-code` | 関数を包む rclpy ノードのコードを書き出す `{directory}` → `{file, command}` |
 | POST / PUT | `/api/classes[?start=true]`, `/api/classes/{id}` | クラスノードの登録 / 更新 (`ClassSpec`) |

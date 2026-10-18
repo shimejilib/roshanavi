@@ -31,6 +31,27 @@
 .class-params label { display: flex; flex-direction: column; gap: 4px; }
 .class-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .notice-box { padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--accent); }
+/* where the code is: 「コードの場所」 and the dependency info (docs/design/user-code.md) */
+.code-locations { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 10px; margin-bottom: 8px; display: flex; flex-direction: column; gap: 8px; }
+.code-locations > summary { cursor: pointer; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 2px 0; }
+.code-locations[open] > summary { border-bottom: 1px solid var(--border); padding-bottom: 6px; margin-bottom: 4px; }
+.code-locations h5, .dep-panel h5, .dep-route h5 { margin: 4px 0 2px; font-size: 13px; }
+.code-locations p, .dep-panel p { margin: 2px 0; }
+.code-scope { padding-left: 8px; border-left: 3px solid #db2777; }
+.code-scope .plain-list, .code-problems .plain-list, .code-place .plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.code-entry { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px; overflow-wrap: anywhere; }
+.code-adder .row, .code-scaffold .row { display: flex; flex-wrap: nowrap; align-items: flex-end; gap: 8px; }
+.code-adder .row > button, .code-scaffold .row > button { flex: none; }
+.code-adder .grow, .code-scaffold .grow { flex: 1; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.code-problem { padding: 4px 8px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 8%, transparent); border-radius: 0 var(--radius) var(--radius) 0; overflow-wrap: anywhere; }
+.code-command { margin: 4px 0; padding: 6px 8px; background: var(--surface-2, rgba(0, 0, 0, 0.05)); border-radius: var(--radius); white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; user-select: all; }
+.code-place li { overflow-wrap: anywhere; }
+.badge.warn { color: var(--warn); border-color: currentColor; }
+.module-notes { display: flex; flex-direction: column; gap: 4px; }
+.dep-panel { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border); display: flex; flex-direction: column; gap: 4px; }
+.dep-req ul { margin: 0; padding-left: 16px; }
+.dep-route { border: 1px solid var(--border); border-radius: var(--radius); padding: 6px 8px; margin-top: 4px; }
+.dep-route.recommended { border-color: var(--ok); box-shadow: inset 3px 0 0 var(--ok); }
 @media (max-width: 640px) {
   .function-port-row { grid-template-columns: minmax(0, 1fr); }
 }

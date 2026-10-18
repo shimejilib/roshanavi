@@ -9,6 +9,17 @@
 - ``POST /api/functions/{id}/export-code {directory}``: write the function as a standalone
   rclpy node into a directory inside the workspace.
 
+Where the code comes from (docs/design/user-code.md):
+
+- ``GET /api/functions/locations`` (``?refresh=true`` asks the node's Python again): the
+  「コードの場所」 panel — what scope A / B / C found, why other code is not a candidate, where to
+  put code, and which Python runs the nodes. ``PUT`` with ``{code_paths, installed_modules}``
+  changes scope B / C (saved in the project file).
+- ``POST /api/functions/scaffold {name}``: 「ひな形を作る」 — a new ament_python package in
+  ``<workspace>/src`` (never overwrites).
+- ``GET /api/functions/dependency?missing=numpy&module=pkg.mod``: what to do about a missing
+  library (rosdep key + ``<exec_depend>``, or a venv). roshanavi never runs pip.
+
 Class nodes (docs/design/nodes.md) share ``/api/functions/modules`` and ``/module`` (the module
 description also lists its ``classes``) and add:
 
@@ -19,16 +30,17 @@ description also lists its ``classes``) and add:
   (or a LifecycleNode).
 """
 
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from fastapi import FastAPI
 
-from .function import class_call, class_codegen, class_modules, codegen, modules
+from .function import (class_call, class_codegen, class_modules, code_report, codegen,
+                       dependencies, modules, scaffold, scopes)
 from .injector import Injector
 from .lab import Lab
 from .launcher import validate
 from .launcher.errors import LauncherError
-from .launcher.schema import ClassSpec, FunctionSpec, METHOD_PATTERN, MODULE_PATTERN
+from .launcher.schema import ClassSpec, CodeSettings, FunctionSpec, METHOD_PATTERN, MODULE_PATTERN
 from .pydantic_compat import StrictModel, constr
 
 
@@ -48,17 +60,67 @@ class CallRequest(_Strict):
     method: constr(regex=METHOD_PATTERN)
 
 
+class ScaffoldRequest(_Strict):
+    name: constr(min_length=1, max_length=64)
+
+
+PYTHON_KEYS = ('executable', 'version', 'prefix', 'venv', 'error')
+
+
 def register(app: FastAPI, lab: Lab) -> None:
     launcher = lab.launcher
+
+    manager = launcher.manager
+    rosdep = dependencies.RosdepResolver(env=launcher.workspace.env)
+
+    def python_info(refresh: bool = False) -> Dict[str, Any]:
+        info = manager.node_interpreter(refresh)
+        return {**{k: info.get(k) for k in PYTHON_KEYS}, 'forced': manager.node_python()}
 
     @app.get('/api/functions/modules')
     def list_modules() -> Dict[str, Any]:
         return {'workspace': launcher.workspace.root,
-                'modules': modules.list_modules(launcher.workspace.root)}
+                'modules': modules.list_modules(manager.locations())}
 
     @app.get('/api/functions/module')
     def describe_module(name: constr(regex=MODULE_PATTERN, max_length=256)) -> Dict[str, Any]:
-        return class_modules.describe_module(launcher.workspace.root, name)
+        return class_modules.describe_module(manager.locations(), name)
+
+    @app.get('/api/functions/locations')
+    def get_locations(refresh: bool = False) -> Dict[str, Any]:
+        python = python_info(refresh)
+        result = code_report.report(manager.locations(), python)
+        result['settings'] = {'code_paths': list(manager.code.code_paths),
+                              'installed_modules': list(manager.code.installed_modules)}
+        return result
+
+    @app.put('/api/functions/locations')
+    def put_locations(req: CodeSettings) -> Dict[str, Any]:
+        locations = manager.locations()
+        for path in req.code_paths:
+            if path not in manager.code.code_paths:   # entries already saved may be stale
+                scopes.check_code_path(path, locations)
+        launcher.set_code_settings(req)
+        return get_locations()
+
+    @app.post('/api/functions/scaffold', status_code=201)
+    def make_scaffold(req: ScaffoldRequest) -> Dict[str, Any]:
+        taken = [p['name'] for p in launcher.workspace.to_dict()['packages']]
+        result = scaffold.scaffold(manager.locations(), req.name, taken)
+        launcher.workspace.refresh()   # the Launcher tab lists the new package too
+        return result
+
+    @app.get('/api/functions/dependency')
+    def dependency_hint(missing: constr(regex=MODULE_PATTERN, max_length=256),
+                        module: Optional[constr(regex=MODULE_PATTERN, max_length=256)] = None
+                        ) -> Dict[str, Any]:
+        resolved = None
+        if module:
+            try:
+                resolved = modules.resolve_module(manager.locations(), module)
+            except LauncherError:
+                resolved = None
+        return dependencies.hint(missing, resolved, rosdep, python_info())
 
     @app.post('/api/functions', status_code=201)
     def add_function(spec: FunctionSpec, start: bool = False) -> Dict[str, Any]:
@@ -74,7 +136,7 @@ def register(app: FastAPI, lab: Lab) -> None:
         if not isinstance(spec, FunctionSpec):
             raise LauncherError('not_found', f'{function_id} is not a function node', 404)
         directory = validate.contained_dir(req.directory, launcher.workspace.root)
-        return codegen.export_code(spec, launcher.workspace.root, directory)
+        return codegen.export_code(spec, manager.locations(), directory)
 
     # ---- class nodes --------------------------------------------------------------------
     calls = Injector(lab.runtime, lab.data_dir)   # its own: the one-shot calls are not inject jobs
@@ -118,4 +180,4 @@ def register(app: FastAPI, lab: Lab) -> None:
     def export_class_code(class_id: str, req: ClassExportRequest) -> Dict[str, Any]:
         spec = class_spec(class_id)
         directory = validate.contained_dir(req.directory, launcher.workspace.root)
-        return class_codegen.export_code(spec, launcher.workspace.root, directory, req.lifecycle)
+        return class_codegen.export_code(spec, manager.locations(), directory, req.lifecycle)

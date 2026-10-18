@@ -7,7 +7,10 @@
 #   test : build + C++ probe unit tests (gtest) + full pytest suite (exit code = result)
 #   lab-e2e / demo-e2e / e2e (profile e2e): an isolated copy of the stack for Playwright, on its
 #          own ROS_DOMAIN_ID with a fresh tmpfs /data (nothing mounted from ./data), not published.
-#          Run it all with scripts/e2e.sh
+#          Its workspace src is a fresh tmpfs too (the repo's packages are mounted read-only inside
+#          it at /ws/src/repo), shared with the Playwright runner, so 「ひな形を作る」 can write a
+#          package and the test can edit it (docs/design/user-code.md). Run it all with
+#          scripts/e2e.sh
 # ROS_DISTRO (host env, default jazzy) selects the ROS 2 distro: jazzy / lyrical (official),
 # kilted (verified once). e.g. `ROS_DISTRO=lyrical docker compose --profile test run --rm test`.
 
@@ -77,16 +80,18 @@ services:
       ROS_DOMAIN_ID: ${E2E_ROS_DOMAIN_ID:-77}
       ROSHANAVI_BUILD: "1"
     volumes:
-      - ./ros2_ws/src:/ws/src:ro
+      - e2e-src:/ws/src       # writable workspace src (scaffold); shared with the e2e runner
+      - ./ros2_ws/src:/ws/src/repo:ro
       - ./examples:/examples:ro
       - e2e-media:/data/e2e   # clips the media test writes; shared with the e2e runner
     tmpfs:
       - /data                 # fresh project / recordings every run, seeded from the template
     expose: ["6871"]          # compose network only, never published to the host
-    command: ["ros2", "run", "roshanavi", "server", "--host", "0.0.0.0", "--port", "6871",
-              "--data-dir", "/data", "--project", "/data/roshanavi.yaml",
-              "--project-template", "/examples/demo_project/roshanavi.yaml",
-              "--allowed-host", "lab-e2e"]
+    # umask 0000: the scaffolded files (written as root) stay editable by the runner's user.
+    command: ["bash", "-c",
+              "umask 0000 && exec ros2 run roshanavi server --host 0.0.0.0 --port 6871
+               --data-dir /data --project /data/roshanavi.yaml
+               --project-template /examples/demo_project/roshanavi.yaml --allowed-host lab-e2e"]
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://localhost:6871/api/health"]
       interval: 3s
@@ -123,13 +128,18 @@ services:
       HOME: /tmp
       ROSHANAVI_URL: ${ROSHANAVI_URL:-http://localhost:6871}
       E2E_MEDIA_DIR: /e2e-media
+      E2E_WS_SRC: /e2e-ws-src    # lab-e2e's /ws/src
     working_dir: /repo/web
     volumes:
       - .:/repo
       - e2e-media:/e2e-media
+      - e2e-src:/e2e-ws-src
     command: ["npx", "playwright", "test"]
 
 volumes:
   e2e-media:
+    driver: local
+    driver_opts: {type: tmpfs, device: tmpfs, o: "mode=1777"}
+  e2e-src:
     driver: local
     driver_opts: {type: tmpfs, device: tmpfs, o: "mode=1777"}

@@ -18,7 +18,7 @@ import yaml
 from ..jobs import InjectSpec
 from ..pydantic_compat import ValidationError, validation_errors
 from .errors import LauncherError
-from .schema import ClassSpec, DummySpec, FunctionSpec, TransformSpec, clean_dict
+from .schema import ClassSpec, CodeSettings, DummySpec, FunctionSpec, TransformSpec, clean_dict
 
 LOG = logging.getLogger(__name__)
 
@@ -91,39 +91,60 @@ def transform_config_text(spec: TransformSpec) -> str:
                                              allow_unicode=True)
 
 
+def _code_body(body: Dict[str, Any], code: Optional[CodeSettings]) -> Dict[str, Any]:
+    """Scope B / C of the project (docs/design/user-code.md): the node resolves modules the same
+    way the server does."""
+    if code is not None and code.code_paths:
+        body['code_paths'] = list(code.code_paths)
+    if code is not None and code.installed_modules:
+        body['installed_modules'] = list(code.installed_modules)
+    return body
+
+
 def function_config_text(spec: FunctionSpec, workspace: str,
-                         status_file: Optional[str] = None) -> str:
+                         status_file: Optional[str] = None,
+                         code: Optional[CodeSettings] = None) -> str:
     body: Dict[str, Any] = {'function': clean_dict(spec),
                             'workspace': os.path.realpath(workspace)}
     if status_file:
         body['status_file'] = status_file
-    return FUNCTION_HEADER + yaml.safe_dump(body, sort_keys=False, allow_unicode=True)
+    return FUNCTION_HEADER + yaml.safe_dump(_code_body(body, code), sort_keys=False,
+                                            allow_unicode=True)
 
 
-def class_config_text(spec: ClassSpec, workspace: str, status_file: Optional[str] = None) -> str:
+def class_config_text(spec: ClassSpec, workspace: str, status_file: Optional[str] = None,
+                      code: Optional[CodeSettings] = None) -> str:
     body: Dict[str, Any] = {'class': clean_dict(spec), 'workspace': os.path.realpath(workspace)}
     if status_file:
         body['status_file'] = status_file
-    return CLASS_HEADER + yaml.safe_dump(body, sort_keys=False, allow_unicode=True)
+    return CLASS_HEADER + yaml.safe_dump(_code_body(body, code), sort_keys=False,
+                                         allow_unicode=True)
+
+
+FUNCTION_CONFIG_KEYS = {'workspace', 'status_file', 'code_paths', 'installed_modules'}
 
 
 def load_function_config(path: str) -> Dict[str, Any]:
-    """``{'spec': FunctionSpec | ClassSpec, 'workspace': str, 'status_file': str | None}``.
+    """``{'spec': FunctionSpec | ClassSpec, 'workspace': str, 'status_file': str | None,
+    'code': CodeSettings}``.
 
     ``ros2 run roshanavi function`` runs both: the key is ``function`` or ``class``."""
     raw = _read_yaml(path)
     key = 'class' if isinstance(raw, dict) and 'class' in raw else 'function'
     if not isinstance(raw, dict) or key not in raw or 'workspace' not in raw \
-            or set(raw) - {key, 'workspace', 'status_file'}:
+            or set(raw) - {key, *FUNCTION_CONFIG_KEYS}:
         raise LauncherError('invalid_config', f'{path}: expected keys "function" (or "class"), '
-                            '"workspace" (and optionally "status_file")')
+                            '"workspace" (and optionally "status_file", "code_paths", '
+                            '"installed_modules")')
     try:
         spec = (ClassSpec if key == 'class' else FunctionSpec).model_validate(raw[key] or {})
+        code = CodeSettings.model_validate({k: raw[k] for k in ('code_paths', 'installed_modules')
+                                            if raw.get(k)})
     except ValidationError as exc:
         raise LauncherError('invalid_config', f'{path}: {format_errors(exc)}') from exc
     status = raw.get('status_file')
     return {'spec': spec, 'workspace': str(raw['workspace']),
-            'status_file': str(status) if status else None}
+            'status_file': str(status) if status else None, 'code': code}
 
 
 def _read_yaml(path: str) -> Any:
@@ -178,7 +199,8 @@ def has_control_chars(text: str) -> bool:
 
 def export(dummies: Sequence[DummySpec], directory: str, data_dir: str,
            transforms: Sequence[TransformSpec] = (), functions: Sequence[FunctionSpec] = (),
-           workspace: str = '', classes: Sequence[ClassSpec] = ()) -> Dict[str, Any]:
+           workspace: str = '', classes: Sequence[ClassSpec] = (),
+           code: Optional[CodeSettings] = None) -> Dict[str, Any]:
     """Write ``<id>.yaml`` per dummy / transform / function / class and one launch file."""
     if not dummies and not transforms and not functions and not classes:
         raise LauncherError('invalid_request', 'there are no dummy, transform, function or '
@@ -187,8 +209,10 @@ def export(dummies: Sequence[DummySpec], directory: str, data_dir: str,
         raise LauncherError('invalid_request', 'export directory must not contain control characters')
     items = [(spec, 'dummy', config_text(spec, data_dir)) for spec in dummies]
     items += [(spec, 'transform', transform_config_text(spec)) for spec in transforms]
-    items += [(spec, 'function', function_config_text(spec, workspace)) for spec in functions]
-    items += [(spec, 'function', class_config_text(spec, workspace)) for spec in classes]
+    items += [(spec, 'function', function_config_text(spec, workspace, code=code))
+              for spec in functions]
+    items += [(spec, 'function', class_config_text(spec, workspace, code=code))
+              for spec in classes]
     try:
         os.makedirs(directory, exist_ok=True)
         files: List[str] = []

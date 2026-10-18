@@ -9,14 +9,12 @@ of the hooks roshanavi calls (``close`` / ``shutdown`` / ``get_state`` / ``set_s
 """
 
 import ast
-import os
 from typing import Any, Dict, List, Optional
 
-from ..launcher.errors import LauncherError
 from ..launcher.schema import HOOK_METHODS
 from .class_params import UNSET, kind_for
 from . import modules
-from .modules import MAX_SOURCE_BYTES, _annotation, suggest_kind
+from .signatures import _annotation, parse_source, suggest_kind
 
 SKIPPED_DECORATORS = ('staticmethod', 'classmethod', 'property', 'cached_property',
                       'abstractmethod')
@@ -130,22 +128,14 @@ def _param_text(param: Dict[str, Any]) -> str:
 
 def list_classes(path: str) -> List[Dict[str, Any]]:
     """Top-level public classes of a source file, parsed with :mod:`ast` only."""
-    try:
-        if os.path.getsize(path) > MAX_SOURCE_BYTES:
-            raise LauncherError('module_too_large', f'{path} is larger than 1 MB')
-        with open(path, encoding='utf-8') as fh:
-            tree = ast.parse(fh.read(), filename=path)
-    except SyntaxError as exc:
-        raise LauncherError('module_syntax_error', f'{os.path.basename(path)}:{exc.lineno}: '
-                            f'{exc.msg}') from exc
-    except (OSError, UnicodeDecodeError, ValueError) as exc:
-        raise LauncherError('module_unreadable', f'cannot read {path}: {exc}') from exc
+    tree = parse_source(path)
     return [_class_info(n) for n in tree.body
             if isinstance(n, ast.ClassDef) and not n.name.startswith('_')]
 
 
-def describe_module(workspace: str, module: str) -> Dict[str, Any]:
-    """``modules.describe_module`` plus the module's ``classes``."""
+def describe_module(workspace: Any, module: str) -> Dict[str, Any]:
+    """``modules.describe_module`` plus the module's ``classes`` (none for an extension)."""
     info = modules.describe_module(workspace, module)
-    info['classes'] = list_classes(modules.resolve_module(workspace, module).file)
+    resolved = modules.resolve_module(workspace, module)
+    info['classes'] = list_classes(resolved.file) if resolved.listable else []
     return info

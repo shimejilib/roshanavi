@@ -15,6 +15,8 @@ import threading
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from ..function.core import adopt_class_topic_types, adopt_topic_types
+from ..function.python_env import InterpreterProbe, entry_script_python, venv_python
+from ..function.scopes import CodeLocations
 from . import command
 from .discovery import Workspace
 from .dummy_config import (class_config_text, config_text, function_config_text,
@@ -22,7 +24,7 @@ from .dummy_config import (class_config_text, config_text, function_config_text,
 from .env import child_env
 from .errors import LauncherError
 from .process import SIGINT_TIMEOUT_SEC, SIGTERM_TIMEOUT_SEC
-from .schema import ClassSpec, DummySpec, FunctionSpec, TargetSpec, TransformSpec
+from .schema import ClassSpec, CodeSettings, DummySpec, FunctionSpec, TargetSpec, TransformSpec
 from .target import Spec, Target, kind_of, role_of
 
 LOG = logging.getLogger(__name__)
@@ -43,6 +45,37 @@ class ProcessManager:
         self._closed = False
         # topic -> its current types (the server's graph); function inputs adopt them
         self.topic_types: Optional[Callable[[str], Sequence[str]]] = None
+        # The project's opt-in code locations for function / class nodes (scope B / C).
+        self.code = CodeSettings()
+        self._interpreters = InterpreterProbe()
+
+    # ---- where function / class node code comes from (docs/design/user-code.md) ----------
+    def node_python(self) -> Optional[str]:
+        """A venv interpreter for function / class nodes (None: ``ros2 run`` as usual)."""
+        return venv_python(self.workspace.env)
+
+    def node_interpreter(self, refresh: bool = False) -> Dict[str, Any]:
+        """``{executable, version, venv, path}`` of the Python that runs function nodes."""
+        python = self.node_python()
+        if python is None:
+            script = None
+            try:
+                info = self.workspace.package('roshanavi')
+                script = os.path.join(info.prefix, 'lib', 'roshanavi', 'function') \
+                    if info.prefix else None
+            except LauncherError:
+                pass
+            python = entry_script_python(script, self.workspace.env)
+        return self._interpreters.info(python, self._env(), refresh)
+
+    def locations(self, refresh: bool = False) -> CodeLocations:
+        """Scope A + the project's B / C; installed modules on the node interpreter's path."""
+        search = tuple(self.node_interpreter(refresh)['path']) \
+            if self.code.installed_modules else None
+        return CodeLocations(workspace=self.workspace.root,
+                             code_paths=tuple(self.code.code_paths),
+                             installed_modules=tuple(self.code.installed_modules),
+                             search_path=search, data_dir=self.data_dir)
 
     # ---- argv / env --------------------------------------------------------
     def _argv(self, spec: Spec) -> List[str]:
@@ -55,7 +88,8 @@ class ProcessManager:
             path = self._write_config(spec.id, transform_config_text(spec))
             return command.transform_command(spec, path)
         if isinstance(spec, FunctionSpec):
-            command.validate_function(spec, self.workspace.root)
+            locations = self.locations()
+            command.validate_function(spec, locations)
             if self.topic_types is not None:
                 spec = adopt_topic_types(spec, self.topic_types)
             status = self.status_path(spec.id)
@@ -64,10 +98,11 @@ class ProcessManager:
             except FileNotFoundError:
                 pass
             path = self._write_config(spec.id, function_config_text(spec, self.workspace.root,
-                                                                    status))
-            return command.function_command(spec, path, self.workspace.root)
+                                                                    status, self.code))
+            return command.function_command(spec, path, locations, self.node_python())
         if isinstance(spec, ClassSpec):
-            command.validate_class(spec, self.workspace.root)
+            locations = self.locations()
+            command.validate_class(spec, locations)
             if self.topic_types is not None:
                 spec = adopt_class_topic_types(spec, self.topic_types)
             status = self.status_path(spec.id)
@@ -76,8 +111,8 @@ class ProcessManager:
             except FileNotFoundError:
                 pass
             path = self._write_config(spec.id, class_config_text(spec, self.workspace.root,
-                                                                 status))
-            return command.class_command(spec, path, self.workspace.root)
+                                                                 status, self.code))
+            return command.class_command(spec, path, locations, self.node_python())
         return command.target_command(spec, self._ctx)
 
     def status_path(self, spec_id: str) -> str:
@@ -109,9 +144,9 @@ class ProcessManager:
         elif isinstance(spec, TransformSpec):
             command.validate_transform(spec)
         elif isinstance(spec, FunctionSpec):
-            command.validate_function(spec, self.workspace.root)
+            command.validate_function(spec, self.locations())
         elif isinstance(spec, ClassSpec):
-            command.validate_class(spec, self.workspace.root)
+            command.validate_class(spec, self.locations())
         else:
             command.target_command(spec, self._ctx)
 

@@ -1,7 +1,9 @@
 // Live status of a function node: state, counters and the last error with file:line.
 
+import type { FunctionSpec } from '../api/functionTypes';
 import type { Target } from '../api/types';
 import { t, type MessageKey } from '../i18n';
+import { DependencyPanel } from './DependencyPanel';
 
 export function FunctionStatusPanel({ target }: { target: Target }) {
   const raw = target.function_status;
@@ -33,6 +35,7 @@ export function FunctionStatusPanel({ target }: { target: Target }) {
           <div className="mono small">{error.message}</div>
         </div>
       )}
+      <DependencyPanel module={(target.spec as FunctionSpec).module} environment={status.environment} notices={status.notices} problem={status.problem} lastError={status.last_error} />
     </section>
   );
 }

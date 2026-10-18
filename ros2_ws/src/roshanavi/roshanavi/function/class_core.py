@@ -25,7 +25,8 @@ from ..transform.pipeline import Joiner
 from . import class_params
 from .class_params import UNSET, InitParam
 from .core import ErrorLog, Port, stamp_of
-from .loader import LoadError, Problem, describe, required_positional, user_location
+from .loader import (LoadError, Problem, describe, missing_module_of, required_positional,
+                     user_location)
 from .class_loader import ClassLoader
 from .serial import SerialExecutor
 
@@ -230,7 +231,8 @@ class ClassCore:
             if resolved and not isinstance(exc, _InitValueError) else None
         text = str(exc) if isinstance(exc, _InitValueError) else describe(exc)
         return Problem('init', f'初期化に失敗しました: {text}', where or
-                       self.loader.location_of_function())
+                       self.loader.location_of_function(),
+                       missing_module_of(exc, resolved.package.top if resolved else None))
 
     def _close_instance(self, instance: Any) -> None:
         """``close()`` (or ``shutdown()``) of an instance; an error is reported, not raised."""
@@ -329,7 +331,8 @@ class ClassCore:
         try:
             result = fn(*args)
         except Exception as exc:  # the user's bug: report it, keep the node running
-            self.report(Problem('call', describe(exc), self._where(exc)))
+            self.report(Problem('call', describe(exc), self._where(exc), missing_module_of(
+                exc, self.loader.resolved.package.top if self.loader.resolved else None)))
             return
         self._send_result(binding, result, stamp)
 
@@ -597,6 +600,8 @@ class ClassCore:
                 'actions': {name: {**rec.to_dict(), 'topic': f'~/{name}'}
                             for name, rec in self.actions.items()},
                 'notice': s.notice,
+                'environment': loader.environment, 'notices': loader.notices,
+                'import_seconds': loader.import_seconds,
                 'hooks': {name: s.instance is not None and _hook(s.instance, name) is not None
                           for name in ('close', 'shutdown', 'get_state', 'set_state',
                                        'on_param_change')}}

@@ -5,9 +5,10 @@ in :mod:`.validate`. ROS options are emitted only by this module, each user
 value as its own argv item, after ``--ros-args``.
 """
 
+import shlex
 import shutil
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import Any, List, Optional, Sequence
 
 from . import validate
 from .discovery import Workspace
@@ -98,8 +99,9 @@ def validate_transform(spec: TransformSpec) -> None:
                             'input (the node would receive its own output)')
 
 
-def validate_function(spec: FunctionSpec, workspace_root: str) -> None:
-    """Names / topics like a transform, and the module must resolve inside the workspace."""
+def validate_function(spec: FunctionSpec, workspace_root: Any) -> None:
+    """Names / topics like a transform, and the module must resolve (``workspace_root``: the
+    workspace root or the CodeLocations of the project, docs/design/user-code.md)."""
     from ..function.modules import resolve_module  # the launcher does not need it otherwise
     validate.target_id(spec.id)
     validate.node_name(spec.name)
@@ -113,7 +115,7 @@ def validate_function(spec: FunctionSpec, workspace_root: str) -> None:
     resolve_module(workspace_root, spec.module)
 
 
-def validate_class(spec: ClassSpec, workspace_root: str) -> None:
+def validate_class(spec: ClassSpec, workspace_root: Any) -> None:
     """Names / topics like a function node, and the module must resolve inside the workspace."""
     from ..function.modules import resolve_module
     validate.target_id(spec.id)
@@ -125,22 +127,28 @@ def validate_class(spec: ClassSpec, workspace_root: str) -> None:
     resolve_module(workspace_root, spec.module)
 
 
-def class_command(spec: ClassSpec, config_path: str, workspace_root: str) -> List[str]:
+def class_command(spec: ClassSpec, config_path: str, workspace_root: Any,
+                  python: Optional[str] = None) -> List[str]:
     validate_class(spec, workspace_root)
-    return node_command('function', spec.name, spec.namespace, config_path)
+    return node_command('function', spec.name, spec.namespace, config_path, python)
 
 
-def function_command(spec: FunctionSpec, config_path: str, workspace_root: str) -> List[str]:
+def function_command(spec: FunctionSpec, config_path: str, workspace_root: Any,
+                     python: Optional[str] = None) -> List[str]:
     validate_function(spec, workspace_root)
-    return node_command('function', spec.name, spec.namespace, config_path)
+    return node_command('function', spec.name, spec.namespace, config_path, python)
 
 
-def node_command(executable: str, name: str, namespace: str, config_path: str) -> List[str]:
+def node_command(executable: str, name: str, namespace: str, config_path: str,
+                 python: Optional[str] = None) -> List[str]:
+    """``ros2 run roshanavi <executable>``; ``python`` (a venv's interpreter, chosen by the server,
+    never by the client) runs the entry script through ``ros2 run --prefix``."""
     args = ['-r', f'__node:={name}']
     ns = validate.namespace(namespace)
     if ns:
         args += ['-r', f'__ns:={ns}']
-    return [ros2_binary(), 'run', 'roshanavi', executable, '--config', config_path,
+    prefix = ['--prefix', shlex.quote(python)] if python else []
+    return [ros2_binary(), 'run', *prefix, 'roshanavi', executable, '--config', config_path,
             '--ros-args', *args]
 
 

@@ -2,6 +2,10 @@
 
 各文書が何で、いつ読むかを 1 行ずつ示す。まず [overview/vision.md](overview/vision.md) を読み、あとは必要なページだけ読めばよい。
 
+## guide — 利用ガイド
+
+- [guide/README.md](guide/README.md): 使う人向けの説明の章の一覧。[guide/user-code.md](guide/user-code.md): 自分のコードを関数・クラスノードにする (置き場所 A/B/C、ひな形、依存 ①②、つまずき、サブモジュール)。
+
 ## overview — 全体像
 
 - [overview/vision.md](overview/vision.md): 出発点・対象ユーザー・ユーザー体験 (ノード単体開発者の 1 日)・ゴールと非ゴール。**最初に読む**。
@@ -14,6 +18,7 @@
 - [design/measurement.md](design/measurement.md): C++ 計測ノード、詳細計測モード (トレース計測)、ベンチマーク、トラブルシューティング (CPU が高い: MultiThreadedExecutor の空回り)。計測の仕組みや負荷を調べるとき。
 - [design/input-and-media.md](design/input-and-media.md): 注入ジョブ、式 (`${...}`)、メディアファイル・ブラウザ入力・録画・ビューア、送信のペース。データを流す機能を触るとき。
 - [design/nodes.md](design/nodes.md): 入力ノード (恒久ダミー)・変換ノード・関数ノード・クラスノード・同梱サンプルノード、データの種類。ノードを自作する機能を触るとき。
+- [design/user-code.md](design/user-code.md): 関数・クラスノードのコードの置き場所 (A ワークスペース / B 登録した場所 / C インストール済み)、見つからない理由、「ひな形を作る」、依存ライブラリ (rosdep / venv)、どの Python で動くか。利用者のコードの入口を触るとき。
 - [design/launcher.md](design/launcher.md): Launcher、ノード ⇄ プロセスの対応づけ、プロジェクトファイルと切り替え、パラメータ、lifecycle、launch の取り込み、ノード一覧。ノードの起動・管理を触るとき。
 - [design/ui.md](design/ui.md): タブ構成、ライブ通信マップ、右クリックメニュー、各パネルの実装メモ、アプリ内チュートリアル、UI の実行・E2E の方法。画面を触るとき。
 - [design/api.md](design/api.md): REST / WebSocket の一覧、既定ポート、入力検証、Host / Origin / Content-Type の検査。API を足すとき。

@@ -19,9 +19,13 @@ SERVICES=(lab-e2e demo-e2e e2e)
 # Never `down`: that would also stop the user's lab / demo. Remove only the e2e services + volume.
 cleanup() {
     "${DC[@]}" rm -sfv "${SERVICES[@]}" >/dev/null 2>&1
-    docker volume ls -q --filter label=com.docker.compose.volume=e2e-media \
-        --filter "label=com.docker.compose.project=$(docker compose config --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"])')" \
-        | xargs -r docker volume rm >/dev/null 2>&1
+    local project
+    project="$(docker compose config --format json | python3 -c 'import json,sys;print(json.load(sys.stdin)["name"])')"
+    for volume in e2e-media e2e-src; do
+        docker volume ls -q --filter "label=com.docker.compose.volume=${volume}" \
+            --filter "label=com.docker.compose.project=${project}" \
+            | xargs -r docker volume rm >/dev/null 2>&1
+    done
 }
 
 before="$(proj_hash)"

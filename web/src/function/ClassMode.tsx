@@ -14,7 +14,16 @@ import { useLive } from '../state/LiveProvider';
 import { applyClass, buildClassSpec, defaultClassForm, formFromClass, renameNode, type ClassForm } from './classForm';
 import { ClassNodeFields } from './ClassNodeFields';
 import { ClassStatusPanel } from './ClassStatusPanel';
+import { ModuleNotes, ModuleSelect } from './ModuleSelect';
 import { useFunctionModules, useModuleInfo } from './useFunctionModules';
+
+interface Props {
+  editing?: Target;
+  /** Choose this module and class when the dialog opens (after 「ひな形を作る」). */
+  preselect?: { module: string; className?: string };
+  /** Changes when the code locations changed: the module list is read again. */
+  refreshKey?: number;
+}
 
 function ExportClassCode({ id }: { id: string }) {
   const [directory, setDirectory] = useState('generated');
@@ -49,16 +58,21 @@ function ExportClassCode({ id }: { id: string }) {
   );
 }
 
-export function ClassMode({ editing }: { editing?: Target }) {
+export function ClassMode({ editing, preselect, refreshKey = 0 }: Props) {
   const { closeDialog, select } = useAppState();
   const { live } = useLive();
   const spec = editing?.spec as ClassSpec | undefined;
-  const modules = useFunctionModules();
-  const [form, setForm] = useState<ClassForm>(() => (spec ? formFromClass(spec, undefined) : defaultClassForm()));
+  const modules = useFunctionModules(refreshKey);
+  const [form, setForm] = useState<ClassForm>(() => {
+    if (spec) return formFromClass(spec, undefined);
+    return preselect ? { ...defaultClassForm(), module: preselect.module } : defaultClassForm();
+  });
+  const [pendingClass, setPendingClass] = useState(spec ? '' : (preselect?.className ?? ''));
   const [nameTouched, setNameTouched] = useState(Boolean(editing));
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const moduleInfo = useModuleInfo(form.module);
+  const moduleInfo = useModuleInfo(form.module, refreshKey);
+  const listable = moduleInfo.info?.listable !== false;
   const classInfo = moduleInfo.info?.classes?.find((c) => c.name === form.className);
   const topicTypes = useMemo(() => new Map((live.graph?.topics ?? []).map((tp) => [tp.name, tp.types])), [live.graph]);
   const update = (patch: Partial<ClassForm>) => setForm((prev) => ({ ...prev, ...patch }));
@@ -74,6 +88,11 @@ export function ClassMode({ editing }: { editing?: Target }) {
     const info = moduleInfo.info?.classes?.find((c) => c.name === name);
     setForm((prev) => (info ? applyClass(prev, info, nameTouched) : { ...prev, className: name }));
   };
+  // After 「ひな形を作る」: pick the generated class once its listing arrived.
+  if (pendingClass && moduleInfo.info?.module === form.module) {
+    setPendingClass('');
+    if ((moduleInfo.info.classes ?? []).some((c) => c.name === pendingClass)) pickClass(pendingClass);
+  }
 
   const submit = async () => {
     const built = buildClassSpec(form, classInfo, live.targets.map((tg) => tg.id), editing?.id);
@@ -107,10 +126,7 @@ export function ClassMode({ editing }: { editing?: Target }) {
       <div className="row wrap">
         <label>
           {t('function.module')}
-          <select value={form.module} onChange={(e) => update({ module: e.target.value, className: '', methods: [], params: {} })} disabled={Boolean(editing)} data-testid="class-module">
-            <option value="">{t('function.moduleChoose')}</option>
-            {modules.modules.map((m) => <option key={m.module} value={m.module}>{m.module}</option>)}
-          </select>
+          <ModuleSelect value={form.module} modules={modules.modules} onChange={(module) => update({ module, className: '', methods: [], params: {} })} disabled={Boolean(editing)} testId="class-module" />
           {modules.modules.length === 0 && !modules.error && <span className="muted small">{t('function.noModules')}</span>}
           {modules.error && <span className="error-text small">{modules.error}</span>}
         </label>
@@ -120,7 +136,8 @@ export function ClassMode({ editing }: { editing?: Target }) {
             <option value="">{t('class.classChoose')}</option>
             {(moduleInfo.info?.classes ?? []).map((c) => <option key={c.name} value={c.name}>{c.signature}</option>)}
           </select>
-          {moduleInfo.info && (moduleInfo.info.classes ?? []).length === 0 && <span className="muted small">{t('class.noClasses')}</span>}
+          {moduleInfo.info && listable && (moduleInfo.info.classes ?? []).length === 0 && <span className="muted small">{t('class.noClasses')}</span>}
+          {!listable && <span className="muted small" data-testid="class-not-listable">{t('code.classNotListable')}</span>}
           {moduleInfo.error && <span className="error-text small" role="alert">{moduleInfo.error}</span>}
         </label>
       </div>
@@ -130,6 +147,7 @@ export function ClassMode({ editing }: { editing?: Target }) {
           <span className="muted"> — {moduleInfo.info.file}:{classInfo.line}</span>
         </p>
       )}
+      <ModuleNotes info={moduleInfo.info} />
       <label>
         <span>{t('function.name')} <Term term="node" /></span>
         <input value={form.name} onChange={(e) => { setForm((prev) => renameNode(prev, e.target.value)); setNameTouched(true); }} disabled={Boolean(editing)} data-testid="class-node-name" />

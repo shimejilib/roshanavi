@@ -50,9 +50,9 @@ def node_class_name(name: str, taken: str) -> str:
 
 def _class_info(spec: ClassSpec, workspace: str) -> Dict[str, Any]:
     resolved = resolve_module(workspace, spec.module)
-    for info in list_classes(resolved.file):
+    for info in (list_classes(resolved.file) if resolved.listable else []):
         if info['name'] == spec.class_name:
-            return {**info, 'ros_package': resolved.package.ros_package,
+            return {**info, 'ros_package': resolved.package.ros_package or 'my_ros_package',
                     'top': resolved.package.top}
     raise LauncherError('unknown_class', f'{spec.module} has no public class '
                         f'{spec.class_name!r}', 404)

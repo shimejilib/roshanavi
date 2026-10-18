@@ -27,8 +27,8 @@ from .dummy_config import export, format_errors
 from .errors import LauncherError
 from .manager import ProcessManager
 from .project import DEFAULT_FILE_NAME, ProjectStore
-from .schema import (ClassSpec, DummySpec, FunctionSpec, ProjectSpec, QosSpec, TargetSpec,
-                     TransformSpec, clean_dict)
+from .schema import (ClassSpec, CodeSettings, DummySpec, FunctionSpec, ProjectSpec, QosSpec,
+                     TargetSpec, TransformSpec, clean_dict)
 
 LOG = logging.getLogger(__name__)
 
@@ -77,10 +77,16 @@ class Launcher:
             return self.project_state()
         self.load_error = None
         self._autosave_blocked = False
+        self._set_code(spec)
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
         return self.project_state()
+
+    def _set_code(self, spec: Union[ProjectSpec, CodeSettings]) -> None:
+        # Before the targets: function / class nodes resolve their modules with these.
+        self.manager.code = CodeSettings(code_paths=list(spec.code_paths),
+                                         installed_modules=list(spec.installed_modules))
 
     def open_project(self, path: str) -> Dict[str, Any]:
         """Switch to another project file: stop everything, load it, autostart its targets."""
@@ -99,7 +105,9 @@ class Launcher:
                            transforms=self.manager.transforms(),
                            functions=self.manager.functions(),
                            classes=self.manager.classes(),
-                           watch_topics=self._watch_topics)
+                           watch_topics=self._watch_topics,
+                           code_paths=list(self.manager.code.code_paths),
+                           installed_modules=list(self.manager.code.installed_modules))
 
     def project_state(self) -> Dict[str, Any]:
         current = self.current_project()
@@ -109,6 +117,7 @@ class Launcher:
                 'project': clean_dict(current)}
 
     def put_project(self, spec: ProjectSpec) -> Dict[str, Any]:
+        self._set_code(spec)
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
@@ -146,6 +155,13 @@ class Launcher:
         result = self.manager.remove(target_id)
         self.autosave()
         return result
+
+    def set_code_settings(self, settings: CodeSettings) -> CodeSettings:
+        """Change scope B / C (autosaved). Running nodes keep what they loaded; a restart picks
+        up the new places."""
+        self._set_code(settings)
+        self.autosave()
+        return self.manager.code
 
     def set_watch_topics(self, topics: Sequence[str]) -> None:
         self._watch_topics = list(topics)
@@ -226,7 +242,7 @@ class Launcher:
             functions = [d for d in functions if d.id in set(ids)]
             classes = [d for d in classes if d.id in set(ids)]
         return export(dummies, target_dir, self.manager.data_dir, transforms, functions,
-                      self.workspace.root, classes)
+                      self.workspace.root, classes, self.manager.code)
 
     def close(self) -> None:
         self.builder.close()

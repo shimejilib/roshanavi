@@ -19,7 +19,8 @@ from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from .. import data_kinds
 from ..launcher.schema import ClassSpec, FunctionSpec
 from ..transform.pipeline import Joiner
-from .loader import FunctionLoader, Problem, describe, required_positional, user_location
+from .loader import (FunctionLoader, Problem, describe, missing_module_of, required_positional,
+                     user_location)
 
 LOG = logging.getLogger('roshanavi.function')
 ERROR_LOG_EVERY_SEC = 5.0
@@ -179,7 +180,8 @@ class FunctionCore:
             except Exception as exc:  # the user's bug: report it, keep the node running
                 where = user_location(exc, resolved.package.path, resolved.package.base_dir) \
                     if resolved else None
-                self.report(Problem('call', describe(exc), where))
+                self.report(Problem('call', describe(exc), where, missing_module_of(
+                    exc, resolved.package.top if resolved else None)))
                 return
         if result is None:
             self._count('skipped')
@@ -231,4 +233,6 @@ class FunctionCore:
                     'location': loader.location_of_function(), 'loads': loader.loads,
                     'problem': loader.problem.to_dict() if loader.problem else None,
                     'stats': self.stats.to_dict(), 'last_error': self.last_error,
-                    'inputs': [asdict(p) for p in self.inputs], 'output': asdict(self.output)}
+                    'inputs': [asdict(p) for p in self.inputs], 'output': asdict(self.output),
+                    'environment': loader.environment, 'notices': loader.notices,
+                    'import_seconds': loader.import_seconds}

@@ -73,6 +73,8 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `audio_common_msgs` | 音声の注入先として AudioData 系の型が選べなくなる (std_msgs の配列型は使える) | `sudo apt install ros-<distro>-audio-common-msgs` |
 | `colcon` (`python3-colcon-common-extensions`) | ビルドボタンが無効になる | `sudo apt install python3-colcon-common-extensions` |
 | `python3-pynvml` (pynvml、BSD-3-Clause。rosdep キー `python3-pynvml` は debian / ubuntu にあり、Ubuntu 24.04 は 12.535.133) | GPU の監視が無効になる (リソースタブに理由と導入方法を出す。他の機能は動く)。NVIDIA のドライバ (NVML) も必要。任意のため `package.xml` と Docker イメージには入れていない (Docker では `--gpus` も要る) | `sudo apt install python3-pynvml` |
+| `python3-rosdep` (rosdep、BSD-3-Clause。ROS のイメージには通常入っている) とそのデータベース (`rosdep update`) | 関数・クラスノードで足りないライブラリの rosdep キーを確かめられない。候補のキー (未確認) と venv の手順を出す ([user-code.md#5](../design/user-code.md#5-依存ライブラリ))。roshanavi は `rosdep resolve` を実行するだけで、install はしない | `sudo apt install python3-rosdep && sudo rosdep init && rosdep update` |
+| `python3-packaging` (Apache-2.0 / BSD。Ubuntu では pip / setuptools と一緒に入っていることが多い) | requirements.txt の照合で、版の条件と環境マーカーを確かめず、入っているかどうかだけを確かめる | `sudo apt install python3-packaging` |
 | `lttng-tools`, `liblttng-ust1t64` (`ros-<distro>-tracetools` の依存で通常は導入済み。26.04 では `liblttng-ust1t64` 2.14), `python3-bt2` | 詳細計測モード (トレース) が無効になる。トグルに導入方法を表示する | `sudo apt install lttng-tools python3-bt2` |
 
 ## 3. 開発・テスト用 (利用者には不要)
@@ -86,6 +88,9 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | `ros-<distro>-demo-nodes-cpp`, `ros-<distro>-demo-nodes-py`, `ros-<distro>-example-interfaces` | テストとデモの相手役ノード |
 | `ros-<distro>-lifecycle` | lifecycle ノードのデモとテスト (`lifecycle_talker`) |
 | `roshanavi_test_nodes` (同梱の ament パッケージ。rclcpp, std_msgs, sensor_msgs) | トレース計測のテスト用ノード (遅いコールバックなど) |
+| `git` (ros のベースイメージに同梱) | 関数・クラスノードのテストで、git のサブモジュール (同期済み・未同期) の fixture を作る (roshanavi 自身は git を実行しない) |
+| C コンパイラ (`cc`) と Python のヘッダ (ros のベースイメージに同梱) | 関数・クラスノードのテストで、拡張モジュール (.so) の fixture を作る。無ければそのテストは skip |
+| `python3 -m venv` (標準ライブラリ。テストは `--without-pip` なので `python3-venv` は不要) | 関数ノードを venv の Python で動かすテスト |
 | `ros-<distro>-rmw-cyclonedds-cpp` (任意、未導入) | Cyclone DDS での計測の自動テスト (現在は手動確認のみ) |
 
 ### Web UI (ビルド時のみ。配布物にはビルド済みの静的ファイルを同梱し、利用者に npm を要求しない)
