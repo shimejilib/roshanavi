@@ -3,10 +3,10 @@
 import type { Diagnostic, GraphEdge, GraphSnapshot, RateBasis, Role, TrafficEntry } from '../api/types';
 import { t } from '../i18n';
 import { ageSec, edgeLabel, formatHz, formatRate } from '../lib/format';
-import { isHiddenTopic } from '../lib/topics';
+import { isHiddenNode, isHiddenTopic } from '../lib/topics';
 import type { NodeBadge } from '../api/resourceTypes';
 import { badgeLabel, loadLevel, type LoadLevel } from '../resources/model';
-import { qosReasonText } from './diagnosticsText';
+import { quietTopicNotes, qosReasonText, warningDiagnostics } from './diagnosticsText';
 
 export const STALE_AFTER_SEC = 3;
 const WIDTH_MIN = 1.5;
@@ -137,12 +137,14 @@ export function edgeState(entry: TrafficEntry | undefined, nowMs: number): EdgeS
   return 'active';
 }
 
-/** Keep hidden topics out and apply the name filter (matches pull in neighbours). */
+/** Keep hidden topics and infrastructure nodes (ros2 CLI daemon, `_ros2cli_*`) out and apply the
+ *  name filter (matches pull in neighbours). */
 export function filterSnapshot(snap: GraphSnapshot, opts: FilterOptions): GraphSnapshot {
   const topics = opts.hideHidden ? snap.topics.filter((tp) => !isHiddenTopic(tp.name)) : snap.topics;
   const topicNames = new Set(topics.map((tp) => tp.name));
-  let edges = snap.edges.filter((e) => topicNames.has(e.topic));
-  let nodes = snap.nodes;
+  let nodes = opts.hideHidden ? snap.nodes.filter((n) => !isHiddenNode(n.id)) : snap.nodes;
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  let edges = snap.edges.filter((e) => topicNames.has(e.topic) && nodeIds.has(e.node));
   const query = opts.query.trim().toLowerCase();
   if (query) {
     const matchT = new Set(topics.filter((tp) => tp.name.toLowerCase().includes(query)).map((tp) => tp.name));
@@ -211,6 +213,11 @@ function nodeLabel(n: GraphSnapshot['nodes'][number], badge: NodeBadge | undefin
   return extra ? `${base}\n${extra}` : base;
 }
 
+/** `受信なし` / `送信なし` as a last, small line under the topic name (info, not a warning). */
+function withQuietNote(label: string, note: string | undefined): string {
+  return note ? `${label}\n${note}` : label;
+}
+
 /** Full element list for the current (already filtered) snapshot. ``resources``: per-node
  *  CPU / memory badges (resource monitoring), keyed by node id. */
 export function buildElements(
@@ -224,7 +231,9 @@ export function buildElements(
   const edges = buildEdges(snap, traffic, nowMs).filter((e) => known.has(e.node));
   const nodeBw = new Map<string, number>();
   for (const e of edges) nodeBw.set(e.node, (nodeBw.get(e.node) ?? 0) + e.bw);
-  const warnTopics = new Set(snap.diagnostics.map((d) => d.topic));
+  const warnTopics = new Set(warningDiagnostics(snap.diagnostics).map((d) => d.topic));
+  const quietNotes = quietTopicNotes(snap.diagnostics);
+  const warnNodes = new Set(warningDiagnostics(snap.diagnostics).filter((d) => d.code === 'mine_no_input').flatMap((d) => d.nodes));
   const elements: Element[] = snap.nodes.map((n) => {
     const badge = n.job_id ? undefined : resources[n.id];
     return {
@@ -237,7 +246,7 @@ export function buildElements(
         ref: n.id,
         border: borderWidth(nodeBw.get(n.id) ?? 0),
         state: 'none',
-        warn: false,
+        warn: warnNodes.has(n.id),
         load: loadLevel(badge?.cpu_pct),
         leak: badge?.leak?.suspect === true,
       },
@@ -249,7 +258,7 @@ export function buildElements(
       group: 'nodes',
       data: {
         id: topicElementId(tp.name),
-        label: topicLabel(tp.name, entry),
+        label: withQuietNote(topicLabel(tp.name, entry), quietNotes.get(tp.name)),
         kind: 'topic',
         role: 'topic',
         ref: tp.name,

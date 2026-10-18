@@ -18,6 +18,7 @@ import { tourJa } from './messagesTour';
 import { resourcesJa } from './messagesResources';
 import { codeJa } from './messagesCode';
 import { launchJa } from './messagesLaunch';
+import { diagJa } from './messagesDiag';
 
 export const ja = {
   ...mapJa,
@@ -37,6 +38,7 @@ export const ja = {
   ...resourcesJa,
   ...codeJa,
   ...launchJa,
+  ...diagJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',
@@ -61,7 +63,7 @@ export const ja = {
   'common.edit': '編集',
 
   'graph.filter': '名前で絞り込み',
-  'graph.hideHidden': '/rosout などの内部トピックを隠す',
+  'graph.hideHidden': '/rosout などの内部トピック・内部ノードを隠す',
   'graph.pause': '一時停止',
   'graph.resume': '再開',
   'graph.paused': '一時停止中 (表示を固定しています)',
@@ -82,9 +84,6 @@ export const ja = {
   'diag.none': '問題は見つかっていません',
   'diag.count': '{n} 件',
   'diag.qos_incompatible': '{subscriber} は {topic} を受け取れません: {reasons}',
-  'diag.no_subscriber': '{topic} は送信されていますが、受信しているノードがありません',
-  'diag.no_publisher': '{topic} を受信待ちしていますが、送信しているノードがありません',
-  'diag.similar_names': '{published} (送信のみ) と {subscribed} (受信のみ) は名前が似ています。打ち間違いやリマップ漏れではありませんか?',
   'diag.type_mismatch': '{topic} に異なる型が混在しています: {types}',
   'qos.reliability': '送信側は BEST_EFFORT、受信側は RELIABLE のため届きません',
   'qos.durability': '送信側は VOLATILE、受信側は TRANSIENT_LOCAL (過去メッセージを要求) のため接続されません',

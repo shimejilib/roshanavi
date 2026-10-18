@@ -1,7 +1,7 @@
 import type { Diagnostic } from '../api/types';
 import { t } from '../i18n';
 import { TourHelp } from '../tour/TourHelp';
-import { diagnosticText } from './diagnosticsText';
+import { diagnosticText, warningDiagnostics } from './diagnosticsText';
 
 interface DiagnosticsPanelProps {
   diagnostics: Diagnostic[];
@@ -10,7 +10,9 @@ interface DiagnosticsPanelProps {
 
 const SEVERITY_ICON: Record<Diagnostic['severity'], string> = { error: '⛔', warning: '⚠', info: 'ℹ' };
 
-export function DiagnosticsPanel({ diagnostics, onFocus }: DiagnosticsPanelProps) {
+export function DiagnosticsPanel({ diagnostics: all, onFocus }: DiagnosticsPanelProps) {
+  // `info` entries (no subscriber / no publisher yet) are not problems: map and detail panes only.
+  const diagnostics = warningDiagnostics(all);
   return (
     <section className="diag-panel" aria-labelledby="diag-title" data-tour="diagnostics">
       <h3 id="diag-title">

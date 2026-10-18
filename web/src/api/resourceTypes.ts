@@ -5,11 +5,21 @@ import type { Diagnostic } from './types';
 export type Confidence = 'exact' | 'heuristic';
 export type ProcGroup = 'ros' | 'self' | 'other';
 
+/** Memory growth verdict of one process (docs/design/resources.md#メモリリークの見せ方). */
 export interface LeakState {
+  /** Growth speed over the last 10 minutes (MB/min); null while measuring. */
   slope_mb_per_min: number | null;
+  /** Steady growth without slowing down: shown in the diagnostics panel. */
   suspect: boolean;
+  /** Growing but levelling off (a step, a buffer filling): resources tab only. */
+  watch?: boolean;
   span_sec: number;
   warming_up: boolean;
+  /** Window (minutes) that decided, speed on it, and how long it has been growing. */
+  scale_min?: number | null;
+  rate_mb_per_min?: number | null;
+  duration_sec?: number | null;
+  noise_mb?: number | null;
 }
 
 export interface ConnInfo {

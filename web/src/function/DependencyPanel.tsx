@@ -36,12 +36,32 @@ function MissingLibrary({ missing, module }: { missing: string; module: string }
     };
   }, [missing, module]);
   const route1 = hint ? rosdepRoute(hint) : null;
+  const places = hint?.code_places;
+  const inRegistered = hint?.route === 'code_path_restart' || hint?.route === 'code_path_missing';
   return (
     <div className="dep-missing" data-testid="dep-missing" data-route={hint?.route}>
       <p className="error-text"><strong>{t('dep.missing', { module: missing })}</strong></p>
       {!hint && !error && <p className="muted small">{t('dep.loading')}</p>}
       {error && <p className="error-text small">{error}</p>}
-      {hint && (
+      {hint && places && hint.route === 'code_path_restart' && places.found_in && (
+        <p className="notice-box small" data-testid="dep-code-path">
+          {t('dep.codePath.restart', { path: places.found_in.path, module: hint.top, file: places.found_in.file })}
+        </p>
+      )}
+      {hint && places && hint.route === 'code_path_missing' && places.looks_like && (
+        <p className="notice-box small" data-testid="dep-code-path">
+          {t('dep.codePath.missing', { path: places.looks_like.path, module: hint.top })}
+        </p>
+      )}
+      {hint && !inRegistered && places && (
+        <p className="small" data-testid="dep-code-places">
+          {places.registered.length > 0
+            ? t('dep.codePath.registeredNone', { paths: places.registered.map((r) => r.path).join(', '), module: hint.top })
+            : null}{' '}
+          {t('dep.codePath.register', { module: hint.top })}
+        </p>
+      )}
+      {hint && !inRegistered && (
         <>
           <section className={hint.route === 'rosdep' ? 'dep-route recommended' : 'dep-route'} data-testid="dep-route-rosdep">
             <h5>{t('dep.route1')}</h5>

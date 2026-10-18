@@ -120,7 +120,7 @@ def register(app: FastAPI, lab: Lab) -> None:
                 resolved = modules.resolve_module(manager.locations(), module)
             except LauncherError:
                 resolved = None
-        return dependencies.hint(missing, resolved, rosdep, python_info())
+        return dependencies.hint(missing, resolved, rosdep, python_info(), manager.locations())
 
     @app.post('/api/functions', status_code=201)
     def add_function(spec: FunctionSpec, start: bool = False) -> Dict[str, Any]:

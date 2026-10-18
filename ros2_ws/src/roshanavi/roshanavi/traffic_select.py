@@ -18,7 +18,9 @@ from .heavy_types import HEAVY_TYPES  # noqa: F401 - re-exported for existing im
 
 LOG = logging.getLogger(__name__)
 
-DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$', r'^/events/write_split$')
+# ``<node>/transition_event`` is published by every lifecycle node.
+DEFAULT_COLLAPSED = (r'^/rosout$', r'^/parameter_events$', r'^/events/write_split$',
+                     r'^/.+/transition_event$')
 
 
 class TopicSelector:

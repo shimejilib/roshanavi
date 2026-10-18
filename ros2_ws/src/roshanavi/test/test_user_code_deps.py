@@ -149,3 +149,54 @@ def test_never_runs_pip():
     assert seen and all(argv[:2] == ['rosdep', 'resolve'] for argv in seen)
     assert out['venv']['commands'][-1] == 'pip install numpy'   # shown, not run
     assert dependencies.VENV_DIR == '~/roshanavi-venv'
+
+
+# ---- registered code paths (scope B) in the advice -------------------------------------------------
+class FakeRosdep(RosdepResolver):
+    """rosdep has no rule for anything."""
+
+    def __init__(self):
+        super().__init__(runner=lambda argv, **kw: subprocess.CompletedProcess(
+            argv, 1, '', "ERROR: no rosdep rule for 'x'"))
+
+
+class NoRosdep(RosdepResolver):
+    def resolve(self, key):   # asking rosdep at all would be wrong when the answer is local
+        raise AssertionError('rosdep must not be asked for a library of a registered place')
+
+
+def test_a_library_that_is_in_a_registered_place_says_restart_not_rosdep(tmp_path):
+    proj = flat_project(tmp_path / 'simple-pid', 'dep_pid', {'m.py': SHOUT})
+    loc = CodeLocations(str(tmp_path), code_paths=(str(proj),))
+    out = hint('dep_pid', None, NoRosdep(), NO_VENV, loc)
+    assert out['route'] == 'code_path_restart' and out['rosdep']['status'] == 'skipped'
+    assert out['code_places']['found_in']['path'] == str(proj)
+    assert out['code_places']['found_in']['file'] == str((proj / 'dep_pid' / '__init__.py').resolve())
+
+
+def test_a_registered_place_without_the_library_says_so_instead_of_rosdep(tmp_path):
+    proj = tmp_path / 'third_party' / 'simple-pid'
+    write(proj / 'README.md', 'nothing importable here')
+    loc = CodeLocations(str(tmp_path), code_paths=(str(proj),))
+    out = hint('simple_pid', None, NoRosdep(), NO_VENV, loc)
+    assert out['route'] == 'code_path_missing'
+    assert out['code_places']['looks_like'] == {'path': str(proj), 'real': str(proj.resolve())}
+    assert out['code_places']['found_in'] is None and 'exec_depend' not in out
+
+
+def test_an_unrelated_registered_place_does_not_hide_the_normal_advice(tmp_path):
+    proj = flat_project(tmp_path / 'proj', 'dep_other', {'m.py': SHOUT})
+    loc = CodeLocations(str(tmp_path), code_paths=(str(proj),))
+    out = hint('superlib', None, FakeRosdep(), NO_VENV, loc)
+    assert out['route'] == 'venv' and out['venv']['commands']
+    assert out['code_places']['registered'] == [{'path': str(proj), 'real': str(proj.resolve())}]
+    assert out['code_places']['found_in'] is None and out['code_places']['looks_like'] is None
+    plain = hint('superlib', None, FakeRosdep(), NO_VENV)   # nothing registered at all
+    assert plain['code_places']['registered'] == [] and plain['route'] == 'venv'
+
+
+def test_a_standard_library_name_is_never_found_in_a_registered_place(tmp_path):
+    proj = tmp_path / 'proj'
+    write(proj / 'winreg' / '__init__.py', '')
+    loc = CodeLocations(str(tmp_path), code_paths=(str(proj),))
+    assert hint('winreg', None, FakeRosdep(), NO_VENV, loc)['code_places']['found_in'] is None

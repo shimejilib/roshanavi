@@ -4,7 +4,7 @@ import type { Breakdown, ProcInfo } from '../api/resourceTypes';
 import { t, type MessageKey } from '../i18n';
 import { formatRate } from '../lib/format';
 import { ConfidenceBadge } from './ConfidenceBadge';
-import { cpuSegments, formatCpu, formatMem, growthText, loadLevel, memSegments, selfLabel, type ShareSegment } from './model';
+import { cpuSegments, formatCpu, formatMem, growthText, leakStatusText, loadLevel, memSegments, selfLabel, type ShareSegment } from './model';
 
 function ShareBar({ segments, label }: { segments: ShareSegment[]; label: string }) {
   return (
@@ -51,6 +51,20 @@ export function BreakdownView({ breakdown, memTotal }: { breakdown: Breakdown; m
 /** The `ros2 run` launcher process of a target (no node of its own). */
 function isWrapper(p: ProcInfo): boolean {
   return p.group === 'ros' && p.nodes.length === 0 && p.exe === 'ros2';
+}
+
+function GrowthCell({ p }: { p: ProcInfo }) {
+  const note = leakStatusText(p.leak);
+  return (
+    <td className={note?.kind === 'suspect' ? 'warn-text small' : 'small'} data-testid="res-growth">
+      {growthText(p.leak)}
+      {note && (
+        <div className={note.kind === 'watch' ? 'muted' : undefined} title={note.kind === 'watch' ? t('res.leak.watchHelp') : undefined}>
+          {note.text}
+        </div>
+      )}
+    </td>
+  );
 }
 
 function rowClass(p: ProcInfo): string {
@@ -116,7 +130,7 @@ export function ProcessGroupTable({ title, titleParams, procs, onNode, detailed,
                 {detailed && <td className="small">{t('res.ioValue', { read: formatRate(p.read_bps), write: formatRate(p.write_bps) })}</td>}
                 {detailed && <td className="num">{p.threads ?? '—'}</td>}
                 {detailed && <td className="num">{p.fds ?? '—'}</td>}
-                {detailed && <td className={p.leak?.suspect ? 'warn-text small' : 'small'}>{growthText(p.leak)}</td>}
+                {detailed && <GrowthCell p={p} />}
               </tr>
             ))}
           </tbody>

@@ -10,12 +10,14 @@ import hashlib
 import json
 import logging
 import threading
+import time
 from dataclasses import dataclass, field
 from typing import Any, Collection, Dict, Iterable, List, Mapping, Optional, Tuple
 
 from rclpy.exceptions import InvalidTopicNameException
 
-from .diagnostics import diagnose
+from .diag_history import GraphHistory
+from .diagnostics import diagnose, sort_diagnostics
 from .ros_runtime import RosRuntime, is_self_node, is_self_topic, qos_to_dict
 
 LOG = logging.getLogger(__name__)
@@ -129,9 +131,12 @@ def node_ids(raw: RawGraph) -> List[str]:
 def build_snapshot(raw: RawGraph, show_self: bool = False,
                    jobs: Iterable[Mapping[str, Any]] = (),
                    node_info: Optional[Mapping[str, Mapping[str, Any]]] = None,
+                   history: Optional[GraphHistory] = None,
+                   now: Optional[float] = None,
                    quiet_topics: Collection[str] = ()) -> Dict[str, Any]:
     """``node_info``: per node id ``{role, target_id, confidence}`` from the launcher.
-    ``quiet_topics``: topics that are one-sided on purpose (class nodes' action topics)."""
+    ``quiet_topics``: topics that are one-sided on purpose (class nodes' action topics).
+    ``history`` (+ ``now``, monotonic seconds) adds the diagnostics that need earlier snapshots."""
     nodes, seen = [], set()
     for name, namespace in sorted(raw.nodes, key=lambda n: fq_name(n[0], n[1])):
         node_id = fq_name(name, namespace)
@@ -162,7 +167,12 @@ def build_snapshot(raw: RawGraph, show_self: bool = False,
     edges += [e for e in extra_edges if e['topic'] in known_topics]
     edges.sort(key=lambda e: (e['node'], e['topic'], e['dir']))
     snapshot = {'nodes': nodes, 'topics': topics, 'edges': edges}
-    snapshot['diagnostics'] = diagnose(snapshot, quiet_topics)
+    diagnostics = diagnose(snapshot, quiet_topics)
+    if history is not None:
+        timed = history.update(time.monotonic() if now is None else now, snapshot,
+                               quiet_topics)
+        diagnostics = sort_diagnostics([*diagnostics, *timed])
+    snapshot['diagnostics'] = diagnostics
     return snapshot
 
 
@@ -175,6 +185,7 @@ class GraphMonitor:
 
     def __init__(self, show_self: bool = False):
         self._show_self = show_self
+        self._history = GraphHistory()
         self._lock = threading.Lock()
         self._raw = RawGraph()
         self._snapshot = build_snapshot(self._raw, show_self)
@@ -184,7 +195,8 @@ class GraphMonitor:
                node_info: Optional[Mapping[str, Mapping[str, Any]]] = None,
                quiet_topics: Collection[str] = ()) -> bool:
         """Store a new raw graph (+ running inject jobs, node roles). True when changed."""
-        snapshot = build_snapshot(raw, self._show_self, jobs, node_info, quiet_topics)
+        snapshot = build_snapshot(raw, self._show_self, jobs, node_info, self._history,
+                                  quiet_topics=quiet_topics)
         digest = snapshot_hash(snapshot)
         with self._lock:
             changed = digest != self._hash

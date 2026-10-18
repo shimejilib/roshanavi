@@ -142,6 +142,7 @@ h1, h2, h3, h4 { margin: 0; }
 .diag-item { width: 100%; text-align: left; font-size: 12px; line-height: 1.45; border-left-width: 3px; }
 .sev-error { border-left-color: var(--error); }
 .sev-warning { border-left-color: var(--warn); }
+.sev-info { border-left-color: var(--border); color: var(--muted); }
 .diag-list.compact li { font-size: 12px; padding-left: 8px; border-left: 3px solid var(--border); }
 .diag-list.compact li.sev-error { border-left-color: var(--error); }
 .diag-list.compact li.sev-warning { border-left-color: var(--warn); }

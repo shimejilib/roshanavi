@@ -9,7 +9,7 @@ import { formatRate } from '../lib/format';
 import { useLive } from '../state/LiveProvider';
 import { Sparkline } from '../traffic/Sparkline';
 import { ConfidenceBadge } from '../resources/ConfidenceBadge';
-import { connRemote, formatCpu, formatMem, growthText, ioValues, sparkValues } from '../resources/model';
+import { connRemote, formatCpu, formatMem, growthText, ioValues, leakStatusText, sparkValues } from '../resources/model';
 
 const POLL_MS = 2000;
 const MAX_CONNECTIONS = 10;
@@ -60,6 +60,7 @@ export function NodeResources({ nodeId }: { nodeId: string }) {
     );
   }
   const cur = data?.current;
+  const leakNote = leakStatusText(cur?.leak ?? badge.leak);
   const hist = data?.history;
   const pidText = cur && cur.pids.length > 1 ? t('res.node.pids', { pids: cur.pids.join(', ') }) : t('res.node.pid', { pid: badge.pid ?? '?' });
   return (
@@ -78,7 +79,11 @@ export function NodeResources({ nodeId }: { nodeId: string }) {
         {cur?.fds != null && <Row label={t('res.fds')} value={String(cur.fds)} />}
         {cur?.gpu_mem != null && <Row label={t('res.gpuMem')} value={formatMem(cur.gpu_mem)} />}
       </dl>
-      {badge.leak?.suspect && <p className="warn-text small">⚠ {t('res.leakSuspect')}</p>}
+      {leakNote && (
+        <p className={leakNote.kind === 'suspect' ? 'warn-text small' : 'muted small'} title={leakNote.kind === 'watch' ? t('res.leak.watchHelp') : undefined}>
+          {leakNote.kind === 'suspect' ? '⚠ ' : ''}{leakNote.text}
+        </p>
+      )}
       {hist && (
         <div className="res-sparks" aria-label={t('res.node.history')}>
           <div><span className="muted small">{t('res.cpu')}</span><Sparkline values={sparkValues(hist.cpu_pct)} color="#2563eb" /></div>

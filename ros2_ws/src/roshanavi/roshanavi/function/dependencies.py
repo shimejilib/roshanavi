@@ -21,9 +21,9 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Mapping, Optional
 
-from . import node_env
+from . import code_imports, node_env
 from .modules import ResolvedModule
-from .scopes import SCOPE_CODE_PATH, SCOPE_INSTALLED, SCOPE_WORKSPACE
+from .scopes import SCOPE_CODE_PATH, SCOPE_INSTALLED, SCOPE_WORKSPACE, CodeLocations
 
 ROSDEP_TIMEOUT_SEC = 10.0
 UNAVAILABLE_TTL_SEC = 60.0
@@ -161,15 +161,51 @@ def _requirements_file(resolved: Optional[ResolvedModule]) -> Optional[str]:
     return None
 
 
+def _name_key(name: str) -> str:
+    return re.sub(r'[-_.\s]+', '', name).lower()
+
+
+def code_places(top: str, locations: Optional[CodeLocations]) -> Dict[str, Any]:
+    """The registered code paths (scope B) seen from one missing import.
+
+    ``found_in``: the library IS in a registered place (the node was started before it was
+    registered: restart). ``looks_like``: a registered place whose folder name is the missing
+    library's name (``simple-pid`` for ``simple_pid``) but that does not hold it: say so plainly
+    instead of suggesting rosdep / pip for a library the user keeps in a folder of their own.
+    """
+    roots = code_imports.import_roots(locations) if locations is not None else []
+    out: Dict[str, Any] = {'registered': [{'path': r.path, 'real': r.real} for r in roots],
+                           'found_in': None, 'looks_like': None}
+    found = code_imports.locate_spec(top, roots)
+    if found is not None:
+        out['found_in'] = {'path': found[0].path, 'real': found[0].real,
+                           'file': os.path.realpath(found[1].origin or '')}
+        return out
+    wanted = _name_key(top)
+    for root in roots:
+        if _name_key(os.path.basename(root.real)) == wanted:
+            out['looks_like'] = {'path': root.path, 'real': root.real}
+            break
+    return out
+
+
 def hint(missing: str, resolved: Optional[ResolvedModule], resolver: RosdepResolver,
-         python: Dict[str, Any]) -> Dict[str, Any]:
-    """Both routes for one missing import, filled with the user's real paths."""
+         python: Dict[str, Any], locations: Optional[CodeLocations] = None) -> Dict[str, Any]:
+    """Both routes for one missing import, filled with the user's real paths.
+
+    With ``locations`` the registered code paths are checked first (``route`` is then
+    ``code_path_restart`` or ``code_path_missing``, and rosdep is not asked)."""
     top = missing.split('.')[0]
-    rosdep = lookup(top, resolver)
+    places = code_places(top, locations)
+    place_route = 'code_path_restart' if places['found_in'] else \
+        'code_path_missing' if places['looks_like'] else None
+    rosdep = {'status': 'skipped', 'tried': []} if place_route else lookup(top, resolver)
     key = rosdep.get('key') if rosdep['status'] == 'found' else rosdep.get('candidate')
     out: Dict[str, Any] = {'missing': missing, 'top': top, 'rosdep': rosdep,
                            'scope': resolved.scope if resolved else None,
-                           'route': 'rosdep' if rosdep['status'] == 'found' else 'venv',
+                           'route': place_route or ('rosdep' if rosdep['status'] == 'found'
+                                                    else 'venv'),
+                           'code_places': places,
                            'python': {k: python.get(k) for k in ('executable', 'version', 'venv')}}
     if key:
         out['exec_depend'] = f'<exec_depend>{key}</exec_depend>'

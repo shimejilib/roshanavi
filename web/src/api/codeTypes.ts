@@ -101,7 +101,7 @@ export interface ScaffoldResult {
 }
 
 export interface RosdepLookup {
-  status: 'found' | 'not_found' | 'unavailable';
+  status: 'found' | 'not_found' | 'unavailable' | 'skipped';
   key?: string;
   installer?: string;
   packages?: string[];
@@ -115,7 +115,8 @@ export interface DependencyHint {
   top: string;
   rosdep: RosdepLookup;
   scope: CodeScope | null;
-  route: 'rosdep' | 'venv';
+  route: 'rosdep' | 'venv' | 'code_path_restart' | 'code_path_missing';
+  code_places?: { registered: { path: string; real: string }[]; found_in: { path: string; real: string; file: string } | null; looks_like: { path: string; real: string } | null };
   python: { executable: string | null; version: string | null; venv: boolean | null };
   exec_depend?: string;
   apt_command?: string | null;

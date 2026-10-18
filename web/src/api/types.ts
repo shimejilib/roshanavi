@@ -53,6 +53,9 @@ export type DiagnosticCode =
   | 'no_publisher'
   | 'similar_names'
   | 'type_mismatch'
+  | 'subscriber_lost'
+  | 'publisher_lost'
+  | 'mine_no_input'
   // resource monitoring (docs/design/resources.md)
   | 'mem_leak'
   | 'gpu_mem_leak'
@@ -77,12 +80,19 @@ export interface Diagnostic {
     published?: string;
     subscribed?: string;
     types?: string[];
+    /** subscriber_lost / publisher_lost: the nodes that went away. */
+    lost?: string[];
+    /** mine_no_input: the developer's node whose input has no publisher. */
+    node?: string;
     // resource diagnostics
     pid?: number;
     name?: string | null;
     label?: string | null;
-    slope_mb_per_min?: number | null;
-    span_sec?: number | null;
+    /** mem_leak / gpu_mem_leak: growth speed (MB/min), how long it has been growing, deciding scale. */
+    rate_mb_per_min?: number | null;
+    duration_sec?: number | null;
+    scale_min?: number | null;
+    group?: string | null;
     rss?: number | null;
     free?: number | null;
     path?: string | null;

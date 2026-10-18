@@ -34,6 +34,19 @@ describe('filterSnapshot', () => {
     expect(snap.nodes).toHaveLength(2);
   });
 
+  it('hides the ros2 CLI daemon and transient nodes with the internal topics, keeps them when shown', () => {
+    const graph = chatterGraph();
+    const withCli = {
+      ...graph,
+      nodes: [...graph.nodes, { id: '/_ros2cli_daemon_0_ab', name: '_ros2cli_daemon_0_ab', namespace: '/', role: 'other' as const }],
+      edges: [...graph.edges, { ...graph.edges[1]!, node: '/_ros2cli_daemon_0_ab' }],
+    };
+    const hidden = filterSnapshot(withCli, { query: '', hideHidden: true });
+    expect(hidden.nodes.map((n) => n.id)).toEqual(['/talker', '/listener']);
+    expect(hidden.edges.every((e) => !e.node.startsWith('/_ros2cli'))).toBe(true);
+    expect(filterSnapshot(withCli, { query: '', hideHidden: false }).nodes).toHaveLength(3);
+  });
+
   it('keeps neighbours of matches', () => {
     const snap = filterSnapshot(chatterGraph(), { query: 'talk', hideHidden: true });
     expect(snap.nodes.map((n) => n.id)).toEqual(['/talker']);
@@ -73,6 +86,28 @@ describe('buildElements', () => {
     expect(sub?.qosReason).toContain('BEST_EFFORT');
     const topic = els.find((e) => e.data.id === 't:/chatter');
     expect(topic?.group === 'nodes' && topic.data.warn).toBe(true);
+  });
+
+  it('shows info diagnostics quietly: a note under the topic, no warning glow', () => {
+    const graph = chatterGraph();
+    const info: Diagnostic = { code: 'no_subscriber', severity: 'info', topic: '/chatter', nodes: ['/talker'], detail: {} };
+    const els = buildElements({ ...graph, diagnostics: [info] }, new Map(), NOW_MS);
+    const topic = els.find((e) => e.data.id === 't:/chatter');
+    expect(topic?.group === 'nodes' && topic.data.warn).toBe(false);
+    expect(topic?.group === 'nodes' && topic.data.label).toBe('/chatter\n受信なし');
+  });
+
+  it('glows the developer node and its topic for mine_no_input', () => {
+    const graph = chatterGraph();
+    const warn: Diagnostic = { code: 'mine_no_input', severity: 'warning', topic: '/chatter', nodes: ['/listener'], detail: { node: '/listener' } };
+    const els = buildElements({ ...graph, diagnostics: [warn] }, new Map(), NOW_MS);
+    const flags = (id: string) => {
+      const el = els.find((e) => e.data.id === id);
+      return el?.group === 'nodes' && el.data.warn;
+    };
+    expect(flags('n:/listener')).toBe(true);
+    expect(flags('n:/talker')).toBe(false);
+    expect(flags('t:/chatter')).toBe(true);
   });
 
   it('drops edges whose node is unknown and dedupes duplicates', () => {

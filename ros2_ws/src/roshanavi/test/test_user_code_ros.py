@@ -172,6 +172,90 @@ def test_missing_library_is_reported_with_the_rosdep_route(tmp_path, helper):
         node.stop()
 
 
+def goto_class_spec(name, module='uc_goto.goto'):
+    return ClassSpec.model_validate({
+        'id': name.replace('_', '-'), 'name': name, 'module': module, 'class_name': 'Goto',
+        'methods': [{'method': 'process', 'inputs': [{'topic': f'/{name}_in', 'kind': 'string'}],
+                     'outputs': [{'topic': f'/{name}_out', 'kind': 'string'}]}]})
+
+
+PID_LIB = {'core.py': 'GAIN = 2\n\n\ndef scale(x):\n    return x * GAIN\n',
+           '__init__.py': 'from .core import scale\n'}
+GOTO = ('import uc_pid\n\n\nclass Goto:\n    def process(self, text: str) -> str:\n'
+        '        return f"pid{uc_pid.scale(len(text))}"\n')
+
+
+@pytest.mark.parametrize('build', [flat_project, src_layout_project], ids=['flat', 'src'])
+def test_scope_a_class_imports_a_package_of_a_registered_code_path(tmp_path, helper, build):
+    """The demo bug: ``import simple_pid`` in the user's own package, the library in a
+    registered folder. The node process must find it (and the server must not import it)."""
+    ws = tmp_path / 'ws'
+    ament_python(ws / 'src', 'uc_goto', {'goto.py': GOTO})
+    proj = build(tmp_path / 'third_party' / 'simple-pid', 'uc_pid', PID_LIB)
+    out = feed(helper, 'uc_dep_cls', 'abc')
+    node = Node(tmp_path, 'uc_dep_cls', class_config_text(
+        goto_class_spec('uc_dep_cls'), str(ws), '__STATUS__', CodeSettings(code_paths=[str(proj)])))
+    try:
+        wait_for(lambda: out and out[-1].data.startswith('pid'), timeout=30)
+        status = status_of(node.status)
+        assert status['environment']['scope'] == 'workspace' and not status.get('problem')
+        # editing the library (a dependency, not a sibling) reloads like a sibling
+        write(proj / ('uc_pid' if build is flat_project else 'src/uc_pid') / 'core.py',
+              'GAIN = 5\n\n\ndef scale(x):\n    return x * GAIN\n')
+        wait_for(lambda: out and int(out[-1].data[3:]) >= 20, timeout=15)   # GAIN 5 * 4+ chars
+        wait_for(lambda: status_of(node.status).get('stats', {}).get('reloads', 0) >= 1,
+                 timeout=10)
+    finally:
+        node.stop()
+
+
+def test_unregistering_the_code_path_gives_a_clear_error_and_the_right_advice(tmp_path, helper):
+    ws = tmp_path / 'ws'
+    ament_python(ws / 'src', 'uc_goto', {'goto.py': GOTO})
+    proj = flat_project(tmp_path / 'third_party' / 'simple-pid', 'uc_pid', PID_LIB)
+    spec = goto_class_spec('uc_unreg')
+    feed(helper, 'uc_unreg', 'abc')
+    node = Node(tmp_path, 'uc_unreg', class_config_text(spec, str(ws), '__STATUS__'))
+    try:   # not registered
+        wait_for(lambda: status_of(node.status).get('state') == 'import_error', timeout=30)
+        problem = status_of(node.status)['problem']
+        assert problem['missing_module'] == 'uc_pid'
+        assert 'No module named' in problem['message']
+        plain = dependencies.hint('uc_pid', None, dependencies.RosdepResolver(),
+                                  status_of(node.status)['environment']['python'],
+                                  CodeLocations(str(ws)))
+        assert plain['route'] in ('rosdep', 'venv') and plain['code_places']['registered'] == []
+    finally:
+        node.stop()
+    # registered somewhere it is not: the advice names the registered place, not rosdep / pip
+    empty = tmp_path / 'third_party' / 'uc-pid'
+    write(empty / 'README.md', 'no package here')
+    loc = CodeLocations(str(ws), code_paths=(str(empty),))
+    out = dependencies.hint('uc_pid', None, dependencies.RosdepResolver(), {}, loc)
+    assert out['route'] == 'code_path_missing' and out['code_places']['looks_like']['path'] == str(
+        empty) and out['rosdep']['status'] == 'skipped'
+    # registered where it is, after the node started: restart
+    now = CodeLocations(str(ws), code_paths=(str(proj),))
+    assert dependencies.hint('uc_pid', None, dependencies.RosdepResolver(), {}, now)[
+        'route'] == 'code_path_restart'
+
+
+def test_a_standard_library_name_in_a_code_path_is_refused_for_dependency_use(tmp_path, helper):
+    ws = tmp_path / 'ws'
+    ament_python(ws / 'src', 'uc_goto', {'goto.py': 'import winreg\n' + GOTO.split('\n', 1)[1]})
+    proj = tmp_path / 'proj'
+    write(proj / 'winreg' / '__init__.py', "WHO = 'user'\n")   # not importable on Linux: stdlib name
+    write(proj / 'json' / '__init__.py', "WHO = 'user'\n")
+    feed(helper, 'uc_shadow', 'abc')
+    node = Node(tmp_path, 'uc_shadow', class_config_text(
+        goto_class_spec('uc_shadow'), str(ws), '__STATUS__', CodeSettings(code_paths=[str(proj)])))
+    try:
+        wait_for(lambda: status_of(node.status).get('state') == 'import_error', timeout=30)
+        assert status_of(node.status)['problem']['missing_module'] == 'winreg'
+    finally:
+        node.stop()
+
+
 def test_venv_node_uses_a_library_installed_only_in_the_venv(tmp_path, helper):
     """依存 ②: roshanavi started from an activated venv (``--system-site-packages``) runs its
     function nodes with that venv's Python, so a library installed only there imports."""
@@ -301,6 +385,14 @@ def test_locations_scaffold_and_dependency_api(uc_client, helper):
         assert hint['exec_depend'] == '<exec_depend>python3-opencv</exec_depend>'
         assert hint['package_xml'] == str((ws / 'src' / 'uc_api_pkg' / 'package.xml').resolve())
     assert client.get('/api/functions/dependency', params={'missing': '../x'}).status_code == 422
+    # a library of a registered place: restart advice (no rosdep), and the server (this process)
+    # never makes registered code importable for itself
+    mine = client.get('/api/functions/dependency', params={'missing': 'uc_api_b'}).json()
+    assert mine['route'] == 'code_path_restart' and mine['code_places']['found_in']['path'] == str(
+        proj)
+    from roshanavi.function.code_imports import CodeImportFinder
+    assert not [f for f in sys.meta_path if isinstance(f, CodeImportFinder)]
+    assert 'uc_api_b' not in sys.modules
 
 
 def test_new_routes_are_behind_the_host_origin_content_type_guard(uc_client):

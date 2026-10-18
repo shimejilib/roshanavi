@@ -64,6 +64,36 @@ export function growthText(leak: LeakState | null | undefined): string {
   return t('res.growthValue', { v: `${v >= 0 ? '+' : ''}${v.toFixed(2)}` });
 }
 
+/** `3 MB/min` -> `3.0`, `0.3` -> `0.30`, `12.7` -> `13`: two significant digits. */
+export function formatGrowthRate(mbPerMin: number): string {
+  const v = Math.abs(mbPerMin);
+  return v >= 10 ? v.toFixed(0) : v >= 1 ? v.toFixed(1) : v.toFixed(2);
+}
+
+/** `45 分`, `2 時間`, `2.5 時間` (the growth lasted at least this long). */
+export function formatGrowthDuration(sec: number): string {
+  const min = Math.max(1, Math.round(sec / 60));
+  if (min < 90) return t('res.duration.min', { n: min });
+  const hours = Math.round((min / 60) * 2) / 2;
+  return t('res.duration.hour', { n: Number.isInteger(hours) ? hours : hours.toFixed(1) });
+}
+
+/** One line for the leak verdict: the suspicion with rate and duration, the quiet "watching"
+ *  note, or null. */
+export function leakStatusText(leak: LeakState | null | undefined): { kind: 'suspect' | 'watch'; text: string } | null {
+  if (!leak) return null;
+  if (leak.suspect) {
+    return {
+      kind: 'suspect',
+      text: t('res.leak.suspect', {
+        rate: formatGrowthRate(leak.rate_mb_per_min ?? leak.slope_mb_per_min ?? 0),
+        duration: formatGrowthDuration(leak.duration_sec ?? leak.span_sec),
+      }),
+    };
+  }
+  return leak.watch ? { kind: 'watch', text: t('res.leak.watch') } : null;
+}
+
 export interface ProcessGroups {
   ros: ProcInfo[];
   self: ProcInfo[];

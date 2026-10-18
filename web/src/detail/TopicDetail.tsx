@@ -5,7 +5,7 @@ import { diagnosticText } from '../graph/diagnosticsText';
 import { t } from '../i18n';
 import { formatBytes, formatMs, formatPercent, formatRate } from '../lib/format';
 import { hzBasisHelp, rateText, windowLabel } from '../timing/timing';
-import { topicPath } from '../lib/topics';
+import { isHiddenNode, topicPath } from '../lib/topics';
 import { useAppState } from '../state/AppState';
 import { AudioViewer } from './AudioViewer';
 import { EchoView } from './EchoView';
@@ -69,7 +69,8 @@ function MonitorToggle({ topic, entry }: { topic: string; entry: TrafficEntry })
 export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
   const { openInject } = useAppState();
   const info = graph?.topics.find((tp) => tp.name === topic);
-  const edges = graph?.edges.filter((e) => e.topic === topic) ?? [];
+  // `ros2 topic echo` and the CLI daemon (_ros2cli_*) are not users of the topic.
+  const edges = graph?.edges.filter((e) => e.topic === topic && !isHiddenNode(e.node)) ?? [];
   const diags = graph?.diagnostics.filter((d) => d.topic === topic || d.detail.subscribed === topic) ?? [];
   const { info: media } = useMediaTypes('', true);
   const types = info?.types ?? (entry ? [entry.type] : []);

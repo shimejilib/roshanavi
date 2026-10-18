@@ -73,7 +73,7 @@ test('a periodic injection appears as a dummy source with a diagnostic', async (
   await page.getByTestId('tab-graph').click();
   const outline = page.getByTestId('graph-outline');
   await expect(outline.locator('li[data-id^="n:dummy:"]')).toHaveCount(1, { timeout: 10_000 });
-  await expect(page.locator('.diag-item', { hasText: '/chater は送信されていますが' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.locator('.diag-item', { hasText: '/chater (送信) と /chatter (受信) は名前が似ていて' })).toBeVisible({ timeout: 10_000 });
   await page.locator('.diag-item', { hasText: '/chater' }).click();
   await expect(page.getByTestId('detail-title')).toHaveText('/chater');
   await page.waitForTimeout(2500);

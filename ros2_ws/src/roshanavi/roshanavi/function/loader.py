@@ -21,7 +21,9 @@ not ``importlib.reload`` and not a process restart.
   can never load a stale ``.pyc``, and nothing is written into the source tree.
 
 Limits: module-level state starts over on each reload; C extensions and
-modules outside the user's package are not reloaded. Installed modules (scope C,
+modules outside the user's package are not reloaded (libraries the node imported from a
+registered code path - scope B, ``code_imports`` - count as the user's own and are reloaded
+with it). Installed modules (scope C,
 docs/design/user-code.md) are imported normally from the node's Python environment and are
 never reloaded (reinstall, then restart the node).
 """
@@ -40,7 +42,7 @@ from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from ..launcher.errors import LauncherError
-from . import node_env
+from . import code_imports, node_env
 from .modules import ResolvedModule, resolve_module
 from .scopes import SCOPE_INSTALLED, CodeLocations
 from .signatures import imports_of, parse_source
@@ -127,11 +129,22 @@ class FunctionLoader:
         self.notices: List[Dict[str, Any]] = []
         sys.dont_write_bytecode = True
         sys.pycache_prefix = tempfile.mkdtemp(prefix='roshanavi-function-pyc-')
+        # Scope B folders are libraries too (``import simple_pid`` from a package of scope A).
+        # Node process only: the server never constructs a loader (docs/design/user-code.md).
+        self._code_imports = code_imports.install(self.locations)
 
     # ---- import -----------------------------------------------------------------
     def _package_modules(self, top: str) -> Dict[str, Any]:
         return {name: mod for name, mod in sys.modules.items()
                 if name == top or name.startswith(top + '.')}
+
+    def _dependency_modules(self) -> Dict[str, Any]:
+        """Modules the node imported from registered code paths as libraries (scope B)."""
+        return self._code_imports.served_modules() if self._code_imports else {}
+
+    def _owned_modules(self, top: str) -> Dict[str, Any]:
+        """What a (re)load drops: the target package and the code-path libraries it imported."""
+        return {**self._dependency_modules(), **self._package_modules(top)}
 
     def _import(self, resolved: ResolvedModule) -> Callable[..., Any]:
         if resolved.scope == SCOPE_INSTALLED:
@@ -180,7 +193,7 @@ class FunctionLoader:
             if resolved.scope == SCOPE_INSTALLED and self.function is not None:
                 return self.function   # installed modules are not reloaded
             top = resolved.package.top
-            saved = self._package_modules(top) if resolved.scope != SCOPE_INSTALLED else {}
+            saved = self._owned_modules(top) if resolved.scope != SCOPE_INSTALLED else {}
             if saved and not _same_package(saved.get(top), resolved):
                 self.problem = Problem('import', f'the name {top!r} is already used inside the '
                                        'node (a library roshanavi imports); rename your package',
@@ -196,7 +209,7 @@ class FunctionLoader:
                 if isinstance(exc, KeyboardInterrupt):
                     raise
                 if resolved.scope != SCOPE_INSTALLED:
-                    for name in list(self._package_modules(top)):
+                    for name in list(self._owned_modules(top)):
                         del sys.modules[name]
                     sys.modules.update(saved)
                 self.problem = Problem('import', describe(exc),
@@ -253,6 +266,11 @@ class FunctionLoader:
             # siblings of the same package (also an inward symlink to elsewhere in the root)
             if (real.startswith(real_dir) or path.startswith(pkg_dir)) and real.startswith(root):
                 files.add(real)
+        # code-path libraries imported by the package (scope B): edited -> same fresh import
+        for mod in self._dependency_modules().values():
+            path = getattr(mod, '__file__', None)
+            if path:
+                files.add(os.path.realpath(path))
         self._stamps = {path: _stamp(path) for path in sorted(f for f in files if f)}
 
     @property

@@ -3,6 +3,7 @@
 import type { Diagnostic, QosReason } from '../api/types';
 import { t } from '../i18n';
 import { formatBytes } from '../lib/format';
+import { formatGrowthDuration, formatGrowthRate, selfLabel } from '../resources/model';
 
 function durationText(value: string | number | null): string {
   return typeof value === 'number' ? `${value} ms` : t('qos.infinite');
@@ -33,6 +34,12 @@ export function diagnosticText(d: Diagnostic): string {
       return t('diag.no_subscriber', { topic: d.topic });
     case 'no_publisher':
       return t('diag.no_publisher', { topic: d.topic });
+    case 'subscriber_lost':
+      return t('diag.subscriber_lost', { who: (d.detail.lost ?? []).join(', ') || '?', topic: d.topic });
+    case 'publisher_lost':
+      return t('diag.publisher_lost', { who: (d.detail.lost ?? []).join(', ') || '?', topic: d.topic });
+    case 'mine_no_input':
+      return t('diag.mine_no_input', { node: d.detail.node ?? d.nodes[0] ?? '?', topic: d.topic });
     case 'similar_names':
       return t('diag.similar_names', {
         published: d.detail.published ?? d.topic,
@@ -44,8 +51,8 @@ export function diagnosticText(d: Diagnostic): string {
     case 'gpu_mem_leak':
       return t(`diag.${d.code}`, {
         who: resourceWho(d),
-        slope: (d.detail.slope_mb_per_min ?? 0).toFixed(1),
-        min: Math.max(1, Math.round((d.detail.span_sec ?? 0) / 60)),
+        rate: formatGrowthRate(d.detail.rate_mb_per_min ?? 0),
+        duration: formatGrowthDuration(d.detail.duration_sec ?? 0),
       });
     case 'disk_low': {
       const params = { path: d.detail.path ?? '', free: formatBytes(d.detail.free ?? 0), pct: d.detail.free_pct ?? '?' };
@@ -59,9 +66,26 @@ export function diagnosticText(d: Diagnostic): string {
   }
 }
 
-/** Node names of a resource diagnostic, else its process name. */
+/** What the badge counts and the panel lists: warnings and errors. `info` (no_subscriber /
+ *  no_publisher) is shown quietly on the map and in the topic / node details only. */
+export function warningDiagnostics<T extends Pick<Diagnostic, 'severity'>>(diagnostics: readonly T[]): T[] {
+  return diagnostics.filter((d) => d.severity !== 'info');
+}
+
+/** `受信なし` / `送信なし` marker per topic for the map. */
+export function quietTopicNotes(diagnostics: readonly Diagnostic[]): Map<string, string> {
+  const notes = new Map<string, string>();
+  for (const d of diagnostics) {
+    if (d.code === 'no_subscriber') notes.set(d.topic, t('diag.quiet.no_subscriber'));
+    else if (d.code === 'no_publisher') notes.set(d.topic, t('diag.quiet.no_publisher'));
+  }
+  return notes;
+}
+
+/** Node names of a resource diagnostic, else roshanavi's own process role, else its process name. */
 function resourceWho(d: Diagnostic): string {
   if (d.nodes.length > 0) return d.nodes.join(', ');
+  if (d.detail.group === 'self' && d.detail.label) return t('diag.who.self', { label: selfLabel(d.detail.label) });
   return d.detail.name ?? `pid ${d.detail.pid ?? '?'}`;
 }
 

@@ -2,7 +2,9 @@
 :mod:`roshanavi.diagnostics` (``code``, ``severity``, ``topic``, ``nodes``, ``detail``);
 the web UI writes the plain-Japanese sentence.
 
-- ``mem_leak`` / ``gpu_mem_leak``: memory kept growing (see :mod:`.leak`).
+- ``mem_leak`` / ``gpu_mem_leak``: memory keeps growing at a steady pace without slowing down
+  (the *suspect* tier of :mod:`.leak`, with the rate and how long it has been growing). The
+  milder *watch* tier ("growing but levelling off") is shown on the resources tab only.
 - ``disk_low``: the data_dir volume is below the recording thresholds (same
   :class:`~roshanavi.media.diskguard.DiskThresholds` as the recorder; ``stop`` = error).
 - ``udp_rcvbuf``: the kernel dropped UDP datagrams for full receive buffers in the last
@@ -32,8 +34,9 @@ def leak_diags(processes: Iterable[Mapping[str, Any]]) -> List[Dict[str, Any]]:
                 continue
             out.append(_diag(code, 'warning', proc.get('nodes') or (), {
                 'pid': proc['pid'], 'name': proc.get('name'), 'label': proc.get('label'),
-                'group': proc.get('group'), 'slope_mb_per_min': state.get('slope_mb_per_min'),
-                'span_sec': state.get('span_sec'),
+                'group': proc.get('group'),
+                'rate_mb_per_min': state.get('rate_mb_per_min'),
+                'duration_sec': state.get('duration_sec'), 'scale_min': state.get('scale_min'),
                 'rss': proc.get('rss') if code == 'mem_leak' else proc.get('gpu_mem')}))
     return out
 

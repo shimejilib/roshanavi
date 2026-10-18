@@ -3,9 +3,24 @@
 // `/events/write_split` is published by `ros2 bag record` itself while roshanavi records.
 const INFRA_TOPICS = new Set(['/rosout', '/parameter_events', '/events/write_split']);
 
-/** Same rule as the backend (diagnostics.is_hidden_topic). */
+// Every lifecycle node publishes `<node>/transition_event`.
+const LIFECYCLE_EVENT_SEGMENT = 'transition_event';
+
+/** Same rule as the backend (diagnostics.is_hidden_topic): `/rosout` and friends, any `_` segment
+ *  (`/x/_action/status`), lifecycle `<node>/transition_event`. */
 export function isHiddenTopic(topic: string): boolean {
-  return INFRA_TOPICS.has(topic) || topic.split('/').some((seg) => seg.startsWith('_'));
+  const segments = topic.split('/').filter(Boolean);
+  return (
+    INFRA_TOPICS.has(topic) ||
+    segments.some((seg) => seg.startsWith('_')) ||
+    (segments.length > 1 && segments[segments.length - 1] === LIFECYCLE_EVENT_SEGMENT)
+  );
+}
+
+/** Same rule as the backend (diagnostics.is_hidden_node): ROS hides nodes named `_...`
+ *  (`_ros2cli_daemon_0_...`, the transient `_ros2cli_<pid>`). */
+export function isHiddenNode(nodeId: string): boolean {
+  return (nodeId.split('/').pop() ?? '').startsWith('_');
 }
 
 /** `/a/b` -> `/ws/echo/a/b` with each segment URL-encoded. */

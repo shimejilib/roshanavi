@@ -95,3 +95,13 @@ def test_callback_accepts_message_info():
     rt.subs['/chatter'](b'abc', {'source_timestamp': 5, 'received_timestamp': 6,
                                  'publication_sequence_number': 1})
     assert entries(mon)['/chatter']['total_count'] == 1
+
+
+def test_default_collapsed_topics_include_lifecycle_transition_events():
+    from roshanavi.traffic_select import TopicSelector
+    selector = TopicSelector()
+    for topic in ('/rosout', '/parameter_events', '/events/write_split',
+                  '/lc/transition_event', '/ns/lc/transition_event'):
+        assert selector.collapsed(topic), topic
+    for topic in ('/transition_event', '/lc/transition_events', '/chatter'):
+        assert not selector.collapsed(topic), topic

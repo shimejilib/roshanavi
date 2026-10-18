@@ -12,7 +12,10 @@ import {
   cpuSegments,
   formatCpu,
   groupProcesses,
+  formatGrowthDuration,
+  formatGrowthRate,
   growthText,
+  leakStatusText,
   ioValues,
   loadLevel,
   memSegments,
@@ -145,14 +148,41 @@ describe('map badges', () => {
   });
 });
 
+describe('leak wording', () => {
+  const state = { slope_mb_per_min: 0.3, span_sec: 7200, warming_up: false, suspect: false };
+
+  it('writes rate and duration with two significant digits', () => {
+    expect(formatGrowthRate(0.3)).toBe('0.30');
+    expect(formatGrowthRate(3.04)).toBe('3.0');
+    expect(formatGrowthRate(12.7)).toBe('13');
+    expect(formatGrowthDuration(30)).toBe('1 分');
+    expect(formatGrowthDuration(45 * 60)).toBe('45 分');
+    expect(formatGrowthDuration(2 * 3600)).toBe('2 時間');
+    expect(formatGrowthDuration(2.5 * 3600)).toBe('2.5 時間');
+  });
+
+  it('tells a suspicion (rate, duration, no slowing) from a quiet watching note', () => {
+    expect(leakStatusText(null)).toBeNull();
+    expect(leakStatusText(state)).toBeNull();
+    expect(leakStatusText({ ...state, suspect: true, rate_mb_per_min: 0.3, duration_sec: 7200 })).toEqual({
+      kind: 'suspect',
+      text: '毎分 0.30 MB で 2 時間増え続けています (減速なし)。リークの疑い',
+    });
+    expect(leakStatusText({ ...state, watch: true })?.kind).toBe('watch');
+    expect(leakStatusText({ ...state, watch: true })?.text).toContain('様子見');
+  });
+});
+
 describe('resource diagnostics', () => {
   const base = { severity: 'warning' as const, topic: '', nodes: [] as string[] };
 
   it('renders leak / disk / UDP warnings in plain Japanese', () => {
-    const leak: Diagnostic = { ...base, code: 'mem_leak', nodes: ['/detector'], detail: { slope_mb_per_min: 3.24, span_sec: 300 } };
-    expect(diagnosticText(leak)).toBe('/detector のメモリが増え続けています (+3.2 MB/分、直近 5 分)。メモリリークの疑いがあります');
-    const procLeak: Diagnostic = { ...base, code: 'gpu_mem_leak', detail: { name: 'trainer', slope_mb_per_min: 10, span_sec: 120 } };
-    expect(diagnosticText(procLeak)).toContain('trainer の GPU メモリ');
+    const leak: Diagnostic = { ...base, code: 'mem_leak', nodes: ['/detector'], detail: { rate_mb_per_min: 0.3, duration_sec: 7200 } };
+    expect(diagnosticText(leak)).toBe('/detector のメモリが毎分 0.30 MB で 2 時間増え続けています (減速なし)。メモリリークの疑いがあります');
+    const procLeak: Diagnostic = { ...base, code: 'gpu_mem_leak', detail: { name: 'trainer', rate_mb_per_min: 10, duration_sec: 1200 } };
+    expect(diagnosticText(procLeak)).toContain('trainer の GPU メモリが毎分 10 MB で 20 分増え続けています');
+    const own: Diagnostic = { ...base, code: 'mem_leak', detail: { group: 'self', label: 'server', rate_mb_per_min: 1.5, duration_sec: 3600 } };
+    expect(diagnosticText(own)).toContain('roshanavi 自身 (サーバー本体) のメモリが毎分 1.5 MB で 60 分増え続けています');
     const disk: Diagnostic = { ...base, code: 'disk_low', detail: { path: '/data', free: 900_000_000, free_pct: 3.1, level: 'warn', recording: true } };
     expect(diagnosticText(disk)).toBe('データフォルダ (/data) のディスクの空きが少なくなっています (残り 900 MB、3.1%)。録画中です。さらに減ると録画は自動で止まります');
     const full: Diagnostic = { ...base, severity: 'error', code: 'disk_low', detail: { path: '/data', free: 100_000_000, free_pct: 0.5, level: 'stop' } };

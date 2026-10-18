@@ -11,7 +11,7 @@ import time
 
 import pytest
 
-from roshanavi.function import node_env
+from roshanavi.function import code_imports, node_env
 from roshanavi.function.class_loader import ClassLoader
 from roshanavi.function.loader import FunctionLoader, LoadError, missing_module_of
 from roshanavi.function.scopes import CodeLocations
@@ -35,6 +35,7 @@ def clean_modules():
     for name in set(sys.modules) - before:
         if name.split('.')[0].startswith(('lu_', 'ext_', 'inst_')) or name == 'fastlib':
             del sys.modules[name]
+    code_imports.uninstall()
 
 
 def test_b_src_layout_relative_imports_and_sibling_reload(ws, tmp_path, clean_modules):
@@ -225,3 +226,156 @@ def test_reload_keeps_working_after_many_saves(ws, clean_modules):
         time.sleep(0.01)
         assert loader.load()('x') == f'{i}x'
     assert loader.loads == 6
+
+
+# ---- scope B folders as libraries of the user's code ---------------------------------------------
+PID_LIB = {'core.py': "GAIN = 2\n\n\ndef scale(x):\n    return x * GAIN\n",
+           '__init__.py': 'from .core import scale\n'}
+
+
+def a_package_using(ws, lib, extra=''):
+    """A scope A class / function whose logic does ``import <lib>`` (the demo's goto.py)."""
+    return ament_python(ws / 'src', 'lu_app', {
+        'logic.py': f'import {lib}\n{extra}\n\ndef shout(text: str) -> str:\n'
+                    f'    return str({lib}.scale(len(text)))\n\n\n'
+                    f'class Goto:\n    def process(self, text: str) -> str:\n'
+                    f'        return str({lib}.scale(len(text)))\n'})
+
+
+@pytest.mark.parametrize('layout', ['flat', 'src'])
+def test_scope_a_code_imports_a_package_of_a_registered_code_path(ws, tmp_path, clean_modules,
+                                                                  layout):
+    build = flat_project if layout == 'flat' else src_layout_project
+    proj = build(tmp_path / 'third_party' / 'simple-pid', 'lu_pid', PID_LIB)
+    a_package_using(ws, 'lu_pid')
+    loc = CodeLocations(str(ws), code_paths=(str(proj),))
+    assert ClassLoader(loc, 'lu_app.logic', 'Goto').load()().process('abc') == '6'
+    assert FunctionLoader(loc, 'lu_app.logic', 'shout').load()('abcd') == '8'
+
+
+def test_a_code_path_that_is_a_package_itself_serves_only_that_package(ws, tmp_path,
+                                                                       clean_modules):
+    proj = tmp_path / 'lu_selfpkg'
+    write(proj / '__init__.py', 'def scale(x):\n    return x + 1\n')
+    write(proj / 'secret.py', 'VALUE = 1\n')
+    a_package_using(ws, 'lu_selfpkg')
+    loc = CodeLocations(str(ws), code_paths=(str(proj),))
+    assert FunctionLoader(loc, 'lu_app.logic', 'shout').load()('abc') == '4'
+    assert code_imports.locate('secret', loc) is None   # siblings of the folder are not exposed
+
+
+def test_without_the_registration_the_library_is_missing(ws, tmp_path, clean_modules):
+    flat_project(tmp_path / 'simple-pid', 'lu_pid', PID_LIB)
+    a_package_using(ws, 'lu_pid')
+    loader = FunctionLoader(CodeLocations(str(ws)), 'lu_app.logic', 'shout')
+    with pytest.raises(LoadError) as err:
+        loader.load()
+    assert err.value.problem.missing_module == 'lu_pid'
+    assert not [f for f in sys.meta_path if isinstance(f, code_imports.CodeImportFinder)]
+
+
+def test_the_standard_library_and_runtime_names_are_never_served_from_a_code_path(
+        ws, tmp_path, clean_modules):
+    # json would be shadowed by a folder that comes first; here it is appended last AND refused
+    proj = tmp_path / 'proj'
+    for name in ('json', 'winreg', 'audio_common_msgs', 'rclpy_fake_ok'):
+        write(proj / name / '__init__.py', "WHO = 'user'\n")
+    write(proj / 'tests' / '__init__.py', '')
+    loc = CodeLocations(str(ws), code_paths=(str(proj),))
+    roots = code_imports.import_roots(loc)
+    assert code_imports.locate_spec('json', roots) is None
+    assert code_imports.locate_spec('winreg', roots) is None            # stdlib name, absent here
+    assert code_imports.locate_spec('audio_common_msgs', roots) is None  # the node's own runtime
+    assert code_imports.locate_spec('tests', roots) is None             # not a library folder
+    assert code_imports.locate_spec('rclpy_fake_ok', roots) is not None
+    ament_python(ws / 'src', 'lu_app', {'logic.py': 'import winreg\n' + SHOUT})
+    loader = FunctionLoader(loc, 'lu_app.logic', 'shout')
+    with pytest.raises(LoadError) as err:
+        loader.load()
+    assert err.value.problem.missing_module == 'winreg'
+    import json
+    assert json.__file__.startswith(os.path.dirname(os.__file__))   # the standard library
+
+
+def test_an_outward_symlink_in_a_code_path_is_not_served(ws, tmp_path, clean_modules):
+    outside = tmp_path / 'outside'
+    write(outside / 'lu_out' / '__init__.py', 'X = 1\n')
+    proj = tmp_path / 'proj'
+    proj.mkdir()
+    os.symlink(outside / 'lu_out', proj / 'lu_out')
+    inside = flat_project(tmp_path / 'proj2', 'lu_inside', {})
+    os.symlink(inside / 'lu_inside', inside / 'lu_alias')    # inward: fine
+    loc = CodeLocations(str(ws), code_paths=(str(proj), str(inside)))
+    roots = code_imports.import_roots(loc)
+    assert code_imports.locate_spec('lu_out', roots) is None
+    assert code_imports.locate_spec('lu_alias', roots) is not None
+
+
+def test_site_packages_come_first_and_the_library_wins_over_the_code_path(ws, tmp_path,
+                                                                           monkeypatch,
+                                                                           clean_modules):
+    site = tmp_path / 'site'
+    install_dist(site, 'lu-twin', '1.0', {'__init__.py': 'def scale(x):\n    return -1\n'},
+                 top='lu_twin')
+    monkeypatch.syspath_prepend(str(site))
+    proj = flat_project(tmp_path / 'proj', 'lu_twin', PID_LIB)
+    a_package_using(ws, 'lu_twin')
+    loader = FunctionLoader(CodeLocations(str(ws), code_paths=(str(proj),)), 'lu_app.logic',
+                            'shout')
+    assert loader.load()('abc') == '-1'
+
+
+def test_a_changed_library_of_a_code_path_is_reloaded_like_a_sibling(ws, tmp_path,
+                                                                     clean_modules):
+    proj = flat_project(tmp_path / 'simple-pid', 'lu_pid', PID_LIB)
+    a_package_using(ws, 'lu_pid')
+    loader = FunctionLoader(CodeLocations(str(ws), code_paths=(str(proj),)), 'lu_app.logic',
+                            'shout')
+    assert loader.load()('abc') == '6'
+    assert {'core.py', '__init__.py'} <= {os.path.basename(p) for p in loader.watched_files
+                                          if str(proj) in p}
+    assert not loader.changed()
+    write(proj / 'lu_pid' / 'core.py', 'GAIN = 10\n\n\ndef scale(x):\n    return x * GAIN\n')
+    assert loader.changed()
+    assert loader.load()('abc') == '30'
+    # a broken library keeps the old function running and is reported with its location
+    write(proj / 'lu_pid' / 'core.py', 'def scale(x:\n')
+    assert loader.changed()
+    with pytest.raises(LoadError):
+        loader.load()
+    assert loader.function('abc') == '30'
+    write(proj / 'lu_pid' / 'core.py', 'def scale(x):\n    return 0\n')
+    assert loader.load()('abc') == '0'
+
+
+def test_reload_never_drops_modules_that_merely_live_inside_a_code_path(ws, tmp_path,
+                                                                        clean_modules):
+    """A venv inside the project folder (common): its libraries are not code-path libraries."""
+    proj = flat_project(tmp_path / 'proj', 'lu_pid', PID_LIB)
+    write(proj / '.venv' / 'lib' / 'lu_vendor' / '__init__.py', 'V = 1\n')
+    sys.path.insert(0, str(proj / '.venv' / 'lib'))
+    try:
+        import lu_vendor
+        a_package_using(ws, 'lu_pid')
+        loader = FunctionLoader(CodeLocations(str(ws), code_paths=(str(proj),)), 'lu_app.logic',
+                                'shout')
+        loader.load()
+        loader.load()
+        assert sys.modules['lu_vendor'] is lu_vendor
+        assert not [p for p in loader.watched_files if '.venv' in p]
+    finally:
+        sys.path.remove(str(proj / '.venv' / 'lib'))
+
+
+def test_c_installed_module_imports_other_installed_libraries_and_code_path_ones(
+        ws, tmp_path, monkeypatch, clean_modules):
+    """Scope C is on the interpreter's own path; code paths (B) are libraries for it too."""
+    site = tmp_path / 'site'
+    install_dist(site, 'inst-base', '1.0', {'__init__.py': 'K = 3\n'}, top='inst_base')
+    install_dist(site, 'inst-top', '1.0', {'filters.py': (
+        'import inst_base\nimport lu_pid\n\n\ndef shout(text: str) -> str:\n'
+        '    return str(inst_base.K + lu_pid.scale(1))\n')}, top='inst_top')
+    monkeypatch.syspath_prepend(str(site))
+    proj = flat_project(tmp_path / 'simple-pid', 'lu_pid', PID_LIB)
+    loc = CodeLocations(str(ws), code_paths=(str(proj),), installed_modules=('inst_top',))
+    assert FunctionLoader(loc, 'inst_top.filters', 'shout').load()('x') == '5'

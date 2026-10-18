@@ -1,4 +1,4 @@
-"""Resource monitoring: pure parts (leak regression, attribution, breakdown, /proc parsers,
+"""Resource monitoring: pure parts (leak diagnostics, attribution, breakdown, /proc parsers,
 disk / UDP diagnostics, GPU degradation, connection events). No ROS, no real processes."""
 
 import os
@@ -18,100 +18,10 @@ from roshanavi.resources.connections import (Conn, ConnectionTracker, ReverseDns
                                              decode_address, parse_table)
 from roshanavi.resources.gpu import GpuReader
 from roshanavi.resources.host import HostSampler, cpu_percents, volume_device
-from roshanavi.resources.leak import MIB, LeakConfig, LeakDetector, mb_per_min, slope_per_sec
 from roshanavi.resources.procs import (ProcessTable, ProcRow, RawProc, parse_stat, read_cmdline,
                                        read_io, read_procs, read_uss)
 from roshanavi.resources.snmp import parse_snmp, read_udp
 from roshanavi.resources.summary import breakdown, node_dict
-
-
-# ---- leak / regression ---------------------------------------------------------------------
-
-def test_slope_of_a_straight_line_and_of_noise_free_constant():
-    assert slope_per_sec([(0, 1.0), (1, 3.0), (2, 5.0)]) == pytest.approx(2.0)
-    assert slope_per_sec([(0, 7.0), (5, 7.0), (9, 7.0)]) == pytest.approx(0.0)
-    assert slope_per_sec([(1, 1.0)]) is None
-    assert slope_per_sec([(1, 1.0), (1, 2.0)]) is None
-
-
-def test_mb_per_min_converts_bytes_per_second():
-    samples = [(t, 100 * MIB + t * MIB / 60.0) for t in range(0, 120)]  # +1 MiB per minute
-    assert mb_per_min(samples) == pytest.approx(1.0)
-
-
-def feed(detector, key, start, end, rate_mb_per_min, base_mb=100.0, first_seen=0.0, noise=0.0):
-    state = None
-    for i, t in enumerate(range(start, end)):
-        jitter = noise if i % 2 else -noise
-        state = detector.observe(key, float(t), (base_mb + rate_mb_per_min * t / 60.0 + jitter) * MIB,
-                                 first_seen)
-    return state
-
-
-def test_leak_is_ignored_during_warm_up():
-    det = LeakDetector(LeakConfig())
-    state = feed(det, 'p', 0, 59, rate_mb_per_min=50.0)
-    assert state.warming_up and state.slope is None and not state.suspect
-
-
-def test_leak_needs_min_span_then_sustain_before_warning():
-    det = LeakDetector(LeakConfig())  # warm-up 60, min span 120, sustain 60, 1 MB/min
-    state = feed(det, 'p', 0, 60 + 119, rate_mb_per_min=3.0)
-    assert state.slope is None and not state.suspect  # span 118 s < 120 s
-    state = feed(det, 'p', 60 + 119, 60 + 121, rate_mb_per_min=3.0)
-    assert state.slope == pytest.approx(3.0, rel=0.01) and not state.suspect  # above, not yet 60 s
-    state = feed(det, 'p', 60 + 121, 60 + 181, rate_mb_per_min=3.0)
-    assert state.suspect
-
-
-def test_leak_flat_and_noisy_memory_is_not_a_leak():
-    det = LeakDetector(LeakConfig())
-    state = feed(det, 'p', 0, 400, rate_mb_per_min=0.0, noise=5.0)  # +-5 MB jitter, no trend
-    assert state.slope is not None and abs(state.slope) < 0.2 and not state.suspect
-
-
-def test_leak_slow_growth_below_threshold_is_fine():
-    det = LeakDetector(LeakConfig())
-    state = feed(det, 'p', 0, 500, rate_mb_per_min=0.5)
-    assert state.slope == pytest.approx(0.5, rel=0.02) and not state.suspect
-
-
-def test_leak_suspicion_resets_when_growth_stops():
-    det = LeakDetector(LeakConfig(window_sec=120, min_span_sec=60, sustain_sec=30))
-    state = feed(det, 'p', 0, 300, rate_mb_per_min=5.0)
-    assert state.suspect
-    # memory stops growing: once the window only holds the flat part the warning goes away
-    last = 100.0 + 5.0 * 299 / 60.0
-    for t in range(300, 450):
-        state = det.observe('p', float(t), last * MIB, 0.0)
-    assert not state.suspect and abs(state.slope) < 0.1
-
-
-def test_leak_warm_up_counts_from_process_start_not_first_sample():
-    det = LeakDetector(LeakConfig())
-    state = det.observe('p', 1000.0, 100 * MIB, first_seen=0.0)  # started long ago
-    assert not state.warming_up
-
-
-def test_leak_running_sums_match_a_full_fit_after_days_of_samples():
-    det = LeakDetector(LeakConfig(window_sec=300, warmup_sec=0, min_span_sec=60))
-    start = 3 * 86400.0  # a process that has been running for three days
-    samples = []
-    for i in range(2000):
-        t = start + i
-        value = (500 + 2.0 * i / 60.0 + (3 if i % 7 == 0 else 0)) * MIB
-        samples.append((t, value))
-        state = det.observe('p', t, value, first_seen=0.0)
-    window = [s for s in samples if s[0] >= samples[-1][0] - 300]
-    assert state.slope == pytest.approx(mb_per_min(window), rel=1e-6, abs=1e-6)
-
-
-def test_leak_retain_forgets_exited_processes():
-    det = LeakDetector()
-    det.observe('a', 0.0, 1.0)
-    det.observe('b', 0.0, 1.0)
-    det.retain(['b'])
-    assert det.state('a') is None and det.state('b') is not None
 
 
 # ---- /proc/net/snmp ----------------------------------------------------------------------------
@@ -263,13 +173,23 @@ def test_udp_errors_without_large_drops_are_not_a_diagnostic():
 
 
 def test_leak_diag_entries():
+    suspect = {'suspect': True, 'rate_mb_per_min': 3.2, 'duration_sec': 1200, 'scale_min': 10}
     procs = [{'pid': 5, 'name': 'leaky', 'label': 't', 'group': 'ros', 'nodes': ['/leaky'],
-              'rss': 10, 'leak': {'suspect': True, 'slope_mb_per_min': 3.2, 'span_sec': 200},
-              'gpu_leak': None},
-             {'pid': 6, 'name': 'ok', 'nodes': [], 'rss': 1, 'leak': {'suspect': False}}]
+              'rss': 10, 'leak': suspect, 'gpu_leak': None},
+             {'pid': 6, 'name': 'ok', 'nodes': [], 'rss': 1, 'leak': {'suspect': False}},
+             # growing but levelling off: resources tab only, never a diagnostic
+             {'pid': 7, 'name': 'filling', 'nodes': ['/f'], 'rss': 1,
+              'leak': {'suspect': False, 'watch': True, 'rate_mb_per_min': 1.0}},
+             # roshanavi's own processes are judged like any other
+             {'pid': 8, 'name': 'python3', 'label': 'server', 'group': 'self', 'nodes': [],
+              'rss': 99, 'leak': {**suspect, 'rate_mb_per_min': 0.4, 'duration_sec': 7200,
+                                  'scale_min': 360}}]
     diags = diagnose.leak_diags(procs)
-    assert [(d['code'], d['nodes'], d['detail']['slope_mb_per_min']) for d in diags] == [
-        ('mem_leak', ['/leaky'], 3.2)]
+    assert [(d['code'], d['nodes'], d['detail']['rate_mb_per_min']) for d in diags] == [
+        ('mem_leak', ['/leaky'], 3.2), ('mem_leak', [], 0.4)]
+    assert diags[0]['detail']['duration_sec'] == 1200 and diags[0]['detail']['scale_min'] == 10
+    assert diags[1]['detail']['group'] == 'self' and diags[1]['detail']['label'] == 'server'
+    assert all(d['severity'] == 'warning' for d in diags)
 
 
 # ---- attribution -----------------------------------------------------------------------------

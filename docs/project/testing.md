@@ -41,7 +41,10 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | A-12 | 別コンテナ・別プロセスのノード (同一 DOMAIN_ID) | 検出される / 異なる DOMAIN_ID は見えない | 👀 |
 | A-13 | グラフの変化検知 | 変化がなければ WS でグラフを再送しない (hash) | ✅ |
 | A-14 | QoS 互換性 (reliability / durability / deadline / liveliness / lease) | 非互換の pub–sub 組が理由付きで `qos_incompatible` に出る | ✅ (unit) |
-| A-15 | 診断 (片側のみ・名前の取り違え・型の不一致) | 隠しトピックを除き、決定的な順で警告が出る | ✅ (unit) |
+| A-15 | 診断 (片側のみ・名前の取り違え・型の不一致) | 片側だけのトピックは info (警告にしない)。名前が似ている組は警告 (つながっているトピックとの打ち間違いも)。隠しトピックを除き、決定的な順 | ✅ (unit `test_diagnostics.py`) |
+| A-15a | 時間のかかる診断 (unit) | `subscriber_lost` / `publisher_lost` (直近 5 分に居た→居ない、3 秒未満の再起動は出さない、戻れば消える、5 分で期限切れ、最初から居なければ出さない、トピックごと消えたら出さない)、`mine_no_input` (ノードが現れて 3 秒後、`mine` のみ、送信元が来れば消える、`publisher_lost` より優先)、インフラのノード (`_ros2cli_*`、roshanavi 自身) は受信者に数えない | ✅ (`test_diag_history.py`) |
+| A-15b | 診断の見せ方 (vitest) | バッジ・パネルは warning / error だけ。info は地図のトピックの下に「受信なし」「送信なし」、警告色にしない。`mine_no_input` はノードとトピックを警告色に。新しい 3 種の文 | ✅ (`graph/diagnosticsText.test.ts`、`graph/model.test.ts`) |
+| A-15c | インフラを隠す (unit) | `_ros2cli_daemon_*` / `_ros2cli_*` ノード、`*/transition_event`、`*/_action/*` は内部トピック・内部ノードとして地図から隠れ、診断に数えない | ✅ (`test_diagnostics.py`、`lib/topics.test.ts`、`graph/model.test.ts`) |
 | A-16 | 注入ジョブの仮想ノード | 実行中ジョブが `dummy:<id>` (role dummy) としてグラフに出て、終了で消える | ✅ |
 
 ### B. トラフィック計測
@@ -425,7 +428,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 
 | ID | 項目 | 期待結果 | 状態 |
 |---|---|---|---|
-| Q-01 | 最小二乗の傾きとリーク判定 (時刻を注入) | 直線・平らな値の傾き、MB/分への換算。起動から 60 秒は判定しない (起動時刻から数える)、120 秒分たまるまで傾きなし、+1 MB/分 超えが 60 秒続いてから「疑い」、±5 MB の揺れや +0.5 MB/分は疑わない、増えるのが止まると疑いが消える、逐次の和が 3 日動いたプロセスでも全体の当てはめと一致、終了したプロセスを忘れる | ✅ (`test_resources_unit.py`) |
+| Q-01 | リーク判定 (合成データ、時刻を注入) | 段差・頭打ち (直線で埋まる / 指数的に飽和)・スパイクは疑いにならず (段差は「様子見」が出て消える)、一定速度 3 MB/分は 20 分以内に疑い (速さ ±25%、継続時間つき)、0.1 MB/分 (揺れ中) は 6 時間スケールで検出、加速する増加も検出、揺れだけは 12 時間 × 3 種類 × 3 回で誤検出なし、増加が止まれば疑いが消える、ウォームアップは起動時刻から数える、プロセスごとに独立、`retain`。揺れの推定は一定の傾き・段差に影響されない。検出できる最小速度の表 (スケール × 揺れ 3 段階) を実測値で固定 (`test_detection_limits`)、その 1/10 では検出しない | ✅ (`test_leak_detector.py`) |
 | Q-02 | ノード ⇄ プロセスの対応づけと区分 | Launcher の exact は実行ファイルのプロセス、コンテナの 2 ノードは同じプロセスを共有、他のノードは argv の `__node:=` (ラッパーでなく本体、推定)、argv は Launcher の時刻による推定より優先、プログラム名は 1 つだけのときのみ (他 PC のノードは対応づけない)、Launcher が起動設定しか知らなければ起動設定全体。区分: サーバー (とその `ros2 run` ラッパー)・計測ノード・ビルド・補助・入力ノード (roshanavi 自身)、起動設定 (ROS ノード)、LTTng はトレース中だけ自身 | ✅ (`test_resources_unit.py`) |
 | Q-03 | 内訳とノードの値 | PC 全体の CPU を ROS / 自身 / その他に分け、その他の上位の名前、その他は負にならない、起動設定全体の合計と範囲 (`scope`) | ✅ (`test_resources_unit.py`) |
 | Q-04 | `/proc` の読み取り (偽の `/proc`) | `stat` の名前に空白や括弧があっても読める、CPU 時間・起動時刻・RSS、自分のユーザーだけ / root は全部、CPU% は差分、I/O の速さ、USS (`smaps_rollup`)、`python3 スクリプト` / `-m モジュール` / 15 文字で切れた名前の表示名 | ✅ (`test_resources_unit.py`) |
@@ -439,10 +442,10 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | Q-12 | サンプラーの負荷 | 50 プロセス (すべて詳しく見る最悪の場合) で 1 コアの 4% 未満 (目標 2% 未満。実測 1.5% 前後。デモのラボでは 0.2%) | ✅ (`test_resources_ros.py`) |
 | Q-13 | API と WebSocket はミドルウェアの内側 | 不正な Host は 403、`/ws/resources` は不正な Origin / Host で切断、正しい接続でスナップショットが届く、`scope` の検査 (422)、空のノード名 (400) | ✅ (`test_resources_ros.py`) |
 | Q-14 | 実ノード: シナリオの判定 | CLI: talker で `resources` と `mem_growth` が成功 (exact)、`mem_max_mb: 1` で失敗、いないノードは「見つかりませんでした」。サーバー: セットアップのプロセスは exact。サンプル `busy_cpu.yaml` が成功し、`qos_events: default` にすると「CPU が上限を超えました」で失敗 (空回りが再現しなければ飛ばす) | ✅ (`test_resources_ros.py`) |
-| Q-15 | 画面の純ロジック (vitest) | 負荷の色分け (40% / 80%)、バッジの文 (推定)、増え方の文、プロセス・接続の持ち主の文、グループ分けと並び、内訳の帯 (100% を超えない)、スパークラインの値、地図の要素に `load` / `leak`、バッジの行が増えたら配置し直し (数字が変わるだけならしない)、`/ws/live` の `resources` を保持、診断の文 (リーク・ディスク・UDP) と選ぶ対象、シナリオのステップの文とラベル | ✅ (`resources/model.test.ts`、`graph/diff.test.ts`、`scenarios/editSteps.test.ts`、`scenarios/messages.test.ts`) |
+| Q-15 | 画面の純ロジック (vitest) | 負荷の色分け (40% / 80%)、バッジの文 (推定)、増え方の文、プロセス・接続の持ち主の文、グループ分けと並び、内訳の帯 (100% を超えない)、スパークラインの値、地図の要素に `load` / `leak`、バッジの行が増えたら配置し直し (数字が変わるだけならしない)、`/ws/live` の `resources` を保持、診断の文 (リークは速さと継続時間・roshanavi 自身の書き方、ディスク、UDP)、リークの疑い / 様子見の注記と数字の丸め と選ぶ対象、シナリオのステップの文とラベル | ✅ (`resources/model.test.ts`、`graph/diff.test.ts`、`scenarios/editSteps.test.ts`、`scenarios/messages.test.ts`) |
 | Q-16 | E2E: 地図のバッジとリソースタブ | busy_demo の multi + default を起動 → 地図のノードのラベルに `CPU` (推定ではない)、空回りが出れば光の色が mid / high → ノードを選ぶと右ペインに CPU・RSS・スパークライン → リソースタブに PC 全体・「この PC だけ」・ディスク (/data)・GPU・内訳・ROS ノードの行・サーバー本体・計測の負荷 → ノード名で地図に戻る | ✅ (`e2e/resources.spec.ts`、[resources-map.png](../images/resources-map.png)、[resources-tab.png](../images/resources-tab.png)) |
 | Q-17 | E2E: リソースのシナリオ | シナリオタブでサンプル `busy_cpu` を実行 → 3 ステップ成功、CPU の平均と MB/分 の説明 | ✅ (`e2e/resources.spec.ts`、[resources-scenario.png](../images/resources-scenario.png)) |
-| Q-18 | メモリリークの疑いが地図・診断パネルに出る (実プロセス) | 5 分以上メモリを増やし続けるノードで「リークの疑い」 | ⬜ (判定は Q-01 の単体テストのみ。実時間で 3 分以上かかるため自動テストなし) |
+| Q-18 | メモリリークの疑いが地図・診断パネルに出る (実プロセス) | 17 分以上メモリを一定の速さで増やし続けるノードで「リークの疑い」 | ⬜ (判定は Q-01 の単体テストのみ。実時間で 17 分以上かかるため自動テストなし) |
 | Q-19 | UDP 受信バッファ溢れの案内 (実環境) | 大きな画像を `--monitor-heavy` で監視し、受信バッファを小さくして溢れさせると `net.core.rmem_max` の案内 | ⬜ (判定は Q-06 の単体テストのみ。E2E のコンテナでは RcvbufErrors が実際に増え、リソースタブに橙色で出ることを目視で確認 👀) |
 | Q-20 | 自分以外のユーザーのプロセスを一覧しない (非 root) | 非 root で起動すると他のユーザーのプロセスが一覧に出ない | 🟡 (単体テストの読み取り関数で確認。Docker は root で動くため実機は未確認 👀) |
 
@@ -523,6 +526,7 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | T-19 | 画面のロジック (vitest) | パッケージ名・フォルダ・モジュール名の検査、追加・削除 (元を変えない)、すべての理由と通知に文がある (`{}` が残らない)、設計の表どおりの文、置き場所の文、範囲ごとのグループ、requirements の要約、rosdep の手順 (書いてある / オフライン / package.xml なし / キーなし) | ✅ |
 | T-20 | E2E: 理由 → ひな形 → 書き換え → 出力が変わる | `__init__.py` の無いフォルダに理由と実際のパス、置き場所、Python。不正な名前は断られ、`e2e_logic` を作ると関数が選ばれた状態 → `/chatter` で `HELLO WORLD` → テストが `logic.py` を書き換えると `edited: Hello World`。OpenCV を使う関数ノードの右ペインに ① `python3-opencv` と ② venv。スクリーンショット [`user-code-locations.png`](../images/user-code-locations.png)・[`user-code-scaffold.png`](../images/user-code-scaffold.png)・[`user-code-dependency.png`](../images/user-code-dependency.png) | ✅ |
 | T-21 | Lyrical での実行 | T の単体・実ノード・API のテストが Lyrical (Python 3.14、pydantic 2) でも通る (77 件) | ✅ |
+| T-22 | 登録した場所 (B) をライブラリとして使う (unit + 実ノード) | A の `import <ライブラリ>` が、登録した B (flat・src・フォルダ自体がパッケージ) から動く (関数・クラスとも、実ノードで出力まで確認)。登録を外すと `missing_module` と rosdep / pip の案内 + 「登録すると import できます」、登録済みなのに無ければ「登録した場所 … に見つかりません」(rosdep を尋ねない)、起動後に登録したなら「再起動」。標準ライブラリ・ノードが使う名前 (`json`・`winreg`・`audio_common_msgs`)・`tests` は依存としても出さず、環境のライブラリが先、外向きのシンボリックリンクは拒否、プロジェクトの `.venv` のモジュールは読み直しで外さない。依存ライブラリの書き換えはホットリロードされ (実ノードで `reloads` が増える)、壊れていれば古いまま。C のコードから B のライブラリも使える。サーバーのプロセスに finder は入らない | ✅ |
 
 
 ### U. launch の引き取り (`--launch`)・強制終了の後始末 (#12)・ノード一覧の削除

@@ -30,6 +30,8 @@
 - **C の検索パスはノードの Python のもの**: サーバーは「ノードを動かす Python」に一度だけ `sys.path` などを尋ねる (`function/python_env.py`: `<python> -c <probe>`、argv のリスト、シェルなし、10 秒、5 分キャッシュ。利用者のコードは import しない)。venv を使っているときにサーバーの `sys.path` で探すと、見つかるものが違うため。
 - **C に標準ライブラリは登録できない** (`os`、`subprocess` など。スキーマで拒否し、解決でも拒否)。`os.system` を関数ノードにすると、そのトピックに送れる誰でもコマンドを実行できてしまうため。
 - **安全の原則は変えない**: サーバーは利用者のコードを import しない (一覧は構文解析だけ)。実行は独立したノードのプロセスで行う。読み込めるのは A、および利用者が明示的に登録した B・C だけ。A・B は realpath がその範囲の根の内側にある通常ファイルだけ (内向きのシンボリックリンクは使え、外向きは拒否)。`.git` (と隠しディレクトリ) は辿らない。
+- **B は「ライブラリの置き場所」でもある** (`function/code_imports.py`): 登録したフォルダは、関数・クラスの取り出し元であるだけでなく、**ノードの中のコードが `import` するライブラリ**の置き場所にもなる (例: A の `turtle_patrol.goto` が `import simple_pid` し、`simple_pid` は登録した `/opt/third_party/simple-pid` にある)。ノードのプロセス (サーバーではない) の `sys.meta_path` の**いちばん最後**に、登録した場所だけを探す finder を入れる。標準ライブラリ・`sys.path` (site-packages、ROS の install) で見つからなかったときだけ使われるので、**同じ名前のライブラリが環境に入っていれば環境のものが勝つ** (`sys.path` の最後に足すのと同じ順序)。探す場所は B の検査を通った登録済みフォルダだけで、フォルダごとに、そのフォルダ (flat)・`src/` (src レイアウト)、フォルダ自体がパッケージならそのパッケージだけ (兄弟のファイルは出さない)。**使えない名前** (標準ライブラリ・`rclpy`・`numpy` など `is_reserved_top`、`tests` / `docs` など隠しフォルダ・置き場所でない名前) は依存としても出さない (`json/` を含むフォルダがあっても標準ライブラリは置き換わらず、環境に無い `winreg` のような標準ライブラリの名前も出さない)。見つけたファイルの realpath が登録したフォルダの内側にあることを確かめ (外向きのシンボリックリンクは拒否)、`__init__.py` の無い名前空間パッケージも出さない。C はノードの Python の検索パス上にあるので、そのまま `import` できる (B のライブラリも C のコードから使える)。サーバーは何も import せず、助言のために `PathFinder.find_spec` で場所を調べるだけ。
+- **ホットリロード**: finder が実際に出した名前 (`served`) のモジュールだけを、兄弟モジュールと同じ「`sys.modules` から外して新しく import し直す」の対象にし、見張るファイルにも加える。フォルダの中にあるだけのもの (プロジェクトの中の `.venv` のライブラリなど) は対象にしない。読み込みに失敗したら古いモジュールに戻る。登録した場所そのものの変更 (追加・削除) は、動いているノードを再起動すると反映される。
 - ビルドは不要: A・B はソースから直接読み込むので、保存すればすぐ反映される (ホットリロード、同じパッケージの別モジュールの変更も)。C は通常の import で、保存しても読み直さない (入れ直したらノードを再起動)。
 - プロジェクトファイル: `code_paths:` (最大 20、制御文字なし、1024 文字まで、重複なし) と `installed_modules:` (最大 50、モジュール名の形、重複なし、`roshanavi` と標準ライブラリは不可)。スキーマは `launcher/schema.py` (`CodeSettings`、`ProjectSpec`。pydantic 1 / 2 の両方で `pydantic_compat` 経由)。ノードの設定 YAML にも同じ 2 つを書き、ノードはサーバーと同じ規則でモジュールを解決する (C はノード自身の `sys.path` で)。
 - **B に登録できない場所** (`scopes.check_code_path`): 存在しないフォルダ、`/`・`/usr`・ホームディレクトリそのものなど広すぎる場所、`.git` の中、data フォルダ (アップロード・録画の置き場) とその中・それを含むフォルダ。保存済みの項目が後で消えた場合は、一覧から外れ、理由に `code_path_invalid` と出る (エラーにはしない)。
@@ -60,6 +62,8 @@
 | 同じ名前が 2 か所 | `name_collision` | どちらを使い、どちらを使わないか |
 | 登録した場所が使えない・空 | `code_path_invalid` / `code_path_empty` | 理由 |
 | 登録したモジュールがノードの Python に無い | `installed_not_found` | 「入れた先の Python が違うかもしれません」 |
+
+足りないライブラリ (依存) の案内は §5。
 
 - 一覧の関数の候補にならなかった名前も、モジュールの説明 (`GET /api/functions/module` の `skipped[{name, line, reason: private | async | main_guard}]`) で出す。
 - 走査は上限付き (理由 200 件、構文を確かめるファイル 500、深さ)。解析した木はファイルの (mtime, サイズ) でキャッシュする (`function/signatures.py`)。
@@ -100,6 +104,7 @@
 
 - **足りないライブラリの検出**: ノードで `ModuleNotFoundError` が出たら (読み込み時、呼び出し時、クラスの `__init__`)、状態の問題に `missing_module` (例 `cv2`) を付ける。利用者自身のパッケージの中のモジュールが無い場合 (`from .not_there import x`) は依存ではないので付けない。`raise ImportError(...) from ModuleNotFoundError` も 1 段たどる。
 - **モジュール名 → rosdep キー**: 名前が違うよく知られたもの (`cv2` → `python3-opencv`、`yaml` → `python3-yaml`、`PIL` → `python3-pil`、`sklearn` …) の表、次に `python3-<名前>` を候補にし、**rosdep 自身のデータベース**で確かめる (`rosdep resolve <key>`。argv のリスト、シェルなし、10 秒、結果をキャッシュ)。**apt で入るキーだけ**を ① にする (`*-pip` のキーは pip を実行するので使わない)。rosdep が無い・`rosdep update` をしていない (オフラインで一度も更新していないなど)・時間切れは「確かめられなかった」として、確かめていない候補のキーと ② の両方を出す (`sudo rosdep init` と `rosdep update` を案内)。
+- **登録した場所を先に調べる** (`dependencies.code_places`): `ModuleNotFoundError` のライブラリが (a) 登録した場所にある → rosdep も pip も出さず「ノードを起動したあとで登録したようです。再起動してください」(`route: code_path_restart`)、(b) 登録した場所のフォルダ名がそのライブラリの名前 (`simple-pid` と `simple_pid`) なのに中にない → 「登録した場所 `<path>` に `<module>` が見つかりません」(`route: code_path_missing`。`rosdep` は調べない、`status: skipped`)、(c) どちらでもない → 今までの rosdep / venv の案内に加えて、登録した場所が 1 つ以上あれば「登録した場所 (…) には `<module>` がありません」、なければ「自分のフォルダに持っているなら『コードの場所』に登録すると import できます」を添える。B を登録していれば `import simple_pid` はもう `ModuleNotFoundError` にならない (登録していない・場所を間違えたときだけここに来る)。
 - ① の内容: そのコードの ROS パッケージの `package.xml` の実際のパス、足す 1 行 (`<exec_depend>python3-opencv</exec_depend>`)、既に書いてあるか (コメントアウトは数えない)、`rosdep install --from-paths <パッケージの実際のパス> --ignore-src -y`。B のコードは ROS パッケージではないので、`sudo apt install <apt のパッケージ名>` を出す。
 - ② の内容: `python3 -m venv --system-site-packages ~/roshanavi-venv` → `source ~/roshanavi-venv/bin/activate` → `pip install <pip の名前>` (requirements.txt があれば `pip install -r <実際のパス>`)。pip の名前が import の名前と違うもの (`cv2` → `opencv-python`) はそう書く。ノードが既に venv で動いていれば、その Python に入れる 1 行 (`<python> -m pip install …`) だけ。
 - **venv で roshanavi を起動したとき**: サーバーが venv の中で動いている、または起動した端末で venv が有効 (`VIRTUAL_ENV`) なら、関数・クラスノードを `ros2 run --prefix <venv>/bin/python3 roshanavi function …` で起動する (`--prefix` の値はサーバーが決め、クライアントからは渡せない)。こうしないと、エントリスクリプトの shebang (`/usr/bin/python3`) の Python で動き、venv に入れたものが見えない。venv が無ければコマンドは今までどおり。
@@ -113,6 +118,7 @@
 |---|---|
 | 相対 import (`from .utils import x`) | パッケージとして読み込むので動く (テストで保証) |
 | 同じパッケージ内の別モジュールを書き換えた | ホットリロードの監視対象に含める (読み込まれた同じパッケージのモジュールすべて。内向きのリンク先も) |
+| 登録した場所 (B) のライブラリを書き換えた | 同じ扱い (§2 の「B はライブラリの置き場所でもある」。finder が出したモジュールだけを新しく import し直す) |
 | モジュールの読み込み時に重い処理・ROS の初期化をしている | 読み込みに 1 秒以上かかったら `slow_import` の通知 (秒数付き)。ガイドで、重い処理はクラスの `__init__` に移すよう案内する |
 | モジュールの中で `rclpy` を import している | 動かせるが、関数ノードの外で ROS を使う設計は混乱の元なので注意を出す (`imports_rclpy`。作成画面ではそのモジュール、ノードでは読み込んだパッケージのファイル) |
 | 型注釈が無い | データの種類を手で選んでもらう (現状どおり) |
@@ -126,9 +132,9 @@
 - `GET /api/functions/locations[?refresh=true]`: `{workspace, src, src_exists, src_writable, scopes{workspace{root, packages[]}, code_paths[{path, real, status, error?, packages[{top, dir, layout}]}], installed_modules[{module, status: found | not_found | extension | namespace | shadowed, file, listable}]}, problems[{code, ...}], place_here[{scope, root}], python{executable, version, prefix, venv, error?, forced}, settings{code_paths, installed_modules}}`。
 - `PUT /api/functions/locations {code_paths, installed_modules}`: 新しく足したフォルダだけを検査 (400 / 404 `invalid_code_path`)、保存 (プロジェクトファイルに自動保存)。動いているノードは再起動すると新しい場所を使う。
 - `POST /api/functions/scaffold {name}` → 201 `{package, directory, module, function, class_name, files[]}`。
-- `GET /api/functions/dependency?missing=cv2&module=pkg.mod` → `{missing, top, rosdep{status, key?, installer?, packages?, reason?, candidate?, tried}, route: rosdep | venv, exec_depend?, apt_command?, package_xml?, already_declared?, rosdep_command?, venv{pip_name, pip_name_differs, requirements, commands[], active}, python, note?}`。
+- `GET /api/functions/dependency?missing=cv2&module=pkg.mod` → `{missing, top, rosdep{status: found | not_found | unavailable | skipped, key?, installer?, packages?, reason?, candidate?, tried}, route: rosdep | venv | code_path_restart | code_path_missing, code_places{registered[{path, real}], found_in?{path, real, file}, looks_like?{path, real}}, exec_depend?, apt_command?, package_xml?, already_declared?, rosdep_command?, venv{pip_name, pip_name_differs, requirements, commands[], active}, python, note?}`。
 - 関数・クラスノードの状態 (`function_status`) に `environment{python, scope, loaded_from, requirements[]}`・`notices[]`・`import_seconds`、問題に `missing_module`。
-- 画面 ([ui.md#実装メモ (P5.5 …)](ui.md#実装メモ-p55-データの種類詳細設定モード関数ノードクラスノード)): 作成画面の「コードの場所」(`function/CodeLocationsPanel.tsx`。使えるコードがまだ無いときは開いた状態)、モジュールの一覧は範囲ごとのグループ (`ModuleSelect.tsx`)、候補にならなかった名前と通知、拡張モジュールは関数名の手入力。ノードの右ペイン・編集画面の動作状況に `DependencyPanel.tsx` (Python・requirements.txt の照合・通知・足りないライブラリの ①②)。
+- 画面の「コードの場所」には、登録した場所は関数・クラスの置き場所であると同時にコードが import できるライブラリの置き場所でもあることを書く (`code.intro`、B の説明)。画面 ([ui.md#実装メモ (P5.5 …)](ui.md#実装メモ-p55-データの種類詳細設定モード関数ノードクラスノード)): 作成画面の「コードの場所」(`function/CodeLocationsPanel.tsx`。使えるコードがまだ無いときは開いた状態)、モジュールの一覧は範囲ごとのグループ (`ModuleSelect.tsx`)、候補にならなかった名前と通知、拡張モジュールは関数名の手入力。ノードの右ペイン・編集画面の動作状況に `DependencyPanel.tsx` (Python・requirements.txt の照合・通知・足りないライブラリの ①②)。
 
 ![コードの場所](../images/user-code-locations.png)
 ![ひな形を作ったところ](../images/user-code-scaffold.png)
