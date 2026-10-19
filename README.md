@@ -49,6 +49,7 @@ cd roshanavi && docker compose up -d --build lab demo
 
 ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) と、rclpy の MultiThreadedExecutor が CPU を空回りする様子を確かめるデモ (busy_demo) も開けます。
 
+- **自分のコード**: 関数・クラスノードの「ひな形を作る」で作るパッケージは、clone したフォルダの `workspace/` にできます。ホストのエディタでそのまま編集でき、保存すると動いているノードがすぐに読み直します (`workspace/` は git に入りません)。
 - **ROS 2 の版**: 既定は Jazzy です。Lyrical にするときは `ROS_DISTRO=lyrical docker compose up -d --build lab demo` のように付けます (`jazzy` / `lyrical` が正式対応、`kilted` は動作確認のみ)。ホストで ROS を `source` した端末では `ROS_DISTRO` がすでにその版になっているので、別の端末で実行するか、`ROS_DISTRO=jazzy` を明示してください。
 - **プロキシのある環境**: `docker build` は、端末の `HTTP_PROXY` などを自動では使いません。ビルドの途中 (`npm ci` や `apt-get`) で止まるときは、`~/.docker/config.json` にプロキシを書きます (ビルドと、新しく作るコンテナに効きます)。
 

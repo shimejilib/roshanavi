@@ -8,6 +8,7 @@ import {
   checkModuleName,
   checkPackageName,
   DEFAULT_SCAFFOLD_NAME,
+  hostSrcText,
   groupModules,
   missingModuleOf,
   noticeText,
@@ -96,6 +97,14 @@ describe('not-found reasons', () => {
     expect(problemText({ code: 'name_collision', top: 'v', kept: '/a', ignored: '/b', kept_scope: 'workspace', ignored_scope: 'installed' })).toContain(
       '/a (ワークスペース) を使い、/b (インストール済み) は使いません',
     );
+  });
+  it('shows where the src is on the PC, as plain text, only when the server gave a hint', () => {
+    expect(hostSrcText(undefined)).toBeNull();
+    expect(hostSrcText(null)).toBeNull();
+    expect(hostSrcText('  ')).toBeNull();
+    expect(hostSrcText(' roshanavi を clone したフォルダの workspace/ ')).toBe('ホストでは: roshanavi を clone したフォルダの workspace/');
+    // Not interpreted: the text stays as it is (React escapes it; there is no link or HTML here).
+    expect(hostSrcText('<b>x</b> http://e.example')).toBe('ホストでは: <b>x</b> http://e.example');
   });
   it('shows where to put code with the real roots', () => {
     expect(placeHereText({ scope: 'workspace', root: '/ws/src' })).toContain('/ws/src/<パッケージ名>/<パッケージ名>/logic.py');

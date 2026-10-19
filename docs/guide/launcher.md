@@ -12,7 +12,7 @@
 
 ランチャーが一覧に出すのは、ワークスペース (`src/` とビルド結果 `install/` の入ったフォルダ) にあるパッケージ (ROS のコードを配る単位) です。次の 2 つが必要です。
 
-1. roshanavi が、自分のワークスペースを見ていること。ネイティブで動かすときは、ワークスペースで `source install/setup.bash` した端末から `ros2 run roshanavi app` を起動します ([自分のワークスペースに入れる](install.md))。Docker のときは、`docker-compose.yml` で自分の `src` を `/ws/src/<名前>` に渡します。
+1. roshanavi が、自分のワークスペースを見ていること。ネイティブで動かすときは、ワークスペースで `source install/setup.bash` した端末から `ros2 run roshanavi app` を起動します ([自分のワークスペースに入れる](install.md))。Docker のときは、clone したフォルダの `workspace/` (コンテナの中では `/ws/src`) に置くか、`docker-compose.yml` で自分の `src` を `/ws/src/<名前>` に渡します。
 2. パッケージをビルド (`colcon build`) してあること。未ビルドのパッケージも一覧には「未ビルド」の印つきで出るので、そこからビルドボタンで作れます (4 章)。
 
 自分のパッケージが 1 つも無いと、画面に「ワークスペースに自分のパッケージがありません」と出て、渡し方が案内されます。

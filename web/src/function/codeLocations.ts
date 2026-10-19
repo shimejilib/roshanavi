@@ -98,6 +98,12 @@ export function placeHereText(place: { scope: CodeScope; root: string }): string
   return t(place.scope === 'workspace' ? 'code.place.workspace' : 'code.place.code_path', { root: place.root });
 }
 
+/** 「ホストでは: …」 for the src line, or null without a hint. The hint is shown as plain text. */
+export function hostSrcText(hint: string | null | undefined): string | null {
+  const text = hint?.trim();
+  return text ? t('code.hostSrc', { hint: text }) : null;
+}
+
 export interface ModuleGroup {
   scope: CodeScope;
   label: string;

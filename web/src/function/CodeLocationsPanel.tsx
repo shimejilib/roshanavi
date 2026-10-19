@@ -12,6 +12,7 @@ import {
   checkModuleName,
   checkPackageName,
   DEFAULT_SCAFFOLD_NAME,
+  hostSrcText,
   placeHereText,
   problemText,
   removeEntry,
@@ -169,6 +170,7 @@ export function CodeLocationsPanel({ onScaffolded, onChanged }: Props) {
           <section className="code-scope" data-testid="code-scope-workspace">
             <h5>{t('code.scope.workspace')}</h5>
             <p className="muted small">{t('code.scope.workspaceHelp', { root: report.src })}</p>
+            {hostSrcText(report.host_src_hint) && <p className="small" data-testid="code-host-src">{hostSrcText(report.host_src_hint)}</p>}
             <p className="small">{t('code.packages', { list: report.scopes.workspace.packages.map((p) => p.top).join(', ') || t('code.noPackages') })}</p>
           </section>
 

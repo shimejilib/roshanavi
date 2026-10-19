@@ -76,7 +76,7 @@ export const uxJa2 = {
   'wsHelp.title': 'ワークスペースに自分のパッケージがありません',
   'wsHelp.body': 'いま見ているワークスペースは {root} です。自分のノードを一覧に出すには:',
   'wsHelp.native': 'ネイティブ実行: ワークスペースのフォルダで ros2 run roshanavi server を起動する (または --workspace で指定)',
-  'wsHelp.docker': 'Docker: docker-compose.yml の lab に、自分の src を /ws/src/<名前> としてマウントする',
+  'wsHelp.docker': 'Docker: clone したフォルダの workspace/ (コンテナの中の /ws/src) に置く。または docker-compose.yml の lab に、自分の src を /ws/src/<名前> としてマウントする',
   'wsHelp.build': 'パッケージを colcon build すると一覧に出ます (未ビルドでもビルドボタンが出ます)',
 
   'launcher.add': '＋ ノードを起動',

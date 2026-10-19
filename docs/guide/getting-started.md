@@ -14,6 +14,7 @@ cd roshanavi && docker compose up -d --build lab demo
 初回はイメージのビルドに時間がかかります。終わったらブラウザで http://localhost:6871 を開きます。
 
 - `lab` が roshanavi 本体、`demo` が見本のノード (talker / listener と、roshanavi の外から動かしているノードの例) です。
+- 自分で書くコード (関数・クラスノード) は、clone した `roshanavi` フォルダの `workspace/` にできます。コンテナの中では `/ws/src` です。ホストのエディタで編集して保存すると、動いているノードがすぐに読み直します ([自分のコードを関数・クラスノードにする](user-code.md))。roshanavi 自身のパッケージは、その中の `/ws/src/roshanavi` に読み取り専用で見えています。
 - 止めるときは `docker compose down` です。
 - ポートは自分のパソコンの中 (`127.0.0.1`) にだけ開きます。別のパソコンから見る方法は [別のマシンから roshanavi を見る (SSH)](remote-ssh.md) にあります。
 - ROS 2 のバージョンを選ぶときは `ROS_DISTRO=lyrical docker compose up -d --build lab demo` のように付けます (既定は Jazzy)。

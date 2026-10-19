@@ -16,6 +16,7 @@ roshanavi/
   docker/Dockerfile            # ros:${ROS_DISTRO}-ros-base + fastapi/uvicorn/pytest/demo_nodes_py/rosbag2/ffmpeg/audio_common_msgs
                                # (C++ の計測ノードのビルドに要る ament_cmake / rosidl / rclcpp / gtest は ros-base に含まれる)
   docker-compose.yml           # lab (サーバー, :6871) / demo (外部ノードの例) / test / e2e
+  workspace/                   # Docker の lab の /ws/src (書ける。「ひな形を作る」の出力先。中身は git に入らない, docs/design/user-code.md)
   examples/demo_project/       # デモ用プロジェクト (lab が初回に /data/roshanavi.yaml へコピー, docs/design/launcher.md)
   examples/busy_demo/          # MultiThreadedExecutor の空回りの再現 (executor_busy_demo × 3 構成, docs/design/nodes.md)
   examples/perception_demo/    # 認識パイプラインのデモ (動画 → image_filter → blob_detector、音声 → audio_level, docs/design/launcher.md)

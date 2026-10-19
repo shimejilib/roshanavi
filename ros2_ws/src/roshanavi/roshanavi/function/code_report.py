@@ -25,6 +25,8 @@ from .scopes import (CODE_PATH_SKIP_DIRS, IDENT_RE, SCOPE_CODE_PATH, SCOPE_WORKS
 from .signatures import SourceSyntaxError, parse_source, public_members, skipped_members
 
 MAX_PROBLEMS = 200
+HOST_SRC_HINT_ENV = 'ROSHANAVI_HOST_SRC_HINT'
+MAX_HOST_SRC_HINT = 200
 MAX_FILES_CHECKED = 500
 _LOOSE_IGNORED = {'setup.py', 'conftest.py', '__init__.py'}
 _GITMODULES_PATH_RE = re.compile(r'^\s*path\s*=\s*(.+?)\s*$')
@@ -316,6 +318,14 @@ def _installed_status(locations: CodeLocations, taken: Dict[str, Tuple[str, str]
     return out
 
 
+def host_src_hint() -> Optional[str]:
+    """Free text from ``$ROSHANAVI_HOST_SRC_HINT``: where ``src`` is on the user's PC (Docker, where
+    the server only sees ``/ws/src``). Control characters are dropped and the length is capped; the
+    UI shows it as plain text, never as HTML or a link."""
+    text = ''.join(ch for ch in os.environ.get(HOST_SRC_HINT_ENV, '') if ch.isprintable())
+    return text.strip()[:MAX_HOST_SRC_HINT] or None
+
+
 def report(locations: CodeLocations, python: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
     """The whole 「コードの場所」 panel: scopes, problems and where to put code."""
     problems = _Problems()
@@ -332,6 +342,7 @@ def report(locations: CodeLocations, python: Optional[Dict[str, Any]] = None) ->
     return {
         'workspace': locations.workspace, 'src': src, 'src_exists': os.path.isdir(src),
         'src_writable': os.path.isdir(src) and os.access(src, os.W_OK),
+        'host_src_hint': host_src_hint(),
         'scopes': {
             'workspace': {'root': src, 'packages': [
                 {'top': p.top, 'ros_package': p.ros_package, 'dir': p.path} for p in a]},

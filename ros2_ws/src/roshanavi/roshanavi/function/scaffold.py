@@ -9,8 +9,9 @@ node right away (no build: scope A loads the source) and ``colcon build`` builds
 Safety: the name follows the ROS package name rules and must not be taken (an existing
 directory, a ROS package of the workspace or the environment, the standard library / the node's
 runtime, another Python package of the scopes). The directory is created with ``mkdir`` (never
-reused) and every file with ``O_EXCL``; the target must be inside ``<workspace>/src``. Values are
-validated before they are put into the files (the name is ``[a-z][a-z0-9_]*``).
+reused) and every file with ``O_EXCL``; the target must be inside ``<workspace>/src``. When the
+server runs as root (Docker), what it created is handed to the owner of ``src`` (ownership.py).
+Values are validated before they are put into the files (the name is ``[a-z][a-z0-9_]*``).
 """
 
 import keyword
@@ -20,6 +21,7 @@ import xml.etree.ElementTree as ElementTree
 from typing import Any, Dict, Iterable, List
 
 from ..launcher.errors import LauncherError
+from ..ownership import give_to, makedirs_owned
 from .scopes import CodeLocations, inside, is_reserved_top, source_packages
 
 NAME_RE = re.compile(r'^[a-z][a-z0-9_]{0,63}\Z')
@@ -242,7 +244,7 @@ def scaffold(locations: CodeLocations, name: Any,
     files = render(name)
     created: List[str] = []
     try:
-        os.makedirs(src, exist_ok=True)
+        owner = makedirs_owned(src)  # root in Docker: the new files go to src's owner
         os.mkdir(target)
         created.append(target)
         for rel, text in files.items():
@@ -255,6 +257,7 @@ def scaffold(locations: CodeLocations, name: Any,
             created.append(path)
             with os.fdopen(fd, 'w', encoding='utf-8') as fh:
                 fh.write(text)
+        give_to(created, owner)  # only what this call created (lchown: no symlink is followed)
     except FileExistsError as exc:
         _rollback(created)
         raise LauncherError('file_exists', f'{target} already exists (nothing was overwritten)',

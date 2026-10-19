@@ -395,6 +395,15 @@ def test_locations_scaffold_and_dependency_api(uc_client, helper):
     assert 'uc_api_b' not in sys.modules
 
 
+def test_locations_api_returns_the_host_src_hint(uc_client, monkeypatch):
+    client = uc_client[0]
+    monkeypatch.delenv('ROSHANAVI_HOST_SRC_HINT', raising=False)
+    assert client.get('/api/functions/locations').json()['host_src_hint'] is None
+    monkeypatch.setenv('ROSHANAVI_HOST_SRC_HINT', 'clone したフォルダの workspace/')
+    body = client.get('/api/functions/locations').json()
+    assert body['host_src_hint'] == 'clone したフォルダの workspace/' and body['src_writable']
+
+
 def test_new_routes_are_behind_the_host_origin_content_type_guard(uc_client):
     client = uc_client[0]
     assert client.get('/api/functions/locations', headers={'Host': 'evil.com'}).status_code == 403

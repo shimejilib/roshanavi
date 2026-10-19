@@ -542,6 +542,10 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | T-20 | E2E: 理由 → ひな形 → 書き換え → 出力が変わる | `__init__.py` の無いフォルダに理由と実際のパス、置き場所、Python。不正な名前は断られ、`e2e_logic` を作ると関数が選ばれた状態 → `/chatter` で `HELLO WORLD` → テストが `logic.py` を書き換えると `edited: Hello World`。OpenCV を使う関数ノードの右ペインに ① `python3-opencv` と ② venv。スクリーンショット [`user-code-locations.png`](../images/user-code-locations.png)・[`user-code-scaffold.png`](../images/user-code-scaffold.png)・[`user-code-dependency.png`](../images/user-code-dependency.png) | ✅ |
 | T-21 | Lyrical での実行 | T の単体・実ノード・API のテストが Lyrical (Python 3.14、pydantic 2) でも通る (77 件) | ✅ |
 | T-22 | 登録した場所 (B) をライブラリとして使う (unit + 実ノード) | A の `import <ライブラリ>` が、登録した B (flat・src・フォルダ自体がパッケージ) から動く (関数・クラスとも、実ノードで出力まで確認)。登録を外すと `missing_module` と rosdep / pip の案内 + 「登録すると import できます」、登録済みなのに無ければ「登録した場所 … に見つかりません」(rosdep を尋ねない)、起動後に登録したなら「再起動」。標準ライブラリ・ノードが使う名前 (`json`・`winreg`・`audio_common_msgs`)・`tests` は依存としても出さず、環境のライブラリが先、外向きのシンボリックリンクは拒否、プロジェクトの `.venv` のモジュールは読み直しで外さない。依存ライブラリの書き換えはホットリロードされ (実ノードで `reloads` が増える)、壊れていれば古いまま。C のコードから B のライブラリも使える。サーバーのプロセスに finder は入らない | ✅ |
+| T-23 | 作ったファイルの持ち主 (unit。本物の chown は root の実行だけ) | root のとき、ひな形・コードの書き出し・起動設定の書き出しが新しく作ったパスだけを、作った先のフォルダの持ち主に `lchown` する。既にあったファイルは変えない、シンボリックリンクは辿らない (対象の持ち主は変わらない)、root でない実行・持ち主が root のフォルダでは何もしない、変えられなくても失敗にせず警告 | ✅ (`test_ownership.py`) |
+| T-24 | ホストのどこか `host_src_hint` (unit + API) | 環境変数が無ければ `null`、あればそのままの文字で返す。制御文字は除き、200 文字で切り、空白だけなら `null`。`<b>` や URL も文字のまま | ✅ (`test_user_code_report.py`、`test_user_code_ros.py`) |
+| T-25 | 画面: 「ホストでは: …」 (vitest) | ヒントが無い・空白だけなら出さない。あれば前後の空白を除いて文字のまま (HTML や URL として扱わない)。用語集のテストも通る | ✅ (`codeLocations.test.ts`、`glossary.test.ts`) |
+| T-26 | 試用の Docker で自分のコードを書く道 (手動、実機) | `lab` の `/ws/src` が `./workspace` (書ける)。`locations` が `src_writable: true` と `host_src_hint`、ひな形が作れ、ホストでは自分の持ち主のファイル。そのクラスから作ったノードが起動する | 👀 |
 
 
 ### U. launch の引き取り (`--launch`)・強制終了の後始末・ノード一覧の削除

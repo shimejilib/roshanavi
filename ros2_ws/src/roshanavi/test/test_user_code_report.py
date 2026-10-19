@@ -219,3 +219,19 @@ def test_git_is_not_needed_to_read_submodules(tmp_path, monkeypatch):
     monkeypatch.setattr(subprocess, 'run', lambda *a, **k: calls.append(a) or real_run(*a, **k))
     report = code_report.report(CodeLocations.of(str(plain)))
     assert 'submodule_empty' in codes(report) and calls == []
+
+
+def test_host_src_hint_is_optional_capped_plain_text(ws, monkeypatch):
+    """``$ROSHANAVI_HOST_SRC_HINT`` (Docker: where /ws/src is on the PC) is returned as text."""
+    def hint():
+        return code_report.report(CodeLocations.of(str(ws)))['host_src_hint']
+    monkeypatch.delenv('ROSHANAVI_HOST_SRC_HINT', raising=False)
+    assert hint() is None
+    monkeypatch.setenv('ROSHANAVI_HOST_SRC_HINT', 'roshanavi を clone したフォルダの workspace/')
+    assert hint() == 'roshanavi を clone したフォルダの workspace/'
+    monkeypatch.setenv('ROSHANAVI_HOST_SRC_HINT', ' <b>x</b>\x1b[31m\nhttp://e.example/ \r\n')
+    assert hint() == '<b>x</b>[31mhttp://e.example/'      # verbatim text; control characters gone
+    monkeypatch.setenv('ROSHANAVI_HOST_SRC_HINT', 'あ' * 500)
+    assert hint() == 'あ' * 200
+    monkeypatch.setenv('ROSHANAVI_HOST_SRC_HINT', '  \n ')
+    assert hint() is None

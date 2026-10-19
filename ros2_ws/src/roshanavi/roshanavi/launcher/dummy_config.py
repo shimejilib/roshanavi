@@ -16,6 +16,7 @@ from typing import Any, Dict, List, Optional, Sequence
 import yaml
 
 from ..jobs import InjectSpec
+from ..ownership import Owner, give_to, makedirs_owned
 from ..pydantic_compat import ValidationError, validation_errors
 from .errors import LauncherError
 from .schema import ClassSpec, CodeSettings, DummySpec, FunctionSpec, TransformSpec, clean_dict
@@ -65,15 +66,27 @@ NODE_TEMPLATE = '''        Node(
 '''
 
 
-def write_atomic(path: str, text: str) -> None:
-    """Write ``text`` to ``path`` via a temp file + rename in the same directory."""
+# Files written into the user's workspace (code / launch export) are ordinary source files that
+# others on the PC may read; roshanavi's own state in data_dir keeps mkstemp's 0600.
+WORKSPACE_FILE_MODE = 0o644
+
+
+def write_atomic(path: str, text: str, owner: Optional[Owner] = None,
+                 mode: Optional[int] = None) -> None:
+    """Write ``text`` to ``path`` via a temp file + rename in the same directory.
+
+    ``owner``: give the new file to this (uid, gid) (ownership.py; workspace files only).
+    ``mode``: permission bits of the new file (default: mkstemp's 0600)."""
     directory = os.path.dirname(path) or '.'
     fd, tmp = tempfile.mkstemp(prefix='.roshanavi-', dir=directory)
     try:
+        if mode is not None:
+            os.fchmod(fd, mode)
         with os.fdopen(fd, 'w', encoding='utf-8') as fh:
             fh.write(text)
             fh.flush()
             os.fsync(fh.fileno())
+        give_to([tmp], owner)
         os.replace(tmp, path)
     except OSError:
         if os.path.exists(tmp):
@@ -214,17 +227,18 @@ def export(dummies: Sequence[DummySpec], directory: str, data_dir: str,
     items += [(spec, 'function', class_config_text(spec, workspace, code=code))
               for spec in classes]
     try:
-        os.makedirs(directory, exist_ok=True)
+        owner = makedirs_owned(directory)
         files: List[str] = []
         nodes = ''
         for spec, executable, text in items:
             config = f'{spec.id}.yaml'
-            write_atomic(os.path.join(directory, config), text)
+            write_atomic(os.path.join(directory, config), text, owner, WORKSPACE_FILE_MODE)
             files.append(os.path.join(directory, config))
             nodes += NODE_TEMPLATE.format(name=spec.name, namespace=spec.namespace or '',
                                           config=config, executable=executable)
         launch_path = os.path.join(directory, LAUNCH_FILE_NAME)
-        write_atomic(launch_path, LAUNCH_TEMPLATE.format(launch_path=launch_path, nodes=nodes))
+        write_atomic(launch_path, LAUNCH_TEMPLATE.format(launch_path=launch_path, nodes=nodes),
+                     owner, WORKSPACE_FILE_MODE)
     except OSError as exc:
         raise LauncherError('export_failed', f'cannot write to {directory}: {exc}', 500) from exc
     LOG.info('exported %d node(s) to %s', len(items), directory)

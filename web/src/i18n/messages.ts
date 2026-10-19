@@ -21,6 +21,7 @@ import { launchJa } from './messagesLaunch';
 import { diagJa } from './messagesDiag';
 import { wiringJa } from './messagesWiring';
 import { monitorJa } from './messagesMonitor';
+import { hostSrcJa } from './messagesHostSrc';
 
 export const ja = {
   ...mapJa,
@@ -43,6 +44,7 @@ export const ja = {
   ...diagJa,
   ...wiringJa,
   ...monitorJa,
+  ...hostSrcJa,
   'app.title': 'roshanavi',
   'tab.graph': 'グラフ',
   'tab.traffic': 'トラフィック',

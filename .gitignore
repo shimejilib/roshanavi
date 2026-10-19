@@ -9,6 +9,13 @@ __pycache__/
 .pytest_cache/
 data/*
 !data/.gitkeep
+
+# Docker trial workspace (lab's /ws/src): the user's own packages stay out of git
+workspace/*
+!workspace/README.md
+!workspace/roshanavi/
+workspace/roshanavi/*
+!workspace/roshanavi/.gitkeep
 web/test-results/
 web/playwright-report/
 

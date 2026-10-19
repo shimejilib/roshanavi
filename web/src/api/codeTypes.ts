@@ -79,6 +79,8 @@ export interface CodeLocationsReport {
   src: string;
   src_exists: boolean;
   src_writable: boolean;
+  /** Free text from the server (Docker): where `src` is on the user's PC. Show as text only. */
+  host_src_hint?: string | null;
   scopes: {
     workspace: { root: string; packages: { top: string; ros_package: string | null; dir: string }[] };
     code_paths: CodePathStatus[];

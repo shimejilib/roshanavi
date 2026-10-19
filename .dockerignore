@@ -1,5 +1,6 @@
 .git
 data
+workspace
 docs
 web/node_modules
 web/dist

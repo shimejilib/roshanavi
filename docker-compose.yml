@@ -1,5 +1,6 @@
 # roshanavi services
-#   lab  : API/web server on 127.0.0.1:6871
+#   lab  : API/web server on 127.0.0.1:6871. Workspace src (/ws/src) = ./workspace (writable, your
+#          own packages); the repo's packages are mounted read-only at /ws/src/roshanavi
 #   demo : nodes roshanavi did NOT start (external_talker / external_listener on
 #          /external/chatter, and the lifecycle node lc_talker which starts
 #          unconfigured); the demo talker / listener are started by `lab` itself
@@ -37,8 +38,13 @@ services:
     environment:
       <<: *ros-env
       ROSHANAVI_BUILD: "1"
+      # Shown next to /ws/src in the 「コードの場所」 panel (free text; docs/design/user-code.md).
+      ROSHANAVI_HOST_SRC_HINT: "roshanavi を clone したフォルダの workspace/"
     volumes:
-      - ./ros2_ws/src:/ws/src:ro
+      # The workspace src is a host folder, writable: 「ひな形を作る」 and the code you write
+      # land in ./workspace. The repo's own packages are read-only one level down.
+      - ./workspace:/ws/src
+      - ./ros2_ws/src:/ws/src/roshanavi:ro
       - ./data:/data
       - ./examples:/examples:ro
     ports:

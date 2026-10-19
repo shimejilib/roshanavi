@@ -76,6 +76,7 @@ cd web && npm ci
 | `ros2_ws/src/roshanavi` | 本体 (Python。FastAPI + rclpy のサーバー、ダミーノード、シナリオ CLI) |
 | `ros2_ws/src/roshanavi_msgs`、`roshanavi_probe` | 計測ノード (C++) と、その内部用のメッセージ型 |
 | `ros2_ws/src/roshanavi_examples`、`roshanavi_test_nodes` | サンプルのノード、テスト用のノード |
+| `workspace/` | Docker の試用環境で、自分のコードを置く・「ひな形を作る」が書く場所 (`lab` の `/ws/src`。`README.md` 以外は git に入らない) |
 | `web/` | Web 画面 (React + Vite + TypeScript) |
 | `docker/`、`docker-compose.yml` | 開発・テスト・E2E の環境 |
 | `docs/` | ドキュメント (5 を参照) |
