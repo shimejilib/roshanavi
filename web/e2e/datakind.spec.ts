@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// データの種類 (#30): beginners pick what they send (文字列, 数値 ...), never a ROS type name.
+// データの種類: beginners pick what they send (文字列, 数値 ...), never a ROS type name.
 // 詳細設定モード (⚙ 設定, remembered by the browser) lists ROS types grouped: common first.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const INPUT_ID = 'e2e_kind_input';

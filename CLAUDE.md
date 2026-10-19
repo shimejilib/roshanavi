@@ -47,5 +47,5 @@ User-facing replies are in **Japanese**, plain language, no unexplained jargon (
 ## Git
 - Conventional commits (`feat:`, `fix:`, `docs:`, `test:`, `chore:`, `refactor:`, `perf:`, `build:`, `style:`).
 - End commit messages with: `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`
-- Remote: public `github.com/shimejilib/roshanavi`. All work goes on a branch and lands on `main` through a PR; never push to `main` directly, never force push.
+- Remote: public `github.com/shimejilib/roshanavi` (`origin`); the old full history and issues are in private `shimejilib/roshanavi-internal` (`internal`). Work goes on a branch and is merged into local `main` after the audit (the user decides when anything is pushed; no PRs unless asked). Never force push.
 - Push, PR and issue writes only when the user asks (or the task brief says so).

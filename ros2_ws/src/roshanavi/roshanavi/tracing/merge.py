@@ -5,7 +5,7 @@ with ``hz_recv`` (successful takes), ``hz_processed`` (finished callbacks)
 and ``cb_ms {avg, p95, max}``; the theoretical value is kept as
 ``hz_expected``. Everything else stays theoretical.
 
-**Topics that are not monitored** (images by default, #61): nothing is subscribed, so the
+**Topics that are not monitored** (images by default): nothing is subscribed, so the
 publisher rows carry only what the trace saw. The send rate counted at the publishers
 (``hz_traced``, the sum over the publishers) becomes the row's Hz (basis ``traced``) and the topic's
 ``hz_traced``; bandwidth stays ``None`` (the trace does not know message sizes).

@@ -1,4 +1,4 @@
-// 「計測していません (…)」 + 「計測する」 inline, for a topic that is not subscribed (#61).
+// 「計測していません (…)」 + 「計測する」 inline, for a topic that is not subscribed.
 
 import { useState } from 'react';
 import { api, describeError } from '../api/client';

@@ -58,7 +58,7 @@ class Launcher:
         self.project = ProjectStore(project_path or os.path.join(self.workspace.root,
                                                                  DEFAULT_FILE_NAME))
         self.mapper = NodeProcessMapper(clock=clock)
-        # #12: what this server started (for cleanup after a SIGKILL), and what a previous,
+        # What this server started (for cleanup after a SIGKILL), and what a previous,
         # force-killed server left running (the leftover banner).
         self.records = ProcessRecord(data_dir)
         self.leftovers = find_leftovers(data_dir)
@@ -189,7 +189,7 @@ class Launcher:
         return dict(self._traffic_monitor)
 
     def set_traffic_monitor(self, topic: str, enabled: bool) -> None:
-        """Remember a topic's monitoring on / off in the project file (autosaved, #61)."""
+        """Remember a topic's monitoring on / off in the project file (autosaved)."""
         if topic not in self._traffic_monitor and len(self._traffic_monitor) >= MAX_TRAFFIC_MONITOR:
             raise LauncherError('invalid_request', 'too many monitored-topic settings in the '
                                 f'project (max {MAX_TRAFFIC_MONITOR})')
@@ -276,7 +276,7 @@ class Launcher:
         return export(dummies, target_dir, self.manager.data_dir, transforms, functions,
                       self.workspace.root, classes, self.manager.code)
 
-    # ---- leftovers of a force-killed previous server (#12) -------------------
+    # ---- leftovers of a force-killed previous server -------------------
     def leftover_state(self) -> Dict[str, Any]:
         return describe(self.leftovers)
 

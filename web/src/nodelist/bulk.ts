@@ -86,7 +86,7 @@ export function planBulk(action: ControlAction, selected: readonly NodeRow[], ta
 /**
  * Plan from one node-list snapshot: the selected rows and the targets they refer to come from
  * the same response, so a row shown as stopped is never planned against a target state from
- * another source (issue #1: the websocket could still say "running" right after a stop).
+ * another source (issue The websocket could still say "running" right after a stop).
  */
 export function planFromSnapshot(action: ControlAction, snapshot: Pick<NodeListResponse, 'rows' | 'targets'>, selected: ReadonlySet<string>): BulkPlan {
   const rows = snapshot.rows.filter((r) => selected.has(r.key));

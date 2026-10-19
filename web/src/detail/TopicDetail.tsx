@@ -48,7 +48,7 @@ function Stats({ entry }: { entry: TrafficEntry }) {
   );
 }
 
-/** A topic nobody subscribes to: say so (with 計測する), plus the traced Hz in 詳細計測モード (#61). */
+/** A topic nobody subscribes to: say so (with 計測する), plus the traced Hz in 詳細計測モード. */
 function NotMeasuredStats({ entry }: { entry: TrafficEntry }) {
   return (
     <div data-testid="detail-not-measured">

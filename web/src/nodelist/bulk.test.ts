@@ -46,7 +46,7 @@ describe('bulk plan', () => {
   });
 
   it('plans from one snapshot: a row shown stopped is started even if live state lags', () => {
-    // Issue #1: right after a stop the node list says stopped; the plan must use the targets of
+    // Issue Right after a stop the node list says stopped; the plan must use the targets of
     // that same response, not another (websocket) source that may still say running.
     const snapshot = {
       rows: [row('target:talker', { target_id: 'talker', running: false, status: 'stopped' })],

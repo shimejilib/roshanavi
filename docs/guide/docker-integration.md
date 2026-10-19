@@ -2,7 +2,7 @@
 
 いま Docker (docker compose) で動かしているプロジェクトに、roshanavi を**コンテナ 1 つ足す**だけで入れる方法です。プロジェクトのイメージの上に roshanavi を重ねるので、自分のノードも、自分で定義したメッセージ型も、そのまま使えます。元の起動方法 (roshanavi なし) も残せます。
 
-この章の手順は、小さな実例で確かめたものです (亀のシミュレーター turtlesim を動かす `turtle_patrol` というプロジェクトで、roshanavi が launch ファイルを引き取り、ノードを 1 つずつ操作、関数・クラスノードの追加、シナリオの実行まで通しました)。**手順の一部は手作業が多く、[#42](https://github.com/shimejilib/roshanavi/issues/42) で簡単にする予定です。** 該当する所に「#42 で改善予定」と書いています。
+この章の手順は、小さな実例で確かめたものです (亀のシミュレーター turtlesim を動かす `turtle_patrol` というプロジェクトで、roshanavi が launch ファイルを引き取り、ノードを 1 つずつ操作、関数・クラスノードの追加、シナリオの実行まで通しました)。**手順の一部は手作業が多く、今後簡単にする予定です。** 該当する所に「改善予定」と書いています。
 
 先に、自分の目的に合うか確かめてください。
 
@@ -88,7 +88,7 @@ CMD ["bash"]
 - `FROM myproj:dev` を、自分のプロジェクトのイメージ名に変えます。
 - 必要な部品 (ROS の依存) は、roshanavi の `package.xml` から `rosdep` が入れます。`ffmpeg` だけは、開発用のヘッダまで入ってしまうので別に入れています。
 - **詳細計測モード (トレース) も使うとき**は、`apt-get install` の行に `lttng-tools python3-bt2` を足します。どちらも任意の部品なので、rosdep では入りません (無いと、詳細計測モードの切り替えが押せず、入れ方が表示されます)。
-- 段 1 (node) は、**画面のビルド済みファイルがまだ配られていない**ために必要です。**#42 で、ビルド済みの画面を同梱して、この段をなくす予定です。**
+- 段 1 (node) は、**画面のビルド済みファイルがまだ配られていない**ために必要です。**ビルド済みの画面を同梱して、この段をなくす予定です。**
 
 `docker/roshanavi-entrypoint.sh` は、ROS → プロジェクト → roshanavi の順に環境を読み込みます。
 
@@ -187,10 +187,10 @@ third_party/roshanavi/web/dist
 
 | 注意 | 内容 |
 |---|---|
-| `.roshanavi/` が root のファイルになる | コンテナは root で書くため、手元から `roshanavi.yaml` を読もうとすると `Permission denied` になります。中身を見たいときは `curl -s localhost:6871/api/project`。**#42 で改善予定** |
-| 画面のビルドボタンの結果が、コンテナを作り直すと消える | ビルドの結果はコンテナの中に作られます。`docker compose up --force-recreate` や、イメージの作り直しで元に戻ります。ソース (`./ros2_ws/src`) は残るので、必要なら画面で再度ビルドします。**#42 で改善予定** |
+| `.roshanavi/` が root のファイルになる | コンテナは root で書くため、手元から `roshanavi.yaml` を読もうとすると `Permission denied` になります。中身を見たいときは `curl -s localhost:6871/api/project`。**改善予定** |
+| 画面のビルドボタンの結果が、コンテナを作り直すと消える | ビルドの結果はコンテナの中に作られます。`docker compose up --force-recreate` や、イメージの作り直しで元に戻ります。ソース (`./ros2_ws/src`) は残るので、必要なら画面で再度ビルドします。**改善予定** |
 | イメージのビルド順 | `dev` は `base` (プロジェクトのイメージ) に依存します。`additional_contexts` を書き忘れると、`FROM` が解決できず失敗します |
-| 画面 (Web UI) を作る段が必要 | 上のとおり、いまは自分のイメージの中で画面をビルドします。**#42 で不要にする予定** |
+| 画面 (Web UI) を作る段が必要 | 上のとおり、いまは自分のイメージの中で画面をビルドします。**不要にする予定** |
 | 「自動で起動する」の関数・クラスノードがあると | `docker compose restart dev` のあと、launch ファイルのノードと同じ役のノードが二重に動くことがあります。片方を止めてください |
 | launch ファイルの動作が一部元どおりにならない | ノードを 1 つずつ動かすため、`on_exit=Shutdown()` やイベントは働かないことがあります。画面に一覧が出ます。必要なら `--launch-mode whole` ([既存の launch ファイルごと動かす](takeover.md)) |
 | ポートの重なり | roshanavi を複数動かすときは、`ports:` と `--port` を別の番号にします。`127.0.0.1:6872:6872` のように両方そろえます |
@@ -210,5 +210,5 @@ third_party/roshanavi/web/dist
 ## 仕組みを知りたい人へ
 
 - launch ファイルを引き取る仕組み、Docker の場合: [design/integration.md](../design/integration.md)
-- 組み込みの計画と、これからの改善 (#42): [planned/integration.md](../planned/integration.md)
+- 組み込みの計画と、これからの改善: [planned/integration.md](../planned/integration.md)
 - 配布の設計: [project/distribution.md](../project/distribution.md)

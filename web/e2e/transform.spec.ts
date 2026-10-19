@@ -61,7 +61,7 @@ test('topic menu -> transform /chatter to upper case -> it runs and echoes upper
   await page.keyboard.press('Escape');
 });
 
-test('the preview computes on the whole array, not the 32-item echo copy (#10)', async ({ page }) => {
+test('the preview computes on the whole array, not the 32-item echo copy', async ({ page }) => {
   const created = await page.request.post('/api/dummies?start=true', {
     data: {
       id: ARRAY_INPUT, name: ARRAY_INPUT, topic: '/e2e_long_array', type: 'std_msgs/msg/Int32MultiArray',

@@ -1,4 +1,4 @@
-// Banners under the top bar: leftovers of a force-killed run (#12), the launch takeover's
+// Banners under the top bar: leftovers of a force-killed run, the launch takeover's
 // error / 「launch ファイルが変更されました」 / what per-node running loses
 // (docs/design/integration.md, docs/design/ui.md).
 

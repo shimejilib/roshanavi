@@ -51,7 +51,7 @@ export function chatterGraph(): GraphSnapshot {
   };
 }
 
-/** A heavy topic roshanavi does not subscribe to (the default for images, #61). */
+/** A heavy topic roshanavi does not subscribe to (the default for images). */
 export function heavyOffEntry(topic = '/turtle_viz/image', over: Partial<TrafficEntry> = {}): TrafficEntry {
   return entry(topic, {
     type: 'sensor_msgs/msg/Image', status: 'not_monitored', monitored: false, heavy: true, hz: 0, bytes_per_sec: 0,

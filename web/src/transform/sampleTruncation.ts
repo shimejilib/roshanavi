@@ -1,5 +1,5 @@
 // The echo view truncates long arrays (`{_truncated, length, head}`) and long strings (`…(+N chars)`).
-// A transform computed on such a copy can differ from the running node (#10): detect it.
+// A transform computed on such a copy can differ from the running node: detect it.
 
 const TRUNCATED_STRING = /\.\.\.\(\+\d+ chars\)$/;
 

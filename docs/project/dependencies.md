@@ -52,7 +52,7 @@ Docker イメージ (`roshanavi:dev-<distro>`) で 2026-10-18 に確認した版
 
 いずれも `ros:<distro>-ros-base` と ROS 2 の標準インストールに含まれる。C++ コンパイラ (build-essential) が必要。
 
-### 中継パイプラインのサンプル (`roshanavi_examples`、`roshanavi_examples_msgs`、#51)
+### 中継パイプラインのサンプル (`roshanavi_examples`、`roshanavi_examples_msgs`)
 | パッケージ | 用途 |
 |---|---|
 | `rosidl_default_generators`, `std_msgs` | 公開メッセージ `Payload` / `SinkStats` の生成 (`roshanavi_examples_msgs`) |
@@ -118,18 +118,18 @@ ffmpeg は **別プロセスとして起動するだけで、ライブラリと�
 | vitest | 5.0.3 | 単体テスト (dev) | MIT |
 | @playwright/test | 1.63.0 | E2E (dev) | Apache-2.0 |
 
-**チュートリアルのライブラリ選定 (#41)**: roshanavi は MIT なので、MIT / Apache-2.0 など互換のライセンスだけを候補にした (`npm view <pkg> license` で確認、2026-10-17)。
+**チュートリアルのライブラリ選定**: roshanavi は MIT なので、MIT / Apache-2.0 など互換のライセンスだけを候補にした (`npm view <pkg> license` で確認、2026-10-17)。
 
 | 候補 | ライセンス | 判断 |
 |---|---|---|
 | **driver.js** | MIT | **採用**。依存パッケージなし、素の JS (React に依存しない)、配布物は約 83 KB (gzip で JS 約 7 KB + CSS 約 1 KB)。画面の一部を切り抜いて吹き出しを出すだけで、「次へ」の判定は持たない。進行 (いつ次へ進むか) を自前のエンジンで決める作りに合う |
 | react-joyride 3.2.0 | MIT | 見送り。10 個の依存パッケージ (配布物 約 720 KB) を連れてくる。「操作したら次へ」を `data-tour` と状態の購読で書く方式では、ライブラリ側の進行管理が邪魔になる |
 | Shepherd.js 15.3.0 | **AGPL-3.0** | 使えない (確認した 14.5.1 も AGPL-3.0。MIT のプロジェクトに取り込めない) |
-| Intro.js | AGPL-3.0 | 使えない (Issue #41 で禁止) |
+| Intro.js | AGPL-3.0 | 使えない (禁止) |
 
 固定したバージョンは **1.8.0** (2026-07-17 公開)。最新の 1.10.1 (2026-10-15) と 1.9.0 (2026-10-03) は公開から約 2 週間未満のため使わない。ビルドへの影響 (実測): JS gzip 360.1 → 377.6 KB (driver.js 約 7 KB + チュートリアルの自前コード・文言 約 10 KB)、CSS gzip 8.1 → 9.4 KB。
 
-**地図の上で線を引く部品の選定 (#47)**: 依存を増やさず自前で実装した ([wiring.md#3](../design/wiring.md#3-実装))。
+**地図の上で線を引く部品の選定**: 依存を増やさず自前で実装した ([wiring.md#3](../design/wiring.md#3-実装))。
 
 | 候補 | ライセンス | 判断 |
 |---|---|---|

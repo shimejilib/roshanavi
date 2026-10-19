@@ -2,8 +2,8 @@
 
 web/src/i18n/glossary.ts is the glossary (docs/design/wiring.md); this is its server-side half:
 scenario hints, diagnostics text, class parameter errors and the scaffold README must say
-トピック / パラメータ / launch ファイル / QoS / メッセージ型 / リマップ, not the words the
-#47 wording audit used instead (チャンネル, 設定値, 起動セット, 届け方の設定, データの形, 名前の付け替え).
+トピック / パラメータ / launch ファイル / QoS / メッセージ型 / リマップ, not the plain words the
+earlier wording audit used instead (チャンネル, 設定値, 起動セット, 届け方の設定, データの形, 名前の付け替え).
 """
 
 import pathlib

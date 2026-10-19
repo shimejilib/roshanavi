@@ -101,7 +101,7 @@ def not_monitored(topic='/cam', type_name='sensor_msgs/msg/Image'):
 
 
 def test_not_monitored_topic_is_not_unknown_but_not_measured():
-    # #61: the publisher rows of a heavy topic say "not measured", not "cannot be split"
+    # The publisher rows of a heavy topic say "not measured", not "cannot be split"
     out = annotate_traffic([not_monitored()], CAM, {})[0]
     assert [p['basis'] for p in out['publishers']] == ['not_monitored', 'not_monitored']
     assert all(p['hz'] is None and p['bps'] is None for p in out['publishers'])

@@ -50,7 +50,7 @@ function DropCell({ entry }: { entry: TrafficEntry }) {
   );
 }
 
-/** Numbers of a topic nobody measures: no `0 Hz`, no `未受信`; with 詳細計測モード the traced Hz (#61). */
+/** Numbers of a topic nobody measures: no `0 Hz`, no `未受信`; with 詳細計測モード the traced Hz. */
 function NotMeasuredCells({ entry }: { entry: TrafficEntry }) {
   return (
     <>

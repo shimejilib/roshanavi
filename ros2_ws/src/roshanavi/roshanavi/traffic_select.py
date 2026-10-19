@@ -51,7 +51,7 @@ class TopicSelector:
             return dict(self._overrides)
 
     def replace_overrides(self, overrides: Mapping[str, bool]) -> None:
-        """Use exactly these per-topic choices (the project's saved ones, #61)."""
+        """Use exactly these per-topic choices (the project's saved ones)."""
         with self._lock:
             self._overrides = dict(overrides)
         LOG.info('traffic: %d per-topic monitoring setting(s) loaded', len(overrides))

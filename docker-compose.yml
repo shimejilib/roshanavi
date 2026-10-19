@@ -106,15 +106,17 @@ services:
     environment:
       <<: *ros-env
       ROS_DOMAIN_ID: ${E2E_ROS_DOMAIN_ID:-77}
-    # e2e_viz: an image publisher outside roshanavi (like a turtle_viz node), for the "not measured" tests (#61).
+      E2E_VIZ: ${E2E_VIZ:-1}
+    # e2e_viz: an image publisher outside roshanavi (like a turtle_viz node), for the "not measured" tests.
+    # E2E_VIZ=0 leaves it out (scripts/record_demo_gif.sh: not part of the demo).
     command: ["bash", "-c",
               "ros2 run demo_nodes_cpp talker --ros-args -r __node:=external_talker
                -r chatter:=/external/chatter &
                ros2 run demo_nodes_cpp listener --ros-args -r __node:=external_listener
                -r chatter:=/external/chatter &
                ros2 run lifecycle lifecycle_talker &
-               ros2 topic pub -r 5 -n e2e_viz /e2e_viz/image sensor_msgs/msg/Image
-               \"{header: {frame_id: viz}, height: 1, width: 2, encoding: rgb8, step: 6, data: [1, 2, 3, 4, 5, 6]}\" &
+               if [ \"$$E2E_VIZ\" != 0 ]; then ros2 topic pub -r 5 -n e2e_viz /e2e_viz/image sensor_msgs/msg/Image
+               \"{header: {frame_id: viz}, height: 1, width: 2, encoding: rgb8, step: 6, data: [1, 2, 3, 4, 5, 6]}\" & fi;
                wait"]
 
   e2e:

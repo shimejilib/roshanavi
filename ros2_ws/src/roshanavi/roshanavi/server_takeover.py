@@ -1,4 +1,4 @@
-"""Launch takeover, leftover processes (#12) and registry delete / undo routes.
+"""Launch takeover, leftover processes and registry delete / undo routes.
 
 * ``/api/takeover``: the launch file taken over with ``--launch`` (or ``start``), the
   report of what per-node running keeps / loses, and a pending re-import after the launch

@@ -4,6 +4,8 @@
 
 対応: **ROS 2 Jazzy・Lyrical Luth** に正式対応。Kilted Kaiju は動作確認のみ (継続的な保証なし) です。
 
+![デモ: 地図の上で通信が流れ、入力ノードを作る](docs/images/demo.gif)
+
 ![通信マップ](docs/images/graph-roles.png)
 
 ## なぜ作ったか
@@ -46,6 +48,15 @@ cd roshanavi && docker compose up -d --build lab demo
 ```
 
 ブラウザで http://localhost:6871 を開きます。デモの talker / listener (roshanavi から起動したノード) と、外部ノードの例が表示されます。⚙ 設定 →「プロジェクトを切り替える」から、画像処理のデモ (perception_demo) と、rclpy の MultiThreadedExecutor が CPU を空回りする様子を確かめるデモ (busy_demo) も開けます。
+
+- **ROS 2 の版**: 既定は Jazzy です。Lyrical にするときは `ROS_DISTRO=lyrical docker compose up -d --build lab demo` のように付けます (`jazzy` / `lyrical` が正式対応、`kilted` は動作確認のみ)。ホストで ROS を `source` した端末では `ROS_DISTRO` がすでにその版になっているので、別の端末で実行するか、`ROS_DISTRO=jazzy` を明示してください。
+- **プロキシのある環境**: `docker build` は、端末の `HTTP_PROXY` などを自動では使いません。ビルドの途中 (`npm ci` や `apt-get`) で止まるときは、`~/.docker/config.json` にプロキシを書きます (ビルドと、新しく作るコンテナに効きます)。
+
+  ```json
+  {"proxies": {"default": {"httpProxy": "http://proxy.example:8080", "httpsProxy": "http://proxy.example:8080", "noProxy": "localhost,127.0.0.1"}}}
+  ```
+
+  ベースイメージの取得 (`docker pull`) は Docker のデーモン側の設定です (Docker Desktop は Settings → Resources → Proxies、Linux は dockerd のプロキシ設定)。
 
 自分のプロジェクトでの使い方は、次の「使い方・組み込み方」を見てください。
 

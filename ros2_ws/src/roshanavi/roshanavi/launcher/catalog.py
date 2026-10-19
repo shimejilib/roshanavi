@@ -12,7 +12,7 @@ Clients pick an entry by its ``id`` from the listing (never by a free path),
 so only these files can ever be opened.
 
 The id of the last opened entry is remembered in ``<data_dir>/last_project.json`` and,
-after validation against the listing, used as the project at the next start (#9).
+after validation against the listing, used as the project at the next start.
 """
 
 import glob
@@ -101,7 +101,7 @@ class ProjectCatalog:
             return target
         raise LauncherError('not_found', f'no such project: {entry_id}', 404)
 
-    # ---- the project to start with (#9) ------------------------------------------
+    # ---- the project to start with ------------------------------------------
     def _last_path(self) -> str:
         return os.path.join(self.data_dir, LAST_PROJECT_FILE)
 

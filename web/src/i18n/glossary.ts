@@ -1,6 +1,6 @@
 // The one glossary of ROS terms (docs/design/wiring.md, glossary section).
 //
-// Rule (user decision, reverses the #47 wording audit): the OFFICIAL ROS term is THE word in every
+// Rule (user decision, reverses the earlier wording audit): the OFFICIAL ROS term is THE word in every
 // UI string, tour, guide page and backend message: トピック, パラメータ, パラメータファイル,
 // launch ファイル, QoS, メッセージ型, リマップ, ノード. One name per concept, so that a user can
 // match the UI with the ROS docs, `ros2 topic ...`, error messages and Q&A threads. The plain-language
@@ -27,7 +27,7 @@ export interface GlossaryEntry {
   ros: Words;
   /** One-line plain-language explanation (tooltip of `<Term>`, the guide's 用語集). Starts with the term. */
   explain: Words;
-  /** The old plain-word replacement (#47 audit). Allowed only in `explain`; a UI string using it fails the test. */
+  /** The old plain-word replacement (earlier wording audit). Allowed only in `explain`; a UI string using it fails the test. */
   avoid?: RegExp;
 }
 
@@ -184,7 +184,7 @@ export function termMessages(lang: Lang = 'ja'): Record<`term.${GlossaryId}`, st
 
 const CODE_SPAN = /`[^`]*`/g;
 
-/** Old plain words (#47 audit) that replaced a ROS term. They may stay in a tooltip (`term.*`) but nowhere else.
+/** Old plain words (earlier wording audit) that replaced a ROS term. They may stay in a tooltip (`term.*`) but nowhere else.
  *  Empty = the string follows the glossary. `code spans` are skipped. */
 export function glossaryViolations(text: string): GlossaryId[] {
   const rest = text.replace(CODE_SPAN, ' ');

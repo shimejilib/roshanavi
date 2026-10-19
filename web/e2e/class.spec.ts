@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { clickElement, rightClickNode } from './helpers';
 
-// Class nodes (#43): a plain Python class (MovingAverage) run as a node. Parameters come from
+// Class nodes: a plain Python class (MovingAverage) run as a node. Parameters come from
 // __init__, `reset` is an action method (map menu / node pane / topic), state lives in the instance.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const NAME = 'e2e_average';

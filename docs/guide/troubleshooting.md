@@ -82,6 +82,8 @@ roshanavi を `kill -9` やメモリ不足で強制終了すると、起動し�
 
 | 症状 | 原因 | 直し方 | くわしくは |
 |---|---|---|---|
+| `docker compose build` が `npm ci` や `apt-get` で失敗する (社内ネットワークなど) | `docker build` は端末のプロキシの環境変数を使わない | `~/.docker/config.json` の `proxies` にプロキシを書く。ベースイメージの取得はデーモン側の設定 (Docker Desktop は Settings → Resources → Proxies) | [README の「試す (Docker)」](https://github.com/shimejilib/roshanavi#試す-docker) |
+| ビルドや起動が、思っていない ROS の版 (Humble など) になる | ホストで ROS を `source` した端末では `ROS_DISTRO` がその版になっていて、compose がそれを使う | `ROS_DISTRO=jazzy` (または `lyrical`) を付けて実行する | [README の「試す (Docker)」](https://github.com/shimejilib/roshanavi#試す-docker) |
 | ブラウザで開けない | コンテナが動いていない。ポート 6871 を別のものが使っている | `docker compose ps` で `lab` を確かめる。別のポートに変えるときは `--port` | [はじめての起動と画面の見方](getting-started.md) |
 | 別のマシンのブラウザから開けない | 安全のため、roshanavi は `localhost` からだけ開けます | SSH のポート転送を使う | [別のマシンから見る (SSH)](remote-ssh.md) |
 | 詳細計測モードで何も記録されない | 共有メモリ (`/dev/shm`) が小さい | compose に `shm_size: 512m` を付ける | [測る](measure.md)、[Docker で動いている既存のプロジェクトに入れる](docker-integration.md) |

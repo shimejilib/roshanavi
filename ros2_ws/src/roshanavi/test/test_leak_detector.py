@@ -1,4 +1,4 @@
-"""Memory-leak detector (resources/leak.py) on synthetic RSS curves (issue #45).
+"""Memory-leak detector (resources/leak.py) on synthetic RSS curves.
 
 Pure: no ROS, no real processes, no clock. ``synth`` makes 1 Hz samples of ``base + trend + noise``
 where the noise is the sum of per-sample jitter and a slow wander (an AR(1) process stepping every
@@ -71,7 +71,7 @@ def run(samples: Iterator[Tuple[float, float]], cfg: LeakConfig = LeakConfig(),
     return out
 
 
-# ---- the patterns of issue #45 ---------------------------------------------------------------
+# ---- the leak patterns ---------------------------------------------------------------
 
 def test_one_time_step_is_not_a_leak():
     step = lambda t: 30.0 if t > HOUR else 0.0  # noqa: E731 - a cache filled once, 30 MB

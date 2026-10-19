@@ -1,4 +1,4 @@
-// UI strings for "not measured" topics (#61, docs/design/map-and-traffic.md#計測していないトピック):
+// UI strings for "not measured" topics (docs/design/map-and-traffic.md#計測していないトピック):
 // a topic roshanavi does not subscribe to (images and point clouds by default) is never shown as
 // 受信なし / 未受信 / 分けられない; it says it is not measured, and offers 計測する.
 // Merged into `ja`.

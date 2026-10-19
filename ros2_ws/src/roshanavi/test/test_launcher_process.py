@@ -158,7 +158,7 @@ def test_restart_counts_and_replaces_process():
 
 
 def test_service_reports_running_once_the_node_is_mapped_even_within_the_starting_window():
-    """#7: 「起動中」 lasts until the node shows up on the map, not a fixed 2 s."""
+    """「起動中」 lasts until the node shows up on the map, not a fixed 2 s."""
     from roshanavi.launcher.service import Launcher
     from roshanavi.process_map import NodeMapping
 

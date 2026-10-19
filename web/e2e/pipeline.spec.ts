@@ -2,11 +2,11 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// Relay pipeline sample (#51, scripts/gen_pipeline.py): the medium preset is a 5 x 4 grid of
+// Relay pipeline sample (scripts/gen_pipeline.py): the medium preset is a 5 x 4 grid of
 // 20 C++ nodes (src_j -> relay_s_j -> sink_j, every node talking to two neighbours).
 //  1. one process per node: the project is opened from the ⚙ settings menu, all 20 nodes are on
 //     the map with live Hz on their edges, and the map stays smooth with real data.
-//  2. the same pipeline in a composable container (#22): the nodes form one group, stopping any
+//  2. the same pipeline in a composable container: the nodes form one group, stopping any
 //     one of them asks about all of them.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const COLUMNS = 4;

@@ -98,7 +98,7 @@ def build_node_list(graph_nodes: Iterable[Mapping[str, Any]],
     """``{rows, groups, targets}`` for ``GET /api/node-list``.
 
     ``targets`` is the launcher snapshot the rows were built from: the UI plans
-    bulk actions from it, so rows and plan never disagree (issue #1).
+    bulk actions from it, so rows and plan never disagree.
     """
     states = lifecycle_states or {}
     by_id = {t['id']: t for t in targets}

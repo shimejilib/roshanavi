@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { clickElement } from './helpers';
 
-// Resource monitoring (#32): the busy_demo's problem configuration (multi + default) started by
+// Resource monitoring: the busy_demo's problem configuration (multi + default) started by
 // the Launcher shows its high CPU on the map, the リソース tab lists it under ROS ノード, and the
 // example scenario busy_cpu.yaml (multi + off) passes its resources / mem_growth steps.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));

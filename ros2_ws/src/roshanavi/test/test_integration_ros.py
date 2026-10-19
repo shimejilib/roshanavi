@@ -129,7 +129,7 @@ def test_echo_latest_message(lab, helper):
 
 
 def test_echo_sample_is_not_truncated_up_to_the_size_cap(lab, helper):
-    """#10: the transform preview must see whole arrays, not the 32-item display copy."""
+    """The transform preview must see whole arrays, not the 32-item display copy."""
     from std_msgs.msg import Int32MultiArray
     helper.periodic_publisher(Int32MultiArray, '/tl_echo_sample', 10.0,
                               lambda i: Int32MultiArray(data=list(range(100))))

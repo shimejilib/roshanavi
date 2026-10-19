@@ -1,4 +1,4 @@
-// The original (pre-#18) statistics implementation, kept verbatim as a test oracle: it copies
+// The original (pre-optimisation) statistics implementation, kept verbatim as a test oracle: it copies
 // every Sample per window and per publisher. test_stats.cpp checks that the production
 // TopicCalculator returns bit-identical results on random streams.
 #ifndef ROSHANAVI_PROBE__REFERENCE_STATS_HPP_

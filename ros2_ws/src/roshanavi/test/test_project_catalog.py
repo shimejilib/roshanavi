@@ -151,7 +151,7 @@ def test_open_project_autostarts_the_new_targets(tmp_path, data_dir):
         launcher.close()
 
 
-# ---- the last opened project is remembered across restarts (#9) ----------------------------
+# ---- the last opened project is remembered across restarts ----------------------------
 
 def test_catalog_remembers_the_last_opened_project(tmp_path):
     data = tmp_path / 'data'

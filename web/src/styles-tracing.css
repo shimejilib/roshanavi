@@ -11,7 +11,7 @@ label.check.disabled { opacity: 0.6; }
 .node-trace th, .node-trace td { text-align: left; padding: 2px 6px 2px 0; vertical-align: top; }
 .node-trace td.num, .node-trace th.num { text-align: right; }
 
-/* "計測していません" + 計測する (#61): one line, the hint under it. */
+/* "計測していません" + 計測する: one line, the hint under it. */
 .not-measured.block { display: block; margin-top: 2px; }
 .not-measured-line { display: inline-flex; flex-wrap: wrap; gap: 4px; align-items: center; }
 .not-measured-hint { display: block; margin-top: 2px; }

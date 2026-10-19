@@ -62,9 +62,9 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | B-09 | 統計計算の決定性 | 時刻を注入した unit test で hz / 帯域 / ジッタが一致する | ✅ |
 | B-10 | 長時間稼働 (24 h) | メモリが増え続けない (リングバッファ上限) | ⬜ |
 | B-11 | 計測ノード: 1 トピックに 2 つの送信ノード (5 Hz と 2 Hz) | 送信ノードごとに 5 / 2 Hz (±5%) で `basis: measured`、トピック合計 7 Hz、`gid_resolution: matched` | ✅ (`test_probe_ros.py`) |
-| B-12 | 計測ノードの統計 (gtest) | 欠番、複数 publisher の合計、連番非対応で null、送信時刻が無ければ受信側、計算期間の選択、遅いトピックの延長・`too_few`、止まったら 0、publisher ごとの値と停止、リングバッファの上限 (コンパクション後のビュー)。元の実装 (`reference_stats.hpp`) との照合: 乱数の流れ (複数 publisher・欠番・連番非対応・送信時刻なし・停止・遅れて参加・同時刻・窓の境界) × 5 つの窓で、トピック全体と publisher ごとの全項目がビット単位で一致 (#18)。送信元ノードの対応表を作り直す条件 (グラフ変化・未知の gid を 1 回だけ・5 秒・照会の失敗) | ✅ (`roshanavi_probe/test/test_stats.cpp`) |
+| B-12 | 計測ノードの統計 (gtest) | 欠番、複数 publisher の合計、連番非対応で null、送信時刻が無ければ受信側、計算期間の選択、遅いトピックの延長・`too_few`、止まったら 0、publisher ごとの値と停止、リングバッファの上限 (コンパクション後のビュー)。元の実装 (`reference_stats.hpp`) との照合: 乱数の流れ (複数 publisher・欠番・連番非対応・送信時刻なし・停止・遅れて参加・同時刻・窓の境界) × 5 つの窓で、トピック全体と publisher ごとの全項目がビット単位で一致。送信元ノードの対応表を作り直す条件 (グラフ変化・未知の gid を 1 回だけ・5 秒・照会の失敗) | ✅ (`roshanavi_probe/test/test_stats.cpp`) |
 | B-13 | 計測ノードが使えないとき | `--probe off` / 未ビルド → Python の計測 (`measurement: python`、理由付き)。繰り返し異常終了 → 5 回で Python に切り替え | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
-| B-11b | 計測ノード: 後から参加した・入れ替わった送信ノード | グラフ変化時だけの照会 (#18) でも、後から同じトピックに publish し始めたノード、別名のノードに置き換わったときも、送信ノード名が付く (`basis: measured`) | ✅ (`test_probe_ros.py`) |
+| B-11b | 計測ノード: 後から参加した・入れ替わった送信ノード | グラフ変化時だけの照会 でも、後から同じトピックに publish し始めたノード、別名のノードに置き換わったときも、送信ノード名が付く (`basis: measured`) | ✅ (`test_probe_ros.py`) |
 | B-14 | 計測ノードの異常終了 | 再起動され (1 秒後〜)、TRANSIENT_LOCAL の設定を受け取って計測を再開する | ✅ (`test_probe_ros.py`) |
 | B-15 | 自分用のトピック | `/roshanavi/_probe/*` と計測ノードは地図・診断・トラフィックに出ない | ✅ (`test_probe_unit.py`, `test_probe_ros.py`) |
 | B-16 | gid がグラフと対応しない RMW | `resolved: false` ならトピック合計の分割 (`rates.py`) にフォールバック、UI に案内 | ✅ (判定は `test_probe_unit.py` / `measurement.test.ts`)、Cyclone DDS の実機は 👀 (gid 不一致・連番非対応を確認) |
@@ -73,12 +73,12 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | B-19 | 止まったトピックの Hz 表示 (vitest) | hz 0 / `stale` のとき「(受信時刻で概算)」を付けない | ✅ (`timing.test.ts`) |
 | B-20 | 計測の経路の表示・実測バッジ (vitest) | 「計測: C++ 計測ノード (CPU x%)」、再起動中・RMW の制限・Python の理由、`measured` は「実測」 | ✅ (`traffic/measurement.test.ts`) |
 | B-21 | E2E: talker + 1 Hz の入力ノードが /chatter | 地図の talker の辺が約 1 Hz で「推定」が付かない。トラフィックタブで talker が約 1 Hz の「実測」、入力ノードが約 1 Hz、ツールバーに「C++ 計測ノード」 | ✅ (`e2e/smoke.spec.ts`) |
-| B-22 | 計測していないトピックは「分けられない」ではない (#61, pytest) | 重い型・オフにしたトピックの送信元は `basis: not_monitored`、受信側の数字なしも `not_monitored`、`heavy` が付く。注入ジョブ・恒久ダミーの既知の値は残る。計測中・`unsupported` は従来の根拠のまま | ✅ (`test_rates.py`, `test_sub_rates.py`) |
-| B-23 | 計測していない重いトピックの Hz はトレースから (#61, pytest) | 詳細計測モードで、送信元の行が `traced` の Hz (帯域は null)、全送信元がトレースされたときだけ合計の `hz_traced`、一部だけなら null。受信側はノードの中の受信 Hz。計測中のトピックは変わらない | ✅ (`test_tracing_merge.py`) |
-| B-24 | 計測の on/off をプロジェクトに保存 (#61, pytest) | `traffic_monitor` に保存・自動保存、新しい Lab で復元、プロジェクトの切り替え・読み直しで置き換わる、REST の往復、`PUT /api/project` で置き換わる | ✅ (`test_project.py`) |
-| B-25 | 地図の「受信なし」は本物の受信側だけで決まる (#61, pytest) | roshanavi 自身 (`roshanavi` / `roshanavi_probe` / `roshanavi_scenario`) の購読は受信側に数えない (`show_self` でも)。本物の受信側がいれば出ない | ✅ (`test_graph_unit.py`) |
-| B-26 | 計測していない行の表示 (#61, vitest) | 「計測していません (画像などの重いデータは既定でオフ)」+「計測する」、軽いトピックは理由なし、数字の欄は 0 Hz でなく —、「受信なし」「未受信」「分けられない」が出ない。詳細計測モードは Hz とトレース表記・「— (詳細計測では帯域は測れません)」。計測中で本当に未受信なら「未受信」 | ✅ (`traffic/notMeasured.test.ts`, `graph/model.test.ts`) |
-| B-27 | E2E: 画像のトピック (#61) | `/e2e_viz/image` (roshanavi の外の画像送信ノード) の行・展開行・詳細に「計測していません (…)」と「計測する」、地図の「受信なし」が出ない → 押すと数字が出る → 別プロジェクトに切り替えると戻り、元に戻すと保存から復元される。詳細計測モードでは中継ノードの出力コピーの Hz がトレースで出て、帯域は「— (詳細計測では帯域は測れません)」 | ✅ (`e2e/monitor.spec.ts`。再起動は「プロジェクトの切り替えで読み直し」で代用。プロセスの再起動は pytest B-21) |
+| B-22 | 計測していないトピックは「分けられない」ではない (pytest) | 重い型・オフにしたトピックの送信元は `basis: not_monitored`、受信側の数字なしも `not_monitored`、`heavy` が付く。注入ジョブ・恒久ダミーの既知の値は残る。計測中・`unsupported` は従来の根拠のまま | ✅ (`test_rates.py`, `test_sub_rates.py`) |
+| B-23 | 計測していない重いトピックの Hz はトレースから (pytest) | 詳細計測モードで、送信元の行が `traced` の Hz (帯域は null)、全送信元がトレースされたときだけ合計の `hz_traced`、一部だけなら null。受信側はノードの中の受信 Hz。計測中のトピックは変わらない | ✅ (`test_tracing_merge.py`) |
+| B-24 | 計測の on/off をプロジェクトに保存 (pytest) | `traffic_monitor` に保存・自動保存、新しい Lab で復元、プロジェクトの切り替え・読み直しで置き換わる、REST の往復、`PUT /api/project` で置き換わる | ✅ (`test_project.py`) |
+| B-25 | 地図の「受信なし」は本物の受信側だけで決まる (pytest) | roshanavi 自身 (`roshanavi` / `roshanavi_probe` / `roshanavi_scenario`) の購読は受信側に数えない (`show_self` でも)。本物の受信側がいれば出ない | ✅ (`test_graph_unit.py`) |
+| B-26 | 計測していない行の表示 (vitest) | 「計測していません (画像などの重いデータは既定でオフ)」+「計測する」、軽いトピックは理由なし、数字の欄は 0 Hz でなく —、「受信なし」「未受信」「分けられない」が出ない。詳細計測モードは Hz とトレース表記・「— (詳細計測では帯域は測れません)」。計測中で本当に未受信なら「未受信」 | ✅ (`traffic/notMeasured.test.ts`, `graph/model.test.ts`) |
+| B-27 | E2E: 画像のトピック | `/e2e_viz/image` (roshanavi の外の画像送信ノード) の行・展開行・詳細に「計測していません (…)」と「計測する」、地図の「受信なし」が出ない → 押すと数字が出る → 別プロジェクトに切り替えると戻り、元に戻すと保存から復元される。詳細計測モードでは中継ノードの出力コピーの Hz がトレースで出て、帯域は「— (詳細計測では帯域は測れません)」 | ✅ (`e2e/monitor.spec.ts`。再起動は「プロジェクトの切り替えで読み直し」で代用。プロセスの再起動は pytest B-21) |
 
 ### C. ダミー注入
 
@@ -299,11 +299,11 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | K-20 | 遅いトピックの Hz | 0.5 Hz を 1 秒窓で見ると 10 秒で計算 (`rate_note: extended`, 0.5 Hz)。1 通だけなら `too_few` | ✅ (`test_traffic_windows.py`) |
 | K-21 | 受信者ごとの理論値 (unit) | 全送信者が QoS 適合 → トピック全体、一部 → 適合する送信者の和 (分けられなければ null)、適合なし → 0 と `delivered: false`。roshanavi 自身は除外 | ✅ (`test_sub_rates.py`) |
 | K-22 | 表の絞り込み・選択・グループ (vitest) | 役割・状態・検索 (AND)、全選択は操作できる行だけ、一部選択、消えた行の選択解除、グループの見出しと一括選択 | ✅ (`nodelist/model.test.ts`) |
-| K-23 | 一括操作の計画と確認文 (vitest) | 起動設定ごとに 1 回、一緒に止まるノード (選択外も) を列挙、対象外の理由、lifecycle は activate / deactivate で外部の注意付き 。行と計画は同じ `GET /api/node-list` の応答 (`rows` + `targets`) から作る: 停止直後に別の情報源が「動作中」のままでも起動の計画が空にならない (#1) | ✅ (`nodelist/bulk.test.ts`) |
+| K-23 | 一括操作の計画と確認文 (vitest) | 起動設定ごとに 1 回、一緒に止まるノード (選択外も) を列挙、対象外の理由、lifecycle は activate / deactivate で外部の注意付き 。行と計画は同じ `GET /api/node-list` の応答 (`rows` + `targets`) から作る: 停止直後に別の情報源が「動作中」のままでも起動の計画が空にならない | ✅ (`nodelist/bulk.test.ts`) |
 | K-24 | lifecycle と取り込みの表示 (vitest) | 遷移の並び・確認文、取り込みの既定の選択・引数の差分・要約・理由文・取り込めない理由 | ✅ (`lifecycleText.test.ts`, `importModel.test.ts`) |
 | K-25 | 一時停止中の最終更新・遅いトピックの表示 (vitest) | 一時停止中は警告色にせず「一時停止中 (HH:MM:SS の表示)」。「0.50 Hz (直近 10 秒で計算)」「— (1 秒窓では測定不可)」 | ✅ (`timing.test.ts`) |
 | K-26 | 送受信ごとの行・ノード別 (vitest) | 送信 → 受信の順、ノード別のまとめと並び、届いていない・分けられない値、根拠のラベル、すべて展開 | ✅ (`traffic/endpoints.test.ts`, `model.test.ts`) |
-| K-27 | E2E: チェックボックスで talker + listener を一括停止・起動 | ↓ キーで次の行へ、確認ダイアログに両方のノード、停止状態の行になり、起動で戻る。外部ノードのチェックは無効で案内が出る 。停止直後の一括起動は **再試行なしで** 1 回のクリックで確認ダイアログが出る (#1) | ✅ (`e2e/nodes.spec.ts`) |
+| K-27 | E2E: チェックボックスで talker + listener を一括停止・起動 | ↓ キーで次の行へ、確認ダイアログに両方のノード、停止状態の行になり、起動で戻る。外部ノードのチェックは無効で案内が出る 。停止直後の一括起動は **再試行なしで** 1 回のクリックで確認ダイアログが出る | ✅ (`e2e/nodes.spec.ts`) |
 | K-28 | E2E: 外部の lifecycle ノード (lc_talker) | configure → activate → deactivate → activate → cleanup。確認ダイアログに外部の注意 | ✅ (`e2e/nodes.spec.ts`) |
 | K-29 | E2E: launch の取り込み | roshanavi / demo_system.launch.py を解析 → 2 ノードと ExecuteProcess → 取り込むと一覧に取り込み元付きで出る | ✅ (`e2e/nodes.spec.ts`) |
 | K-30 | E2E: トラフィックの展開とノード別 | /chatter を展開して talker (送信・実測) と listener (受信・理論値)、ノード別に切り替えても同じ | ✅ (`e2e/smoke.spec.ts`) |
@@ -335,7 +335,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | L-17 | 別コンテナのノード | demo コンテナの external_listener は `not_traced` | 👀 (ラボで確認) |
 | L-18 | 他の RMW (Cyclone DDS) | rmw_take / rmw_publish のトレースポイントがある | ⬜ |
 | L-19 | 解析の子プロセス (unit、偽の解析器) | 複数フレームにまたがるイベントの順序と件数、解析エラーは例外で子は続行、子のクラッシュ・30 秒無応答は kill して作り直し、途中で読むのをやめても次のチャンクがずれない、N チャンクごとの入れ替えで漏れる fd が N 本以内、改行入りのパスを拒否 | ✅ (`test_tracing_parser.py`) |
-| L-20 | fd を bt2 の裏で閉じない (#17) | 実チャンク 16 回の回転で worker の fd が平ら、解析の子は 4 チャンクごとに入れ替わり、子の fd も有界。worker 終了で子も残らない | ✅ (`test_tracing_fds.py`) |
+| L-20 | fd を bt2 の裏で閉じない | 実チャンク 16 回の回転で worker の fd が平ら、解析の子は 4 チャンクごとに入れ替わり、子の fd も有界。worker 終了で子も残らない | ✅ (`test_tracing_fds.py`) |
 
 ### M. サンプルノード・変換ノード・パーセプションデモ (P5)
 
@@ -396,7 +396,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | N-20 | E2E: サンプルのモジュールから関数ノードを作る | モジュール roshanavi_examples.logic → 関数の一覧にシグネチャ → shout → 入力 /chatter は「文字列 (std_msgs/String)」、出力の種類は戻り値の注釈から文字列 → 作成 → 地図に役割 function、エコーに HELLO WORLD!、プロジェクトに保存、右クリックの編集画面に動作状況 (running) と書き出し | ✅ (`e2e/function.spec.ts`) |
 | N-21 | 大きい画像を毎秒 30 枚 | numpy 変換と Python の呼び出しの CPU・遅れ | ⬜ |
 
-### O. アプリ内チュートリアル (#41)
+### O. アプリ内チュートリアル
 
 仕様は [ui.md#実装メモ (アプリ内チュートリアル)](../design/ui.md#実装メモ-アプリ内チュートリアル)。E2E は `web/e2e/tour.spec.ts`: 画面に出ている指示のとおり、`data-tour` の目印だけを使って最後まで操作し、終了後に作ったものが無いことまで確かめる (UI の変更でツアーが壊れると落ちる)。
 
@@ -417,21 +417,21 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | O-13 | 準備に失敗したときの表示 (`demo_nodes_cpp` が無い環境など) | 「準備に失敗しました: …」と出てツアーは始まらず、途中まで作ったものは片づく | ⬜ (実装済み・自動テストなし) |
 | O-14 | Chromium 以外 (Firefox / Safari) での見え方・キーボード操作 | 吹き出しの位置・フォーカス・Esc | 👀 (未確認: E2E は Chromium のみ) |
 
-### P. 既知不具合の修正 (#2〜#10)
+### P. 既知不具合の修正
 
 | ID | 項目 | 期待結果 | 状態 |
 |---|---|---|---|
-| P-02 | 常駐ダミーのメニューは現在の `paused` に合う方だけ (#2) | `paused=false` なら「一時停止」だけ、`true` なら「再開」だけ。状態が取れない間は従来どおり両方 (vitest) / E2E は入力ノードのメニューに「再開」が出ない | ✅ (`graph/menuModel.test.ts`、`e2e/ux.spec.ts`) |
-| P-03 | お試し送信のファイル一覧の再取得 (#3) | ウィンドウのフォーカス復帰・タブが見える状態に戻ったとき・「ファイル一覧を更新」ボタンで `/api/files` を取り直す (モード切替時の再取得は従来どおり) | ✅ (vitest `lib/refocus.test.ts`、E2E `e2e/media.spec.ts`) |
-| P-04 | rosbag2 の `/events/write_split` は内部トピック (#4) | 録画するトピックの選択肢・シナリオ記録の候補・地図 (隠すトグル)・診断から外れ、トラフィックの既定の畳み対象 | ✅ (vitest `lib/topics.test.ts`、pytest `test_diagnostics.py::test_hidden_topics`) |
-| P-05 | メディア注入の一時停止はソースを保持する (#5) | 一時停止中は `sent` が増えず、`count` も消費されない。再開すると残りが `late_events` 無しで送られ `count` ちょうどで終わる。一時停止中でも停止できる | ✅ (`test_media_job.py::test_pausing_a_media_job_holds_the_source_instead_of_dropping_frames` / `test_a_paused_media_job_can_still_be_stopped`) |
-| P-06 | ブラウザ入力: 閉じる直前のフレームを失わない (#6) | 破棄の前に ack を待つ (順序をフェイクで検証)、閉じる / 停止コマンドの直後でも送ったフレームが全部届く、停止コマンドには処理と drain の後に `stopped` が返る | ✅ (`test_media_capture.py::test_teardown_waits_for_acks_before_destroying_the_publishers` / `test_frames_sent_right_before_the_socket_closes_are_all_published`) |
-| P-07 | 「起動中」は地図に対応づくまで (#7) | `starting` のターゲットでもノードが対応づいていれば一覧の状態は `running`。対応づいていなければ `starting` のまま、`stopped` は変わらない | ✅ (`test_launcher_process.py::test_service_reports_running_once_the_node_is_mapped_even_within_the_starting_window`) |
-| P-08 | 手で動かしたノードの位置はトポロジーが変わっても固定 (#8) | ドラッグした位置を記録しレイアウトで戻す。プロジェクトごとに localStorage へ保存 (壊れた JSON・形の崩れ・保存先なし・例外でも動く、件数に上限)。「整列し直す」で全部外れる。E2E: talker をドラッグ → 入力ノードを足してもそのまま → 再読み込みしてもそのまま → 整列し直すで動く | ✅ (vitest `graph/pins.test.ts`、E2E `e2e/ux.spec.ts`) |
-| P-09 | 最後に開いたプロジェクトを再起動後も覚える (#9) | `<data_dir>/last_project.json` に `id` を保存・起動時に一覧と照合 (サンプルは通常の「開く」と同じくコピー)。壊れた JSON・型違い・一覧に無い id・消えたファイル・書き込めない data_dir は無視して `--project` に戻る。Lab を作り直す (= 再起動) と記憶したプロジェクトで始まり、ファイルを消すと `--project` に戻る。API で切り替えると保存され、失敗した切り替えでは変わらない | ✅ (`test_project_catalog.py`) |
-| P-10 | 変換ノードのプレビューは切り詰めない値で計算 (#10) | `EchoManager.latest_sample` は 32 個を超える配列も全部返し、サイズの上限を超えると `capped` で表示用の値に戻る。`GET /api/echo/{topic}/sample` (エコー前は `msg: null`)。UI は切り詰めの検出 (配列・文字列・深い所) と全体への差し替え、切り詰めが残るときだけ注意書き。E2E: 40 要素の配列で `len(msg.data)` が 40、注意書きなし | ✅ (pytest `test_integration_ros.py::test_echo_sample_is_not_truncated_up_to_the_size_cap` / `test_server.py::test_echo_sample_endpoint`、vitest `transform/sampleTruncation.test.ts`、E2E `e2e/transform.spec.ts`) |
+| P-02 | 常駐ダミーのメニューは現在の `paused` に合う方だけ | `paused=false` なら「一時停止」だけ、`true` なら「再開」だけ。状態が取れない間は従来どおり両方 (vitest) / E2E は入力ノードのメニューに「再開」が出ない | ✅ (`graph/menuModel.test.ts`、`e2e/ux.spec.ts`) |
+| P-03 | お試し送信のファイル一覧の再取得 | ウィンドウのフォーカス復帰・タブが見える状態に戻ったとき・「ファイル一覧を更新」ボタンで `/api/files` を取り直す (モード切替時の再取得は従来どおり) | ✅ (vitest `lib/refocus.test.ts`、E2E `e2e/media.spec.ts`) |
+| P-04 | rosbag2 の `/events/write_split` は内部トピック | 録画するトピックの選択肢・シナリオ記録の候補・地図 (隠すトグル)・診断から外れ、トラフィックの既定の畳み対象 | ✅ (vitest `lib/topics.test.ts`、pytest `test_diagnostics.py::test_hidden_topics`) |
+| P-05 | メディア注入の一時停止はソースを保持する | 一時停止中は `sent` が増えず、`count` も消費されない。再開すると残りが `late_events` 無しで送られ `count` ちょうどで終わる。一時停止中でも停止できる | ✅ (`test_media_job.py::test_pausing_a_media_job_holds_the_source_instead_of_dropping_frames` / `test_a_paused_media_job_can_still_be_stopped`) |
+| P-06 | ブラウザ入力: 閉じる直前のフレームを失わない | 破棄の前に ack を待つ (順序をフェイクで検証)、閉じる / 停止コマンドの直後でも送ったフレームが全部届く、停止コマンドには処理と drain の後に `stopped` が返る | ✅ (`test_media_capture.py::test_teardown_waits_for_acks_before_destroying_the_publishers` / `test_frames_sent_right_before_the_socket_closes_are_all_published`) |
+| P-07 | 「起動中」は地図に対応づくまで | `starting` のターゲットでもノードが対応づいていれば一覧の状態は `running`。対応づいていなければ `starting` のまま、`stopped` は変わらない | ✅ (`test_launcher_process.py::test_service_reports_running_once_the_node_is_mapped_even_within_the_starting_window`) |
+| P-08 | 手で動かしたノードの位置はトポロジーが変わっても固定 | ドラッグした位置を記録しレイアウトで戻す。プロジェクトごとに localStorage へ保存 (壊れた JSON・形の崩れ・保存先なし・例外でも動く、件数に上限)。「整列し直す」で全部外れる。E2E: talker をドラッグ → 入力ノードを足してもそのまま → 再読み込みしてもそのまま → 整列し直すで動く | ✅ (vitest `graph/pins.test.ts`、E2E `e2e/ux.spec.ts`) |
+| P-09 | 最後に開いたプロジェクトを再起動後も覚える | `<data_dir>/last_project.json` に `id` を保存・起動時に一覧と照合 (サンプルは通常の「開く」と同じくコピー)。壊れた JSON・型違い・一覧に無い id・消えたファイル・書き込めない data_dir は無視して `--project` に戻る。Lab を作り直す (= 再起動) と記憶したプロジェクトで始まり、ファイルを消すと `--project` に戻る。API で切り替えると保存され、失敗した切り替えでは変わらない | ✅ (`test_project_catalog.py`) |
+| P-10 | 変換ノードのプレビューは切り詰めない値で計算 | `EchoManager.latest_sample` は 32 個を超える配列も全部返し、サイズの上限を超えると `capped` で表示用の値に戻る。`GET /api/echo/{topic}/sample` (エコー前は `msg: null`)。UI は切り詰めの検出 (配列・文字列・深い所) と全体への差し替え、切り詰めが残るときだけ注意書き。E2E: 40 要素の配列で `len(msg.data)` が 40、注意書きなし | ✅ (pytest `test_integration_ros.py::test_echo_sample_is_not_truncated_up_to_the_size_cap` / `test_server.py::test_echo_sample_endpoint`、vitest `transform/sampleTruncation.test.ts`、E2E `e2e/transform.spec.ts`) |
 
-### Q. リソース監視 (Lv1, #32)
+### Q. リソース監視 (Lv1)
 
 仕様は [resources.md](../design/resources.md)。busy_demo の比較とサンプラーの負荷は実時間の測定 (テスト方針のとおり、余裕を大きくとり、空回りが再現しない環境では理由を付けて飛ばす)。
 
@@ -458,7 +458,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | Q-19 | UDP 受信バッファ溢れの案内 (実環境) | 大きな画像を `--monitor-heavy` で監視し、受信バッファを小さくして溢れさせると `net.core.rmem_max` の案内 | ⬜ (判定は Q-06 の単体テストのみ。E2E のコンテナでは RcvbufErrors が実際に増え、リソースタブに橙色で出ることを目視で確認 👀) |
 | Q-20 | 自分以外のユーザーのプロセスを一覧しない (非 root) | 非 root で起動すると他のユーザーのプロセスが一覧に出ない | 🟡 (単体テストの読み取り関数で確認。Docker は root で動くため実機は未確認 👀) |
 
-### R. ディストロ対応 (#36, #37)
+### R. ディストロ対応
 
 Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1 回。継続的には確認しない)。版の一覧は [dependencies.md の 0. ディストロごとの主な版](dependencies.md#0-ディストロごとの主な版)。
 
@@ -473,13 +473,13 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | R-07 | rclpy 10 の `MessageInfo.publisher_gid` (dict) | `{'data': bytes}` の形でも bytes の並びでも gid になる。以前は購読のコールバックで例外になり executor のスレッドが止まった | ✅ (`test_traffic_rate.py`) |
 | R-08 | uvicorn 0.29 以降のシグナルの再送 | SIGTERM / SIGINT / SIGHUP でサーバーを止めても Launcher の子が残らない (uvicorn が終了後に同じシグナルを送り直すため、以前は `finally` の前に落ちていた) | ✅ (`test_launcher_shutdown.py` を両方で実行) |
 | R-09 | 取り消された WebSocket の後片付け | タスクが取り消し済みでも、画像・音声ビューアとエコーの購読解除、ブラウザ入力の終了が 1 回だけ走る (Starlette 0.50 の TestClient は閉じた直後に取り消す) | ✅ (`test_asyncutil.py`、`test_media_viewer.py`) |
-| R-10 | babeltrace2 2.1.2 の metadata の fd (#17) | 2.1.2 では解析の子を入れ替えなくても fd が増えない (11 チャンクで 4 本のまま。2.0.5 は 1 チャンクごとに 1 本増える)。入れ替えの仕組みは 2.0.x のために残す | 👀 (2026-10-18 に手動で確認。入れ替えありの回帰テストは `test_tracing_fds.py`) |
+| R-10 | babeltrace2 2.1.2 の metadata の fd | 2.1.2 では解析の子を入れ替えなくても fd が増えない (11 チャンクで 4 本のまま。2.0.5 は 1 チャンクごとに 1 本増える)。入れ替えの仕組みは 2.0.x のために残す | 👀 (2026-10-18 に手動で確認。入れ替えありの回帰テストは `test_tracing_fds.py`) |
 | R-12 | rmw の付属トピック (`<topic>/_buf_cpu`) | Lyrical の rmw_fastrtps は、バイト列を持つ型 (AudioDataStamped など) を C++ で購読すると隠しトピック `<topic>/_buf_cpu` を足す。roshanavi はこれを一覧・地図・計測の対象にしない (以前は計測ノードがそれを購読して `/a/_buf_cpu/_buf_cpu/...` が 1 秒に 1 段ずつ増え、名前が長すぎて rclpy が例外を出し、地図の更新が止まった)。問い合わせで例外になるトピックが 1 つあっても地図の更新は続く | ✅ (`test_probe_ros.py::test_rmw_companion_topics_do_not_multiply` は修正前の Lyrical で失敗を確認、`test_graph_unit.py`) |
 | R-13 | Lyrical のデモ (`/chatter` が `example_interfaces/msg/String`) | Lyrical の demo_nodes_cpp の talker / listener は std_msgs ではなく example_interfaces の String を使う。example_interfaces の String・Bool・整数・小数も「文字列」などのデータの種類として扱う (型はそのまま)。種類だけの関数ノードの入力 (デモの `text_shout`) は既存のトピックの型を使う。チュートリアル「届かない原因を見つけて直す」は受信側を先に起動し、送信側をその型にそろえる。E2E は `/chatter` の型をサーバーに聞いて使う | ✅ (`test_data_kinds.py`、`test_function_unit.py::test_inputs_with_only_a_kind_adopt_the_existing_topic_type`、vitest `tour/fixtures.test.ts`、E2E) |
 | R-11 | Python 3.14 | 式の評価器 (`expr.py`、`msg_view.py`) の許可・拒否のテストが通る (削除された `ast.Num` などは使っていない)。警告なし | ✅ (`test_expr.py`、`test_expr_fields.py`、`test_security.py`) |
 
 
-### S. クラスノード (#43)
+### S. クラスノード
 
 仕様は [nodes.md#クラスノード](../design/nodes.md#クラスノード-状態を持つ処理をそのままノードにする)。単体は `test_class_unit.py` (ROS のグラフ不要)、実ノードは `test_class_ros.py`、画面のロジックは `classForm.test.ts`、E2E は `web/e2e/class.spec.ts`。
 
@@ -541,7 +541,7 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | T-22 | 登録した場所 (B) をライブラリとして使う (unit + 実ノード) | A の `import <ライブラリ>` が、登録した B (flat・src・フォルダ自体がパッケージ) から動く (関数・クラスとも、実ノードで出力まで確認)。登録を外すと `missing_module` と rosdep / pip の案内 + 「登録すると import できます」、登録済みなのに無ければ「登録した場所 … に見つかりません」(rosdep を尋ねない)、起動後に登録したなら「再起動」。標準ライブラリ・ノードが使う名前 (`json`・`winreg`・`audio_common_msgs`)・`tests` は依存としても出さず、環境のライブラリが先、外向きのシンボリックリンクは拒否、プロジェクトの `.venv` のモジュールは読み直しで外さない。依存ライブラリの書き換えはホットリロードされ (実ノードで `reloads` が増える)、壊れていれば古いまま。C のコードから B のライブラリも使える。サーバーのプロセスに finder は入らない | ✅ |
 
 
-### U. launch の引き取り (`--launch`)・強制終了の後始末 (#12)・ノード一覧の削除
+### U. launch の引き取り (`--launch`)・強制終了の後始末・ノード一覧の削除
 
 仕様は [integration.md](../design/integration.md)、[launcher.md#子プロセスの後始末](../design/launcher.md#子プロセスの後始末-12)。fixture は `test/takeover_fixtures.py` (偽の install に置いた `tk_demo` パッケージ: 引き継ぐもの・元どおりにならないものをすべて含む `tk_full.launch.py` (+ include・パラメータファイル)、ノードだけの `tk_simple.launch.py`、OnProcessExit → Shutdown の `tk_exit.launch.py`)。`test_takeover.py`・`test_leftovers.py`・`test_registry_delete.py`、vitest `takeover/model.test.ts`・`nodelist/remove.test.ts`、E2E `web/e2e/takeover.spec.ts`。
 
@@ -567,7 +567,7 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | U-18 | Lyrical での実行 | U の pytest (と launch 取り込み・停止・プロセス管理の既存テスト) が Lyrical でも通る (55 件) | ✅ |
 | U-19 | turtle_demo を引き取りで動かす | `dev` サービス (`--launch turtle_patrol patrol.launch.py --mine patrol`) で /sim と /patrol が roshanavi のノード (patrol は mine)、API から patrol を止める・起動し直す、ログ、turtle_viz の正方形 | 👀 2026-10-18: 報告は空 (元どおりにならない動作なし)、/sim (dependency)・/patrol (mine)・/turtle_viz が確実で対応づき、patrol の停止で地図から消え、起動・再起動で pid が変わり sim の pid はそのまま、ログに「Side N done」と起動コマンド、`reset` 後 40 秒で正方形 (400×400、外接 136×137 px)。コンテナを再起動しても同じ ID・役割で再利用 (`pending` なし、残ったプロセス 0) |
 
-### V. 地図の上での配線・言葉の総点検・pub/sub の 1 枚絵 (#47)
+### V. 地図の上での配線・言葉の総点検・pub/sub の 1 枚絵
 
 仕様は [wiring.md](../design/wiring.md)。互換性の規則はバックエンドと画面の両方を、同じ表 `ros2_ws/src/roshanavi/test/data/wire_compat_cases.json` で検査する。
 
@@ -592,7 +592,7 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 | V-17 | スクリーンリーダーの実機確認 | NVDA / VoiceOver でつなぎ口の名前と一覧が読まれる | 👀 (未確認: 読み上げ用の名前は E2E で検査) |
 | V-18 | 用語の方針 (pytest `test_wording.py`) | サーバーが画面に返す文 (シナリオのヒント・エラー、クラスノードのパラメータの問題、ひな形の README) に、昔の平易な言葉が出ない | ✅ (`test_wording.py`) |
 
-### W. 中継パイプラインのサンプル・composable container (#51, #22)
+### W. 中継パイプラインのサンプル・composable container
 
 仕様は [nodes.md#中継パイプライン](../design/nodes.md#中継パイプライン-source--relay--sink51)、[launcher.md#composable container の扱い](../design/launcher.md#composable-container-の扱い-22)、測定は [measurement.md#規模と負荷の限界](../design/measurement.md#規模と負荷の限界-51)。fixture は `test/pipeline_fixtures.py` (生成した spec を書いて launch の起動設定を作る)。
 

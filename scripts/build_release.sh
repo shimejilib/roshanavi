@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # Build a release source tarball that already contains the built web UI, so that users
-# who install roshanavi from source do not need Node.js / npm (docs/project/distribution.md,
-# issue #42).
+# who install roshanavi from source do not need Node.js / npm (docs/project/distribution.md).
 #
 #   scripts/build_release.sh [--no-web-build] [--ref <git-ref>]
 #

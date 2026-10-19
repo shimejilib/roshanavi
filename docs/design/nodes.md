@@ -43,7 +43,7 @@
 
 **管理**: プロジェクトファイルの `transforms:` (ダミーの `kind` を増やすのではなく別の一覧にした。`DummySpec` は注入の設定で、入力・出力・式の形がまったく違うため)。Launcher の起動リストで ID を共有し (targets / dummies / transforms で一意)、`kind: transform`、役割 `transform` (地図はダミーと同系統の紫、凡例「変換ノード」、ノード一覧の役割「変換」)。起動・停止・再起動・ログ・自動起動・自動再起動・`launch` への書き出しはダミーと同じ (`POST /api/dummies/export` は変換ノードも書き出し、launch ファイルの Node は `executable='transform'`)。API: `POST /api/transforms` (`?start=true`)、`PUT /api/transforms/{id}`。削除・起動・停止・ログは `/api/targets/{id}`。
 
-**試算 (プレビュー)** (`transform/preview.py`、`POST /api/transforms/preview {spec, samples}`): ノードと同じ `Computer` と `msgutil.build` で、送らずに計算だけする。`samples` は入力の別名ごとの素の dict (UI が `/ws/echo` で受けた最新のメッセージ。届いていなければ省略し、サーバーが入力の型の既定値で代わりに計算して `templated` に別名を返す)。常に 200 で `{ok, passed, output, errors[{path, code, message, params}], templated, relay}` を返す (仕様の検査エラーも `spec_invalid` として同じ形)。`passed: false` かつエラーなしは「条件に合わないので送らない」。出力の型に合わない値は `build_invalid_value` などを、メッセージの先頭のフィールドの場所に付ける。サンプルは最大 8 個、深さ 32 まで。エコーは長い配列を先頭 32 個に切り詰めた形 (`{_truncated, length, head}`、長い文字列は `…(+N chars)`) で送るので、**プレビューの計算にはエコーの値ではなく、切り詰めないメッセージを使う** (#10)。`GET /api/echo/{topic}/sample` が、エコー中のトピックの最新メッセージを `{topic, seq, msg, capped, size_bytes, max_bytes}` で返す (`EchoManager.latest_sample`)。シリアライズ後のサイズが上限 (`echo.MAX_SAMPLE_BYTES` = 256 KiB) までなら `msg` は切り詰めない dict (`msgutil.to_plain`)、超えると `capped: true` で従来の切り詰めた表示用の値に戻る (巨大な画像などで応答とプレビューのリクエストが膨らまないため)。エコーしていないトピック・まだ届いていないときは `msg: null`。UI は、エコーの値に切り詰めがあるトピックだけ 1 秒ごとにこの API を引き、上限内ならそれで計算する。上限を超えたとき (または取得できないとき) は切り詰めた値で計算し、プレビューに「入力のメッセージが大きいため、配列や文字列を途中で切った値で計算しています」と明示する。
+**試算 (プレビュー)** (`transform/preview.py`、`POST /api/transforms/preview {spec, samples}`): ノードと同じ `Computer` と `msgutil.build` で、送らずに計算だけする。`samples` は入力の別名ごとの素の dict (UI が `/ws/echo` で受けた最新のメッセージ。届いていなければ省略し、サーバーが入力の型の既定値で代わりに計算して `templated` に別名を返す)。常に 200 で `{ok, passed, output, errors[{path, code, message, params}], templated, relay}` を返す (仕様の検査エラーも `spec_invalid` として同じ形)。`passed: false` かつエラーなしは「条件に合わないので送らない」。出力の型に合わない値は `build_invalid_value` などを、メッセージの先頭のフィールドの場所に付ける。サンプルは最大 8 個、深さ 32 まで。エコーは長い配列を先頭 32 個に切り詰めた形 (`{_truncated, length, head}`、長い文字列は `…(+N chars)`) で送るので、**プレビューの計算にはエコーの値ではなく、切り詰めないメッセージを使う**。`GET /api/echo/{topic}/sample` が、エコー中のトピックの最新メッセージを `{topic, seq, msg, capped, size_bytes, max_bytes}` で返す (`EchoManager.latest_sample`)。シリアライズ後のサイズが上限 (`echo.MAX_SAMPLE_BYTES` = 256 KiB) までなら `msg` は切り詰めない dict (`msgutil.to_plain`)、超えると `capped: true` で従来の切り詰めた表示用の値に戻る (巨大な画像などで応答とプレビューのリクエストが膨らまないため)。エコーしていないトピック・まだ届いていないときは `msg: null`。UI は、エコーの値に切り詰めがあるトピックだけ 1 秒ごとにこの API を引き、上限内ならそれで計算する。上限を超えたとき (または取得できないとき) は切り詰めた値で計算し、プレビューに「入力のメッセージが大きいため、配列や文字列を途中で切った値で計算しています」と明示する。
 
 **詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) での見え方**: 変換ノードは rclpy なので、トレースで測れるのは **受信数だけ** (処理数・処理時間は「未対応」、理由 `rclpy`)。送信は C++ 計測ノード ([measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) で送信ノードごとに実測される。編集画面にもこの注意を書く。
 - 制約: 式は 1 メッセージあたり Python で評価するので、数百 Hz を超える入力や大きい配列のフィールド計算には向かない (大きい型は relay のみ)。
@@ -67,8 +67,8 @@
 - `audio_common_msgs` は `input_type: stamped` のときだけ必要 (package.xml は exec_depend)。`vision_msgs` は新しい依存 (`ros-jazzy-vision-msgs`)。
 - 起動設定の例: `examples/demo_project` (autostart なし)、`examples/perception_demo` ([launcher.md#デモ構成](launcher.md#デモ構成-p45a))、`examples/busy_demo` (executor_busy_demo の 3 構成、autostart なし)。
 
-### executor_busy_demo — MultiThreadedExecutor の空回りを体験する (#40)
-**何が起きるか**: rclpy のノードを `MultiThreadedExecutor` + Fast DDS (`rmw_fastrtps_cpp`、Jazzy 既定) で動かすと、仕事をほとんどしていないのに CPU を 1 コア近く使うことがある。rclpy は購読ごとに「QoS が合わない」などを知らせる QoS イベントの待ち受けを自動で付ける。rmw_fastrtps ではそれが購読本体と同じ「データ到着」の目印を共有していて、MultiThreadedExecutor は購読のコールバックを実行中その購読を待ち受けから外すため、その間に届いたメッセージを待ち受けが「あるのに受け取れない」と見て `wait()` がすぐ戻り続ける (ros2/rmw_fastrtps#929、関連 ros2/rclpy#1223)。executor のスレッドが毎秒数千回空回りして GIL を握り、コールバック自体も遅れる。roshanavi 自身の購読に QoS イベントを付けない理由もこれ ([#19](https://github.com/shimejilib/roshanavi/issues/19)、CLAUDE.md)。
+### executor_busy_demo — MultiThreadedExecutor の空回りを体験する
+**何が起きるか**: rclpy のノードを `MultiThreadedExecutor` + Fast DDS (`rmw_fastrtps_cpp`、Jazzy 既定) で動かすと、仕事をほとんどしていないのに CPU を 1 コア近く使うことがある。rclpy は購読ごとに「QoS が合わない」などを知らせる QoS イベントの待ち受けを自動で付ける。rmw_fastrtps ではそれが購読本体と同じ「データ到着」の目印を共有していて、MultiThreadedExecutor は購読のコールバックを実行中その購読を待ち受けから外すため、その間に届いたメッセージを待ち受けが「あるのに受け取れない」と見て `wait()` がすぐ戻り続ける (ros2/rmw_fastrtps#929、関連 ros2/rclpy#1223)。executor のスレッドが毎秒数千回空回りして GIL を握り、コールバック自体も遅れる。roshanavi 自身の購読に QoS イベントを付けない理由もこれ (CLAUDE.md)。
 
 **構成**: `busy_demo_driver` が `/busy_demo/in` に 100 Hz (`rate_hz`) で送り、`executor_busy_demo` が受けて `work_ms` (既定 5 ms) だけ sleep する (軽い処理の代わり。sleep は CPU を使わないので、見える CPU は executor 自身の空回り)。`executor_busy_demo` は 1 秒ごとに `stats_topic` へ次の JSON (std_msgs/String) を送り、同じ内容を 1 行でログに出す: `executor`、`qos_events`、`num_threads`、`work_ms`、`wait_passes_per_sec` (executor の待ちの回数)、`empty_passes_per_sec`、`empty_ratio` (空振りの割合)、`callbacks_per_sec`、`passes_per_callback`、`process_cpu_percent` (プロセス全体の CPU 時間 ÷ 経過時間。100 = 1 コア)。
 
@@ -90,7 +90,7 @@
 
 起動: `ros2 launch roshanavi_examples busy_demo.launch.py [executor:=multi] [qos_events:=off] [work_ms:=5.0] [num_threads:=4] [rate_hz:=100.0]`、または `ros2 run roshanavi_examples busy_demo_driver` と `ros2 run roshanavi_examples executor_busy_demo --ros-args -p qos_events:=off`。
 
-## 中継パイプライン (source / relay / sink、#51)
+## 中継パイプライン (source / relay / sink)
 受け取って次に送る C++ のノードを、形 (直列・分岐・合流・格子) と規模 (3 段 / 20 ノード / 200 ノード以上) を指定してつなげるサンプルと生成器。「ノードが多いと地図・計測・リソース監視はどこまで持つか」を測る ([measurement.md#規模と負荷の限界](measurement.md#規模と負荷の限界-51)) のと、**別プロセスと composable container の両方で同じ構成を動かして** composable container の扱いを確かめる ([launcher.md#composable container の扱い](launcher.md#composable-container-の扱い-22)) のが目的。
 
 **メッセージ** (`roshanavi_examples_msgs`、公開。どのノードからも使ってよい)
@@ -273,7 +273,7 @@ class MovingAverage:
 - 例外・変換の失敗は関数ノードと同じ扱い (ログと画面に ファイル:行番号 (関数名) 付きで出し、ノードは止めない)。
 
 **操作メソッド (引数なし、`reset` など)**
-- ノードは各操作メソッドについて、トピック `~/<メソッド名>` (= `/<名前空間>/<ノード名>/<メソッド名>`、`std_msgs/Empty`、reliable) を購読し、届くとそのメソッドを呼ぶ。ボタン・シナリオ・`ros2 topic pub --once /<ノード名>/reset std_msgs/msg/Empty` のどれも同じ道を通る。サービス (`std_srvs/Trigger`) は #35 の後で足す。
+- ノードは各操作メソッドについて、トピック `~/<メソッド名>` (= `/<名前空間>/<ノード名>/<メソッド名>`、`std_msgs/Empty`、reliable) を購読し、届くとそのメソッドを呼ぶ。ボタン・シナリオ・`ros2 topic pub --once /<ノード名>/reset std_msgs/msg/Empty` のどれも同じ道を通る。サービス (`std_srvs/Trigger`) は今後足す。
 - 呼び出しはノードの状態に **記録** する: 呼んだ回数 (`count`)、最後の時刻、成功か失敗か、戻り値 (200 文字まで) またはエラー (場所付き)。記録は呼び出しのたびにすぐ状態ファイルへ書く。サーバーの `POST /api/classes/{id}/call` と、シナリオの `call` は、`std_msgs/Empty` を送ったあと **記録の `count` が増えるのを待ち**、結果 (戻り値・エラー) を返す。待つ上限は 5 秒。
 - そのトピックは「購読だけで送り手がいない」状態が普通なので、診断 (受信なし・送信なし・いなくなった警告・開発中ノードの入力なし) から除く (`diagnostics.diagnose(quiet_topics=)`)。
 

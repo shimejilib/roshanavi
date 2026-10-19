@@ -12,6 +12,7 @@ cd "$(dirname "$0")/.."
 export UID GID="$(id -g)"
 export ROS_DISTRO="${ROS_DISTRO:-jazzy}"
 export ROSHANAVI_IMAGE="${ROSHANAVI_IMAGE:-roshanavi:dev-${ROS_DISTRO}}"
+export E2E_VIZ=0  # the test-only image publisher is not part of the demo
 OUT="docs/images/demo.gif"
 WORK="$(mktemp -d)"
 DC=(docker compose --profile e2e)

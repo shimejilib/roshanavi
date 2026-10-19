@@ -22,7 +22,7 @@ export interface EndpointRow {
   bps: number | null;
   basis: string;
   delivered: boolean;
-  /** The topic is measured (subscribed by roshanavi); false = no number from that, only the trace (#61). */
+  /** The topic is measured (subscribed by roshanavi); false = no number from that, only the trace. */
   topicMeasured: boolean;
   /** Subscriber rows: trace values (詳細計測モード). */
   trace?: SubscriberTrace;

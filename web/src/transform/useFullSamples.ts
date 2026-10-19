@@ -1,4 +1,4 @@
-// Whole (untruncated) latest messages for the transform preview (#10).
+// Whole (untruncated) latest messages for the transform preview.
 //
 // The echo view shows long arrays cut to 32 items. A transform such as `len(msg.points)` computed on that copy
 // would differ from the running node, so for topics whose echo copy is truncated the server's

@@ -1,4 +1,4 @@
-"""The disposable chunk-parser child (issue #17), with a fake reader (no bt2 / lttng needed).
+"""The disposable chunk-parser child, with a fake reader (no bt2 / lttng needed).
 
 The fake child reads "chunk paths" of the form ``<n>`` (yield n events), ``fail``
 (raise inside the reader), ``crash`` (exit the process), ``hang`` (sleep) and

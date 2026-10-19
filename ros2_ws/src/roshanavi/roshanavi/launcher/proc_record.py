@@ -1,4 +1,4 @@
-"""Record of every process the launcher started, for cleaning up after a SIGKILL (#12).
+"""Record of every process the launcher started, for cleaning up after a SIGKILL.
 
 The server writes ``<data_dir>/run/procs-<server pid>.json`` (atomic replace)
 whenever the set of its target processes changes: the target's root process and

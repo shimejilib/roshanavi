@@ -6,7 +6,7 @@
 |---|---|---|
 | GET | `/api/graph` | グラフスナップショット |
 | GET | `/api/traffic?window=` | 統計一覧 (各エントリに `monitored`, `status`: ok/not_monitored/unsupported/error、`heavy` (既定で計測しない型か)、計測していないトピックで詳細計測モードのとき `hz_traced`)。`window` は 1 / 5 / 10 秒 ([map-and-traffic.md#traffic](map-and-traffic.md#traffic)) |
-| PUT | `/api/traffic/{topic}/monitor` | `{"enabled": bool}` でトピック単位の計測 on/off。プロジェクトファイルの `traffic_monitor` に保存され、再起動で復元される (#61) |
+| PUT | `/api/traffic/{topic}/monitor` | `{"enabled": bool}` でトピック単位の計測 on/off。プロジェクトファイルの `traffic_monitor` に保存され、再起動で復元される |
 | GET | `/api/types` | 利用可能なメッセージ型一覧 |
 | GET | `/api/data-kinds` | データの種類の一覧 `{kinds[{id, type, available, python}], type_kinds, common_types, conversions[{from, to, note}]}` (`conversions` は地図の配線で許す種類の変換、[wiring.md](wiring.md)) |
 | GET | `/api/types/{pkg}/msg/{name}/template` | テンプレ dict |

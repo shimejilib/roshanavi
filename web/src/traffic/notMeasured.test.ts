@@ -24,7 +24,7 @@ function renderEndpoints(e = heavyOffEntry()): string {
   return renderToStaticMarkup(createElement(LiveProvider, null, createElement('table', null, createElement('tbody', null, rows))));
 }
 
-describe('topics that are not measured (#61)', () => {
+describe('topics that are not measured', () => {
   it('only the not_monitored status counts', () => {
     expect(isNotMeasured(heavyOffEntry())).toBe(true);
     expect(isNotMeasured(entry('/chatter'))).toBe(false);

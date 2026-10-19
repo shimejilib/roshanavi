@@ -101,7 +101,7 @@ test('video file -> sensor_msgs/Image, shown in the image viewer', async ({ page
   await expect(running).toHaveCount(0, { timeout: 5_000 });
 });
 
-test('inject file list refreshes on focus and with the reload button (#3)', async ({ page }) => {
+test('inject file list refreshes on focus and with the reload button', async ({ page }) => {
   await page.goto('/');
   mkdirSync(DATA, { recursive: true });
   await page.getByTestId('tab-inject').click();

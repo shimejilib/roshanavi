@@ -2,7 +2,7 @@
 
 The detector is fed ``(t, bytes)`` samples per key (a process) with ``t`` in monotonic seconds; it
 never reads a clock itself, so tests drive it with any timeline. Design and the measured
-detection limits: docs/design/resources.md#メモリリークの見せ方, issue #45.
+detection limits: docs/design/resources.md#メモリリークの見せ方.
 
 A leak is *memory that keeps growing without slowing down*; everything else that grows is not:
 a one-time step (cache filled once), a plateau (a buffer filling up to its cap), a spike. So the

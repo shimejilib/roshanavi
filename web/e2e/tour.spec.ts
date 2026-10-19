@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CHATTER_KIND_LABEL, clickElement } from './helpers';
 
-// In-app tours (#41): every tour is followed the way a learner would, by its own instructions and
+// In-app tours: every tour is followed the way a learner would, by its own instructions and
 // through the `data-tour` marks, so a UI change that breaks a tour fails here. Each tour must also
 // finish and remove what it created.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));

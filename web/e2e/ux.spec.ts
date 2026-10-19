@@ -121,7 +121,7 @@ const modelPosition = (page: Page, id: string) =>
     return { x: Math.round(p.x), y: Math.round(p.y) };
   }, id);
 
-test('a dragged node keeps its place when the topology changes; 整列し直す lays everything out again (#8)', async ({ page }) => {
+test('a dragged node keeps its place when the topology changes; 整列し直す lays everything out again', async ({ page }) => {
   await openMap(page);
   const canvas = page.getByTestId('graph-canvas');
   const rendered = await canvas.evaluate((el) => {

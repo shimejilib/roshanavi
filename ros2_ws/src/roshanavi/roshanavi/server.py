@@ -188,7 +188,7 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
 
     @app.get('/api/echo/{topic:path}/sample')
     def echo_sample(topic: str) -> Dict[str, Any]:
-        """Latest message of a topic that is being echoed, untruncated up to a size cap (#10).
+        """Latest message of a topic that is being echoed, untruncated up to a size cap.
 
         For the transform preview, whose expressions must see whole arrays, not the 32-item
         display copy. ``msg`` is null when the topic is not echoed (yet) or nothing arrived.

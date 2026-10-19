@@ -68,7 +68,7 @@ test('bulk stop and start talker + listener with checkboxes', async ({ page }) =
   await page.getByTestId('node-check-target:listener').check();
   await expect(page.getByTestId('nodes-selected')).toContainText('2 個選択');
   await expect(page.getByTestId('nodes-bulk-start')).toBeEnabled();
-  // Rows and the bulk plan come from the same node-list snapshot (issue #1): the start right
+  // Rows and the bulk plan come from the same node-list snapshot: the start right
   // after the stop must open the dialog on the first click, no retry.
   await page.getByTestId('nodes-bulk-start').click();
   await expect(page.getByTestId('confirm-dialog')).toBeVisible();

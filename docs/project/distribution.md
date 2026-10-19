@@ -7,8 +7,8 @@ P7 (公開準備) で実施し、実装後に `docs/design/` へ統合する。
 | ディストロ | Ubuntu / Python | 扱い |
 |---|---|---|
 | **Jazzy Jalisco** (LTS) | 24.04 / 3.12 | 正式対応 (既定) |
-| **Lyrical Luth** (LTS、2031 年ごろまで) | 26.04 / 3.14 | 正式対応 (#36) |
-| Kilted Kaiju | 24.04 / 3.12 | 動作確認のみ (#37)。サポート期限が 2026 年末ごろと近いため継続的には確認しない。2026-10-18 にバックエンドのテスト全体を確認した (gtest 12 + 11 passed、pytest 1089 passed / 1 failed: 0.3 秒のタイミングのテストで、単独では通る)。E2E は Kilted では未実施 |
+| **Lyrical Luth** (LTS、2031 年ごろまで) | 26.04 / 3.14 | 正式対応 |
+| Kilted Kaiju | 24.04 / 3.12 | 動作確認のみ。サポート期限が 2026 年末ごろと近いため継続的には確認しない。2026-10-18 にバックエンドのテスト全体を確認した (gtest 12 + 11 passed、pytest 1089 passed / 1 failed: 0.3 秒のタイミングのテストで、単独では通る)。E2E は Kilted では未実施 |
 
 - 1 つのソースで全ディストロを扱う。ディストロで違う所は小さな互換の層に閉じ込める: pydantic 1.10 / 2 は `roshanavi/pydantic_compat.py`、それ以外は実装の中で両方の形を受け付ける ([testing.md の R](testing.md#r-ディストロ対応-36-37))。
 - apt で配るとき (将来) は `ros-jazzy-roshanavi` と `ros-lyrical-roshanavi` を作る。Docker では `ROS_DISTRO=lyrical docker compose ...` (イメージ `roshanavi:dev-<distro>`)。

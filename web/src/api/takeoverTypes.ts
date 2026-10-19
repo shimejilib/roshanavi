@@ -1,4 +1,4 @@
-// Launch takeover (GET /api/takeover), leftover processes (#12) and registry delete shapes
+// Launch takeover (GET /api/takeover), leftover processes and registry delete shapes
 // (docs/design/integration.md, docs/design/api.md).
 
 import { request } from './client';

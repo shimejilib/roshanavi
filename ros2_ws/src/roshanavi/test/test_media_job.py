@@ -237,7 +237,7 @@ def test_media_job_becomes_persistent_dummy(client, helper, data_dir):
 
 
 def test_pausing_a_media_job_holds_the_source_instead_of_dropping_frames(lab, helper, data_dir):
-    """#5: frames are not read (and not counted against `count`) while paused."""
+    """Frames are not read (and not counted against `count`) while paused."""
     fx.sine(data_dir / 'pause_tone.wav', seconds=2.0, rate=16000)  # 31 chunks of 64 ms
     received = helper.collector(AudioDataStamped, '/tl_pause_mic', 50)
     subscribe_visible(lab, '/tl_pause_mic')

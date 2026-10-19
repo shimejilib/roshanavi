@@ -63,7 +63,7 @@ def nodes():
 def test_worker_fds_stay_bounded_over_many_rotations(tmp_path, nodes):
     worker = Worker('roshanavi-fdtest',
                     str(tmp_path / 'trace'), config.DEFAULT_RT_PER_CPU, lambda _msg: None)
-    worker.parser.recycle_every = 4  # exercise the disposable parser child (issue #17)
+    worker.parser.recycle_every = 4  # exercise the disposable parser child
     worker.start()
     try:
         nodes.start('demo_nodes_cpp', 'talker', '-r', '__node:=fd_talker', '-r', 'chatter:=/fd_chat')

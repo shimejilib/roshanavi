@@ -1,4 +1,4 @@
-"""Parse rotated trace chunks in a disposable child process (issue #17).
+"""Parse rotated trace chunks in a disposable child process.
 
 babeltrace2 2.0.x opens each chunk's ``metadata`` file from C code and never
 closes it. Closing that descriptor behind bt2's back (the former workaround)

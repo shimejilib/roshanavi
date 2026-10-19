@@ -125,7 +125,7 @@ def _cam_graph(*subscribers):
 
 
 def test_no_subscriber_marker_counts_real_subscribers_only():
-    # #61: roshanavi's own viewer / echo / traffic / probe subscriptions are not receivers
+    # roshanavi's own viewer / echo / traffic / probe subscriptions are not receivers
     selfs = ('/roshanavi', '/roshanavi_probe', '/roshanavi_scenario')
     for show_self in (False, True):
         snap = build_snapshot(_cam_graph(*selfs), show_self=show_self)

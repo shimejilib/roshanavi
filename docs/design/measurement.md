@@ -45,7 +45,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 | (a) 同上 | Python | — | 32.3% | 32.3% | 99.99〜100.00 | — |
 | (b) Image 1280×720 rgb8 × 30 Hz (重い型を有効化) | C++ 計測ノード | 11.4% | 0.4% | **11.8%** | 30.00 | 82.9 MB/s |
 | (b) 同上 | Python | — | 17.4% | 17.4% | 30.00 | 82.9 MB/s |
-- 1 秒ごとの集計の作り (#18): 以前は毎秒、トピックごとに `get_publishers_info_by_topic()` を呼び、計算期間 (1 / 5 / 10 秒) ごとにサンプルを `since()` と `group_by_gid()` でコピーして分け直していた。今は (1) **送信元ノードの対応表** (`publisher_directory.hpp`) をグラフが変わったとき (ノードの `get_graph_event()`)・サンプルに未知の gid が現れたとき・5 秒ごとの保険のどれかでだけ作り直す (グラフに居ない gid は 1 回だけ問い合わせて覚える。照会が失敗したら古い表を残して次の秒に再試行)、(2) サンプルのリングバッファは `vector` (先頭位置つき) で、`retained()` はコピーせずビューを返し、(3) トピックごと 1 秒に 1 回、gid のハッシュマップでインデックスだけを分け (`TopicCalculator`)、全計算期間とすべての publisher の値をその分割から出す。数値の計算順は元と同じで、結果は元の実装とビット単位で一致する (`test/reference_stats.hpp` に元の実装を残し、gtest が乱数の流れ [複数 publisher・欠番・連番非対応・送信時刻なし・途中停止・計算期間] で比べる)。
+- 1 秒ごとの集計の作り: 以前は毎秒、トピックごとに `get_publishers_info_by_topic()` を呼び、計算期間 (1 / 5 / 10 秒) ごとにサンプルを `since()` と `group_by_gid()` でコピーして分け直していた。今は (1) **送信元ノードの対応表** (`publisher_directory.hpp`) をグラフが変わったとき (ノードの `get_graph_event()`)・サンプルに未知の gid が現れたとき・5 秒ごとの保険のどれかでだけ作り直す (グラフに居ない gid は 1 回だけ問い合わせて覚える。照会が失敗したら古い表を残して次の秒に再試行)、(2) サンプルのリングバッファは `vector` (先頭位置つき) で、`retained()` はコピーせずビューを返し、(3) トピックごと 1 秒に 1 回、gid のハッシュマップでインデックスだけを分け (`TopicCalculator`)、全計算期間とすべての publisher の値をその分割から出す。数値の計算順は元と同じで、結果は元の実装とビット単位で一致する (`test/reference_stats.hpp` に元の実装を残し、gtest が乱数の流れ [複数 publisher・欠番・連番非対応・送信時刻なし・途中停止・計算期間] で比べる)。
 - 負荷の測り方 (`scripts/bench_probe.py`): test イメージの中で本物の `probe` を起動し、`ProbeConfig` で N トピックを購読させ、rclpy の 1 プロセスが 64 B の String を全トピックに一定レートで publish する。15 秒待ってから 20 秒間、計測ノードの CPU を psutil で測る (100% = 1 コア。Hz が真値と一致することも確認)。上の表と同じ方法で、トピック数を増やした大規模なシステムを模している。下の表は 2 回ずつ測った値。
 
 | 条件 (トピック数 × Hz) | 計測ノード CPU: 変更前 | 変更後 | 1 秒の集計 (`on_timer`) の所要時間: 変更前 | 変更後 |
@@ -66,7 +66,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 ## 詳細計測モード (トレース計測, P4.7)
 受信側のノードの **中で** 実際に受け取った数・処理した数・1 回の処理にかかった時間を、ROS 2 に組み込まれたトレースポイント (ros2_tracing / LTTng) で測る。既定はオフで、トラフィックタブの「詳細計測モード」で有効にした間だけ記録する。
 
-**ファイル記述子 (fd) の扱い**: チャンクの解析 (bt2) は worker の中ではなく、**使い捨ての子プロセス** (`tracing/chunk_parser.py`、worker の子) で行う。worker は子にチャンクのパスを 1 行ずつ渡し、子はイベントを長さ付きの `marshal` フレームで返す (fd 1 は stderr に付け替え、bt2 の出力がフレームに混ざらない)。子はチャンクごとに bt2 のイテレータ (グラフが自分自身を参照する循環) を `gc.collect()` で解放してストリームファイルを閉じる。babeltrace2 2.0.x が閉じない `metadata` の fd は **閉じずに残し、子を 32 チャンクごとに入れ替える** ことで子と一緒に消す (babeltrace2 2.1.2 (Lyrical) ではこの漏れが直っていることを確認した: 入れ替えなしで 11 チャンク解析しても子の fd は 4 本のまま、2.0.5 では 1 チャンクごとに `metadata` が 1 本増える。2.0.x の Jazzy / Kilted のために入れ替えはそのまま残す) (以前はパスを見て fd を手動で閉じていたが、bt2 が後で同じ番号を閉じると再利用された別の fd を閉じる危険があった。issue #17)。子が落ちた・30 秒応答がない・途中で読むのをやめた場合は kill して次のチャンクで作り直し、そのチャンクは `parse_errors` に数える。worker の CPU 使用率には動いている子の CPU 時間 (`/proc/<pid>/stat`) を足す。bt2 のハンドルを解放しないと 5 秒ごとに 1 チャンクぶん (CPU 数+1 本) の fd が漏れ、約 3 分で `RLIMIT_NOFILE` (1024) に達して worker が `Too many open files` で落ちる。`lttng` CLI の `OSError` は `LttngError` に変換し、worker の再起動時は終了途中の `lttng-sessiond` を待って 2 つ目を作らない。サーバー自身の fd が `RLIMIT_NOFILE` の 70% を超えると警告ログを出す (`fd_guard.py`)。サーバー (ROS ノードとして LTTng-UST に登録される) 側の `(deleted)` な `shm-ust-consumer-*` などは CPU 数に比例する LTTng-UST 自身の固定分で、増え続けない。回帰テストは `test_tracing_fds.py` (子を 4 チャンクごとに入れ替えて fd が有界) と `test_tracing_parser.py` (偽の解析器で、フレーム・エラー・クラッシュ・ハング・入れ替え時の fd)。
+**ファイル記述子 (fd) の扱い**: チャンクの解析 (bt2) は worker の中ではなく、**使い捨ての子プロセス** (`tracing/chunk_parser.py`、worker の子) で行う。worker は子にチャンクのパスを 1 行ずつ渡し、子はイベントを長さ付きの `marshal` フレームで返す (fd 1 は stderr に付け替え、bt2 の出力がフレームに混ざらない)。子はチャンクごとに bt2 のイテレータ (グラフが自分自身を参照する循環) を `gc.collect()` で解放してストリームファイルを閉じる。babeltrace2 2.0.x が閉じない `metadata` の fd は **閉じずに残し、子を 32 チャンクごとに入れ替える** ことで子と一緒に消す (babeltrace2 2.1.2 (Lyrical) ではこの漏れが直っていることを確認した: 入れ替えなしで 11 チャンク解析しても子の fd は 4 本のまま、2.0.5 では 1 チャンクごとに `metadata` が 1 本増える。2.0.x の Jazzy / Kilted のために入れ替えはそのまま残す) (以前はパスを見て fd を手動で閉じていたが、bt2 が後で同じ番号を閉じると再利用された別の fd を閉じる危険があった)。子が落ちた・30 秒応答がない・途中で読むのをやめた場合は kill して次のチャンクで作り直し、そのチャンクは `parse_errors` に数える。worker の CPU 使用率には動いている子の CPU 時間 (`/proc/<pid>/stat`) を足す。bt2 のハンドルを解放しないと 5 秒ごとに 1 チャンクぶん (CPU 数+1 本) の fd が漏れ、約 3 分で `RLIMIT_NOFILE` (1024) に達して worker が `Too many open files` で落ちる。`lttng` CLI の `OSError` は `LttngError` に変換し、worker の再起動時は終了途中の `lttng-sessiond` を待って 2 つ目を作らない。サーバー自身の fd が `RLIMIT_NOFILE` の 70% を超えると警告ログを出す (`fd_guard.py`)。サーバー (ROS ノードとして LTTng-UST に登録される) 側の `(deleted)` な `shm-ust-consumer-*` などは CPU 数に比例する LTTng-UST 自身の固定分で、増え続けない。回帰テストは `test_tracing_fds.py` (子を 4 チャンクごとに入れ替えて fd が有界) と `test_tracing_parser.py` (偽の解析器で、フレーム・エラー・クラッシュ・ハング・入れ替え時の fd)。
 
 **構成 (どの層のツールか)**
 ```
@@ -108,7 +108,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 
 **集計** (`tracing/model.py`, 純粋): ハンドルはプロセス内のポインタなので、キーは常に (vpid, ハンドル)。`rcl_node_init` (ノード名) → `rcl_subscription_init` (ノード・rmw ハンドル・トピック) → `rclcpp_subscription_init` → `rclcpp_subscription_callback_added` (コールバック) の連鎖で、`rmw_take` を受信、`callback_start` / `callback_end` を (vpid, vtid) ごとに対にして処理と処理時間、`rmw_publish` を送信に数える。1 / 5 / 10 秒の窓ごとに `hz_recv`・`hz_processed`・`cb_ms {avg, p95, max}`、送信は `hz`。Hz は probe (`stats.py` の `window_rate`, [measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) と同じ規則で、窓の中のイベント時刻から (n−1)/(最後−最初) で求める (件数 ÷ 経過時間にすると 1 Hz が起動直後 1.12 Hz と出た)。窓に 2 件未満なら最長 (10 秒) の窓に広げ、それでも 2 件未満なら null (UI は「計測中…」)、止まっていれば 0。intra-process のコールバックは rmw を通らないので受信は null。10 秒ごとに終了したプロセスの記録を捨てる (ハンドルの再利用対策)。init の無いプロセスからの記録は `unknown_pids`。
 
-**交通量への反映** (`tracing/merge.py`, 純粋): `Lab.traffic_view` の最後に、トレースが対応づいた受信行 (`subscribers[]`) を `basis: "measured"` にし、`hz` = `hz_recv` (intra-process は処理数)、`bps` = `hz × avg_size`、`hz_recv` / `hz_processed` / `cb_ms` / `lang` (`cpp` | `py`) / `intra` / `symbol` (処理関数) を付ける。元の理論値は `hz_expected`。最初の値が出るまでは理論値のまま。QoS が合わない行は `not_delivered` のまま値だけ付ける。送信行には `hz_traced` (計測ノードの実測との突き合わせ用)。 **購読していない (計測していない) トピック** (#61、重い型の既定): 送信元の行は `hz_traced` (そのノードが送った回数) を Hz にして `basis: "traced"`、帯域は `null` (トレースはメッセージの大きさを知らない)。全送信元がトレースされたときだけトピックの `hz_traced` (合計) を付け、UI は Hz にそれを出して帯域は「— (詳細計測では帯域は測れません)」と言う。購読しないのでデータの大きさに関係なく測れる。
+**交通量への反映** (`tracing/merge.py`, 純粋): `Lab.traffic_view` の最後に、トレースが対応づいた受信行 (`subscribers[]`) を `basis: "measured"` にし、`hz` = `hz_recv` (intra-process は処理数)、`bps` = `hz × avg_size`、`hz_recv` / `hz_processed` / `cb_ms` / `lang` (`cpp` | `py`) / `intra` / `symbol` (処理関数) を付ける。元の理論値は `hz_expected`。最初の値が出るまでは理論値のまま。QoS が合わない行は `not_delivered` のまま値だけ付ける。送信行には `hz_traced` (計測ノードの実測との突き合わせ用)。 **購読していない (計測していない) トピック** (重い型の既定): 送信元の行は `hz_traced` (そのノードが送った回数) を Hz にして `basis: "traced"`、帯域は `null` (トレースはメッセージの大きさを知らない)。全送信元がトレースされたときだけトピックの `hz_traced` (合計) を付け、UI は Hz にそれを出して帯域は「— (詳細計測では帯域は測れません)」と言う。購読しないのでデータの大きさに関係なく測れる。
 - **処理が追いついていない** (`behind`): 届く量 = max(送信側の実測の和 `hz_expected`, 受信数)。処理数がそれより 10% 以上かつ 0.5 Hz 以上少なければ `behind: {incoming_hz, processed_hz, basis: sent|received, cb_avg_ms}`、`/api/tracing` の `diagnostics[]` に `processing_behind`。届く量 0.5 Hz 未満と rclpy は判定しない。UI は「受け取っていますが処理が追いついていません: 届く量 10.0 Hz に対して処理 5.00 Hz (1 回の処理に平均 200 ms)」。
 - **測れないノード** (`unsupported[]`, 理由つき): `rclpy` (受信数だけ)、`intra_process` (受信数が測れない)、`restart_needed` (起動リストのノードで、プロセスの起動が init の記録の開始より前)、`not_traced` (記録が無い: 別のコンテナや PC、または roshanavi より前から動いている外部ノード。pid が分からないので両者は区別できない)。
 
@@ -140,7 +140,7 @@ Cyclone DDS は手動で確認した (`roshanavi:dev` のコンテナに一時�
 - RMW は Fast DDS (Jazzy 既定) で確認した。`rmw_take` / `rmw_publish` は rmw の実装ごとのトレースポイントなので、他の RMW では受信・送信が出ない可能性がある ([testing.md の L-18](../project/testing.md#l-詳細計測モード-トレース-p47))。
 - ノードの起動直後 1〜2 秒は、init の区切りがまだ読まれておらず、そのノードの記録を捨てることがある。
 
-## 規模と負荷の限界 (#51)
+## 規模と負荷の限界
 「ノードが増えたら、メッセージが増えたら、重くなったら、roshanavi と ROS 側はどこまで持つか」を、中継パイプライン ([nodes.md#中継パイプライン](nodes.md#中継パイプライン-source--relay--sink51)) で段階的に測った。**この PC での実測**であり、別の PC では限界の値は変わる (傾向と、どこが先に詰まるかを見る表)。再測定は `scripts/bench_pipeline.py`。
 
 **測定条件** (2026-10-18)
@@ -319,7 +319,7 @@ python3 scripts/bench_pipeline.py --report bench/r.json [--compact]      # 表 (
 ```
 `--presets` は `small` / `medium` / `large` か `grid:段x列` (例 `grid:5x16`)、`--axes rate,payload,process`、`--container-type st|mt`、`--no-tracing` (詳細計測の段を省く)。1 系列 (プリセット × 構成) は 1 時間弱かかる。測るあいだ PC をほかの重い仕事に使わないこと (host の CPU と load average を結果に記録する)。
 
-## 重いデータの計測の限界 (#51)
+## 重いデータの計測の限界
 画像・点群 (`sensor_msgs/Image` など) は既定では計測しません ([map-and-traffic.md](map-and-traffic.md))。「重いトピックを計測に入れる (`PUT /api/traffic/<トピック>/monitor`) と、roshanavi と、計測されているノード自身がどうなるか」を測りました (`scripts/bench_heavy.py`、C++ の `heavy_source` / `heavy_sink` で本物の `Image` / `PointCloud2` を送る)。**この PC での実測**で、ほかの処理も動いている共用機です (測定後の load average 8〜13)。
 
 **測り方**

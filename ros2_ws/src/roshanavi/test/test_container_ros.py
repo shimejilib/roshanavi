@@ -1,4 +1,4 @@
-"""Composable container verified with real nodes (issue #22, testing.md H-30 / K-31).
+"""Composable container verified with real nodes (testing.md H-30 / K-31).
 
 A generated relay pipeline (12 nodes, a 4 x 3 grid of independent columns whose sources run at
 20 / 10 / 5 Hz) runs inside one ComposableNodeContainer started by `ros2 launch`. roshanavi must
@@ -273,7 +273,7 @@ def test_intra_process_container_keeps_the_traffic_visible(intra_pipeline):
 
 
 @pytest.mark.xfail(strict=True, reason=(
-    'found by the container check (#22): with use_intra_process_comms the callbacks of the '
+    'found by the container check: with use_intra_process_comms the callbacks of the '
     'container nodes are not attributed to their subscriptions (hz_processed 0, intra false), so '
     'the detailed tracing mode shows a false "processing behind". Remove this xfail when the '
     'tracing model handles intra-process subscriptions.'))

@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CHATTER_KIND_LABEL } from './helpers';
 
-// Scenarios (#31): record a scenario through the UI (send to /chatter, click the function
+// Scenarios: record a scenario through the UI (send to /chatter, click the function
 // node's output on /shouted, save), run it from the Scenarios tab, break it, see why it fails.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const NAME = 'e2e_recorded';

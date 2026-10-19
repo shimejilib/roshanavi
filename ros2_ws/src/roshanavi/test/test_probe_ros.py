@@ -80,7 +80,7 @@ def test_two_publishers_on_one_topic_are_measured_per_node(probe_lab, helper):
 
 
 def test_late_and_replaced_publishers_resolve_to_their_node(probe_lab, helper):
-    # The probe asks the graph who a gid is only on graph changes / unknown gids (#18): a
+    # The probe asks the graph who a gid is only on graph changes / unknown gids: a
     # publisher that joins later, or replaces another one, must still get its node name.
     helper.periodic_publisher(String, '/tl_late', 5.0, lambda i: String(data='a'))
     first = '/' + helper.node.get_name()

@@ -199,7 +199,7 @@ describe('subscriber edge rate', () => {
   });
 });
 
-describe('a heavy topic that is not measured (#61)', () => {
+describe('a heavy topic that is not measured', () => {
   const graph = () => {
     const g = chatterGraph();
     return { ...g, topics: [{ name: '/chatter', types: ['sensor_msgs/msg/Image'] }] };

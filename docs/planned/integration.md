@@ -4,7 +4,7 @@
 
 ## 0. 主な組み込み方: launch を引き取る (実装済み)
 
-既存の launch ファイルを roshanavi が引き取って起動する形を主にする (2026-10-18 決定)。実装済みの仕様は [design/integration.md](../design/integration.md)、使い方は [guide/takeover.md](../guide/takeover.md)。強制終了で残ったプロセスの片付け (#12) は [design/launcher.md#子プロセスの後始末](../design/launcher.md#子プロセスの後始末-12)。
+既存の launch ファイルを roshanavi が引き取って起動する形を主にする (2026-10-18 決定)。実装済みの仕様は [design/integration.md](../design/integration.md)、使い方は [guide/takeover.md](../guide/takeover.md)。強制終了で残ったプロセスの片付け は [design/launcher.md#子プロセスの後始末](../design/launcher.md#子プロセスの後始末-12)。
 
 ## 1. ネイティブ (利用者のワークスペースに入れる)
 

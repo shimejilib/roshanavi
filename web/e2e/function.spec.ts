@@ -3,7 +3,7 @@ import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { CHATTER_KIND_LABEL, rightClickNode } from './helpers';
 
-// Function nodes (#29): a plain Python function of a workspace package run as a node.
+// Function nodes: a plain Python function of a workspace package run as a node.
 // Uses roshanavi_examples.logic.shout on /chatter (the demo talker) -> /e2e_shouted.
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
 const NAME = 'e2e_shout';

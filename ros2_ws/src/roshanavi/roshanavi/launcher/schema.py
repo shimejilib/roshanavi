@@ -472,7 +472,7 @@ class ProjectSpec(_Strict):
     watch_topics: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
                                                                      max_items=200)
     # Per-topic traffic monitoring chosen by the user (topic -> on / off); wins over the heavy-type
-    # default, survives a restart (#61).
+    # default, survives a restart.
     # (the count is capped where it grows: Launcher.set_traffic_monitor; the file is <= 1 MB.)
     traffic_monitor: Dict[constr(min_length=1, max_length=256), bool] = Field(default_factory=dict)
     # Opt-in places for function / class node code besides the workspace (scope B / C).

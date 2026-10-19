@@ -124,7 +124,7 @@ def off_pub(node):
 
 
 def test_heavy_topic_shows_the_traced_send_rate_without_bandwidth():
-    # #61: with 詳細計測モード the Hz of a topic nobody measures comes from the trace
+    # With 詳細計測モード the Hz of a topic nobody measures comes from the trace
     out = merge.apply_trace([heavy_entry([off_pub('/cam_a'), off_pub('/cam_b')])],
                             snap(pubs=[trace_pub('/cam_a', '/cam', 10.0),
                                        trace_pub('/cam_b', '/cam', 20.0)]), 5)[0]

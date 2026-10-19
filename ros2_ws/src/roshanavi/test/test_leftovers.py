@@ -1,4 +1,4 @@
-"""#12: a SIGKILLed server leaves its nodes; they are recorded, shown on the next start and
+"""A SIGKILLed server leaves its nodes; they are recorded, shown on the next start and
 stopped by ``ros2 run roshanavi cleanup`` or ``POST /api/leftovers/stop``."""
 
 import json

@@ -7,7 +7,7 @@
 * :meth:`ProcessRunner.stop` escalates SIGINT -> SIGTERM -> SIGKILL on the
   group, then kills any descendant that escaped the group.
 * Linux: every child gets ``PR_SET_PDEATHSIG`` (SIGTERM), so a SIGKILLed server
-  does not leave its *direct* children behind (#12). The kernel sends that
+  does not leave its *direct* children behind. The kernel sends that
   signal when the *thread* that forked the child ends, not the process, so all
   children are forked from one long-lived spawner thread (:func:`spawn`) --
   never from a short-lived request / autostart / timer thread. Grandchildren

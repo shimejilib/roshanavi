@@ -2,7 +2,7 @@
 
 roshanavi への関心をありがとうございます。バグの報告、使いにくかった所の指摘、ドキュメントの直し、コードの提案を歓迎します。ROS に詳しくない人が最初につまずく所を減らすのが、このツールの目的です。「ここが分かりにくかった」という報告も、立派な貢献です。
 
-*English summary: Bug reports, usability feedback, docs fixes and pull requests are welcome. Development runs entirely in Docker (ROS is not needed on the host). Please read "テスト" (tests) and "コミットと Pull Request" (commits) below before opening a pull request. The UI is Japanese by default; English is planned (#28). Issues and pull requests in English are fine.*
+*English summary: Bug reports, usability feedback, docs fixes and pull requests are welcome. Development runs entirely in Docker (ROS is not needed on the host). Please read "テスト" (tests) and "コミットと Pull Request" (commits) below before opening a pull request. The UI is Japanese by default; English is planned. Issues and pull requests in English are fine.*
 
 行動規範は [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md)、脆弱性の報告は [SECURITY.md](SECURITY.md) を見てください。脆弱性は、公開の Issue には書かないでください。
 
@@ -157,7 +157,7 @@ mkdocs serve
 
 ## 6. 言語 (日本語と英語)
 
-- 画面は**日本語が既定**です。英語の画面は予定にあります ([#28](https://github.com/shimejilib/roshanavi/issues/28))。画面の文言は `web/src/i18n/` にまとめてあるので、文言をコードの中に直接書かないでください。
+- 画面は**日本語が既定**です。英語の画面は予定にあります。画面の文言は `web/src/i18n/` にまとめてあるので、文言をコードの中に直接書かないでください。
 - ドキュメントは日本語です。英語への翻訳の提案は歓迎します (先に Issue で相談してください)。
 - Issue と Pull Request は、日本語でも英語でも構いません。
 - コード中のコメントと識別子は、英語でも日本語でも構いませんが、1 つのファイルの中ではそろえてください。

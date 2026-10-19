@@ -1,4 +1,4 @@
-"""``ros2 run roshanavi cleanup``: stop nodes a force-killed roshanavi left running (#12).
+"""``ros2 run roshanavi cleanup``: stop nodes a force-killed roshanavi left running.
 
 Reads the process records under ``<data dir>/run`` (:mod:`.launcher.proc_record`)
 of servers that are no longer running, and stops only the recorded processes

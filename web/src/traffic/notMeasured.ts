@@ -1,5 +1,5 @@
 // Topics roshanavi does not measure (images and point clouds by default, or switched off) are
-// never shown as 受信なし / 未受信 / 分けられない: they say 計測していません (#61, pure).
+// never shown as 受信なし / 未受信 / 分けられない: they say 計測していません (pure).
 // With 詳細計測モード the Hz of such a topic comes from the trace (send count at the publishers);
 // the bandwidth cannot be measured that way.
 

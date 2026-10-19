@@ -185,7 +185,7 @@ IMAGE = 'sensor_msgs/msg/Image'
 
 
 def test_topic_monitoring_toggle_is_saved_in_the_project_and_restored(tmp_path, data_dir):
-    # #61: the per-topic on / off of the traffic table survives a restart
+    # The per-topic on / off of the traffic table survives a restart
     from roshanavi.lab import Lab
     proj = tmp_path / 'roshanavi.yaml'
     first = Lab(data_dir=str(data_dir), workspace=str(tmp_path), project_path=str(proj),

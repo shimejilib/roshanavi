@@ -129,7 +129,7 @@ class OrderedPublisher:
 
 
 def test_teardown_waits_for_acks_before_destroying_the_publishers():
-    """#6: frames still in flight to reliable readers must not die with the publisher."""
+    """Frames still in flight to reliable readers must not die with the publisher."""
     events = []
 
     class Runtime:
@@ -149,7 +149,7 @@ def test_teardown_waits_for_acks_before_destroying_the_publishers():
 
 @pytest.mark.parametrize('how', ['close', 'stop'])
 def test_frames_sent_right_before_the_socket_closes_are_all_published(client, lab, helper, how):
-    """#6: the browser closes right after its last frame; none of them may be lost."""
+    """The browser closes right after its last frame; none of them may be lost."""
     topic = f'/tl_cap_last_{how}'
     received = helper.collector(Int16MultiArray, topic, 100)
     wait_for(lambda: lab.runtime.subscriptions_info(topic), timeout=10)

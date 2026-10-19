@@ -1,4 +1,4 @@
-// UI strings for the launch takeover banner, leftover processes (#12) and node-list delete
+// UI strings for the launch takeover banner, leftover processes and node-list delete
 // (merged into `ja`).
 
 export const launchJa = {
@@ -54,7 +54,7 @@ export const launchJa = {
   'takeover.note.nothing_decomposed': 'ノードに分解できなかったため、launch ファイル全体として 1 つで動かしています',
   'takeover.note.too_many_nodes': 'ノードが多すぎるため、launch ファイル全体として 1 つで動かしています',
 
-  // ---- leftovers of a force-killed previous run (#12)
+  // ---- leftovers of a force-killed previous run
   'leftovers.banner': '前回の roshanavi が起動したノードが残っています ({n} 個)。止めますか?',
   'leftovers.stop': '止める',
   'leftovers.stopping': '止めています…',

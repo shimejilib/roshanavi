@@ -21,7 +21,7 @@
 - サーバー終了時に全ターゲットを並列に停止する。uvicorn の SIGINT/SIGTERM 処理の後の `finally`、SIGHUP → SIGTERM への読み替え、`atexit` の 3 経路で呼ぶ (冪等)。サーバー自身が SIGKILL された場合は次の「子プロセスの後始末」。
 - `env` (`kind: run`): サーバーの環境に足す環境変数 (launch ファイルの引き取りで引き継いだもの。読み込むコードを左右する名前は拒否、[security.md](security.md))。roshanavi のログ設定 (`PYTHONUNBUFFERED` など) は上書きできない。
 
-### 子プロセスの後始末 (#12)
+### 子プロセスの後始末
 サーバーが強制終了 (`kill -9`、メモリ不足) されたときに、起動したノードが残らないようにする仕組みと、残ったときの片付け方。
 - **直接の子**: Linux では起動時に `PR_SET_PDEATHSIG` (SIGTERM) を付ける (`process.spawn`、`preexec_fn`。`prctl` は fork の前に一度だけ探す。fork と prctl の間に親が死んでいたら自分に SIGTERM)。このシグナルはカーネルが「起動した **スレッド** の終了」で送るため、要求を処理するスレッド (anyio のスレッドは暇になると終わる)・自動起動のスレッド・自動再起動のタイマーから fork すると、元気な子が後で殺される。そこで子プロセスはすべて、サーバーが生きている間ずっと残る専用のスレッド (`roshanavi-spawn`) から起動する。
 - **孫は対象外**: `ros2 run` / `ros2 launch` はノードを自分の子として起動するので、SIGKILL のあと `ros2 run` は止まってもノード本体 (孫) は残る (PR_SET_PDEATHSIG は子に受け継がれない)。そこで **記録** する: 起動したプロセスと子孫のすべてを、起動時刻・コマンドラインのハッシュ付きで `<data_dir>/run/procs-<サーバーの pid>.json` に書く (`proc_record.py`。1 秒ごとの見回りで、変わったときだけ原子的に書き換える。何も動いていなければファイルを消し、通常の終了でも消す。コンテナで前回と同じ pid になったときは前回のファイルを `procs-<pid>.prev-<時刻>.json` に退避)。
@@ -47,7 +47,7 @@
 **ノード ⇄ プロセスの対応づけ (`process_map.py`)** — リソース監視 ([resources.md#前提](resources.md#前提-ノードとプロセスの対応づけ)) でもそのまま使う (リソース監視では、Launcher の時刻による推定より argv の `__node:=` を優先する)。
 - 純関数 `map_nodes(nodes, targets, first_seen, baseline, sticky)` と、状態を持つ `NodeProcessMapper` (初出時刻・ベースライン・確定済みの推定) に分ける。プロセスツリーは psutil (`process_tree(pid)`: ルート + 子孫を深さ順)。
 - **exact**: ターゲットのプロセスツリーの argv に `__node:=<name>` (と `__ns:=`、`node:__node:=` 形式も) があれば一致。`ros2 run` のラッパーと実行ファイルの両方に付くため、最も深いプロセスを pid とする。launch_ros は `Node(name=…)` のときに付け、Launcher はノード名を入力したときに付ける。
-- **launch サービス自身のノード**: `ros2 launch` は `launch_ros_<pid>` という名前のノードを 1 つ持つ。この `<pid>` がターゲットのプロセスツリーにいれば、そのプロセス (`ros2 launch` 本体) に対応づける (推定のまま)。launch がコンテナを起動していても、コンテナには対応づけない (#22 の実機確認で見つかった誤り。以前はツリーの末端 = コンテナの pid になっていた)。
+- **launch サービス自身のノード**: `ros2 launch` は `launch_ros_<pid>` という名前のノードを 1 つ持つ。この `<pid>` がターゲットのプロセスツリーにいれば、そのプロセス (`ros2 launch` 本体) に対応づける (推定のまま)。launch がコンテナを起動していても、コンテナには対応づけない (実機での確認で見つかった誤り。以前はツリーの末端 = コンテナの pid になっていた)。
 - **heuristic**: ターゲットの (再) 起動から 20 秒以内に初めて現れ、他のターゲットが exact で持っていないノード。候補が複数あれば、実行ファイル名とノード名が一致するターゲット、なければ最後に起動したターゲット。一度決まった推定は、そのターゲットが生きている間は保持する。
 - ベースライン: 自分のプロセスが 1 つも動いていない間に見えたノードは推定の対象外 (消えたらベースラインからも外す)。autostart はサーバー起動の 2 秒後に行い、既存ノードの発見を先に済ませる。roshanavi 自身のノードは対象外。
 - 限界 (UI に「推定」と出す): composable node はコンテナプロセス単位 (コンテナ内のどのノードかは分からない。実機での確認は [composable container の扱い](#composable-container-の扱い-22))。別コンテナ (PID 名前空間が別) や別 PC のノードは対応づけない。起動直後に無関係のノードが同時に現れると推定を誤ることがある (ノード名を付ければ exact になる)。
@@ -119,7 +119,7 @@ traffic_monitor: {/camera/image: true}   # トラフィックの計測を利用�
 - `autostart: true` のターゲットとダミーはサーバー起動時に起動する (`--no-autostart` で無効)。
 - **launch の引き取り** (`takeover:` と、ターゲットの `takeover: true`): [integration.md](integration.md)。`takeover: {package, launch_file, args: ["name:=value"], mode: node|whole}` は「どの launch ファイルを引き取ったか」だけを残す。
 
-- **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。切り替えに成功すると (読み込みエラーが無いとき) 開いた一覧の `id` を `<data_dir>/last_project.json` (`{"id": ...}`) に書き、**サーバーを再起動するとそのプロジェクトで始まる** (#9)。起動時は保存された `id` を現在の一覧と照らして検証し (一覧に無い・ファイルが消えた・JSON が壊れている・型が違うときは無視して警告だけ出す)、通らなければ `--project` のファイルで始める。保存に失敗しても切り替え自体は成功する (ログに警告)。
+- **プロジェクトの切り替え (P5)**: ⚙ 設定メニューの「プロジェクトを切り替える」(`GET /api/projects`、`POST /api/projects/open {id}`、`launcher/catalog.py`)。候補は (1) サンプル: `--examples-dir` (既定は `--project-template` の 2 つ上、Docker では `/examples`) の `<name>/roshanavi.yaml`、(2) 保存済み: `<data_dir>/roshanavi.yaml` と `<data_dir>/projects/*.yaml`。サンプルを開くと初回だけ `<data_dir>/projects/<name>.yaml` にコピーし (`O_EXCL`、上書きしない)、以後はそのコピーを編集する (サンプル自体と元のプロジェクトファイルには書かない)。クライアントは一覧の `id` だけを送る (任意のパスは開けない)。切り替えは動いている起動リスト・入力ノード・変換ノードをすべて止め、新しいプロジェクトを読み込み、autostart のものを (待ち時間なしで) 起動する。切り替えに成功すると (読み込みエラーが無いとき) 開いた一覧の `id` を `<data_dir>/last_project.json` (`{"id": ...}`) に書き、**サーバーを再起動するとそのプロジェクトで始まる**。起動時は保存された `id` を現在の一覧と照らして検証し (一覧に無い・ファイルが消えた・JSON が壊れている・型が違うときは無視して警告だけ出す)、通らなければ `--project` のファイルで始める。保存に失敗しても切り替え自体は成功する (ログに警告)。
 
 ## ノードのパラメータと型の定義 (P4.5a)
 **パラメータ (`params.py`)** — rclpy / rclcpp のノードが必ず持つ `<node>/list_parameters`・`describe_parameters`・`get_parameters`・`set_parameters` (rcl_interfaces) を、サーバー自身のノードから呼ぶ。
@@ -132,7 +132,7 @@ traffic_monitor: {/camera/image: true}   # トラフィックの計測を利用�
 ## デモ構成 (P4.5a)
 - `examples/demo_project/roshanavi.yaml`: `talker` (demo_nodes_cpp, role mine, autostart, ノード名 talker) と `listener` (demo_nodes_cpp, role dependency, autostart)。compose の `lab` は `--project-template` でこれを指定し、`/data/roshanavi.yaml` が無いときだけコピーする。デモ開始時点で talker / listener を地図から停止・再起動でき、ログも見られる。(P5) サンプルノード 4 つの起動設定を autostart なしで足した (既存の `./data/roshanavi.yaml` は上書きしないので、すでにあるラボには入らない。プロジェクトの切り替えでサンプルを開くと入る)。
 - (P5) `examples/perception_demo/roshanavi.yaml`: 入力ノード `dummy_camera` (`samples/blobs.mp4` → `/camera/image`、media / loop) → `image_filter` (`/camera/gray`, `/camera/edges`) → `blob_detector` (`/camera/detections`) → 変換ノード `blob_count` (`/camera/blob_count`, `std_msgs/Int32` = `len(msg.detections)`)、入力ノード `dummy_microphone` (`samples/tone.wav` → `/audio`, AudioDataStamped) → `audio_level` (`/audio/level_db`, `/audio/silence`)。すべて autostart。サンプルのファイルはリポジトリに入れず、サーバーの起動時に ffmpeg で `<data_dir>/samples/` に作る (`sample_media.py`、無いものだけ。`--no-sample-media` で無効): `blobs.mp4` (10 秒・320x240・15 fps。ffmpeg の `testsrc` を 25% に暗くし、その上を明るい円が 2 つ動く。`geq` で描く) と `tone.wav` (12 秒・16 kHz mono。440 Hz 2 秒 / 無音 2 秒の繰り返し)。一時ファイルに書いてから rename。
-- (#40) `examples/busy_demo/roshanavi.yaml`: `busy_demo_driver` (`/busy_demo/in` に 100 Hz) と `executor_busy_demo` の 3 構成 (`multi_default` / `multi_off` / `single_default`、stats は `/busy_demo/<構成>/stats`)。すべて autostart なし (1 つずつ起動して比べる)。説明と実測は [nodes.md](nodes.md#executor_busy_demo--multithreadedexecutor-の空回りを体験する-40)。
+- `examples/busy_demo/roshanavi.yaml`: `busy_demo_driver` (`/busy_demo/in` に 100 Hz) と `executor_busy_demo` の 3 構成 (`multi_default` / `multi_off` / `single_default`、stats は `/busy_demo/<構成>/stats`)。すべて autostart なし (1 つずつ起動して比べる)。説明と実測は [nodes.md](nodes.md#executor_busy_demo--multithreadedexecutor-の空回りを体験する-40)。
 - `demo` コンテナは「roshanavi が起動していないノード」の例: `external_talker` が `/external/chatter` に送り、`external_listener` が受ける。`/chatter` とは混ざらず、地図に「操作できるノード」と「見るだけのノード (停止は無効)」が並ぶ。
 - (P4.5b) `demo` コンテナは外部の lifecycle ノード `lc_talker` (unconfigured で起動) も動かす ([launcher.md#lifecycle ノード](launcher.md#lifecycle-ノード-p45b))。launch の取り込みのデモ用に `roshanavi/demo_system.launch.py` を同梱する ([launcher.md#launch の分解取り込み](launcher.md#launch-の分解取り込み-p45b))。
 
@@ -181,7 +181,7 @@ traffic_monitor: {/camera/image: true}   # トラフィックの計測を利用�
 - **ノード一覧** (`node_list.py`, 純関数): グラフのノード (注入ジョブの仮想ノードは除く) と、グラフにノードが無い起動リスト・常駐ダミーの和集合。行に役割・状態 (起動リストの状態、外部は「実行中 (外部)」)・起動元 (package / executable / launch file / 取り込み元)・PID・対応づけ・lifecycle の状態、`control` (`target` / `lifecycle` / `none`) と `reason` (`external` / `invalid`) を付ける。kind launch の起動設定と、1 プロセスに 2 つ以上のノードが対応づいた起動設定 (composable container など) は `groups` になり、行はグループごとに並ぶ (止めると一緒に止まる単位)。
 - **削除と「元に戻す」** (`launcher/trash.py`, `POST /api/registry/delete` / `undo`): ノード一覧で選んだ roshanavi の登録 (起動リスト・取り込んだもの・入力・変換・関数・クラスノード) をまとめて外す。知らない ID が 1 つでもあれば何も変えない (404)。外すときに動いているものは止め、仕様 (spec) と「動いていたか」を 15 秒 (UI は 10 秒) まで最大 8 回分覚えておき、`undo` で登録し直して (検証を通らなくなっていても `invalid` で残す) 動いていたものを起動する。ソースコード・パッケージ・取り込んだパラメータファイル・録画には触らない。
 
-## composable container の扱い (#22)
+## composable container の扱い
 1 つのプロセス (`component_container`) の中に複数のノードが入る構成を、**実物のコンテナ**で確かめた。使ったのは中継パイプライン ([nodes.md#中継パイプライン](nodes.md#中継パイプライン-source--relay--sink51)) の `mode:=container` (`ComposableNodeContainer` に 12〜20 ノード) を `ros2 launch` で起動する `kind: launch` の起動設定。テストは `test_container_ros.py`、E2E は `web/e2e/pipeline.spec.ts`。
 
 | 見る点 | 実機での結果 |

@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
-// #61: a heavy topic (images by default) is not subscribed, so it must say 計測していません with a
+// A heavy topic (images by default) is not subscribed, so it must say 計測していません with a
 // 計測する button, never 受信なし / 未受信 / 分けられない; the choice is saved in the project and restored.
 // demo-e2e runs `e2e_viz`, an image publisher outside roshanavi (like a turtle_viz node).
 const SHOTS = fileURLToPath(new URL('../../docs/images/', import.meta.url));
