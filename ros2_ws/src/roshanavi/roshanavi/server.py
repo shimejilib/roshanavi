@@ -21,7 +21,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from . import (data_kinds, msgutil, security, server_functions, server_launch_import,
                server_launcher, server_media, server_nodes, server_resources, server_scenarios,
-               server_takeover, server_tracing, server_transforms)
+               server_debug, server_takeover, server_tracing, server_transforms)
 from .api_errors import ApiError, parse_window
 from .asyncutil import run_cleanup
 from .echo import MAX_SAMPLE_BYTES, EchoError
@@ -292,6 +292,7 @@ def create_app(lab: Lab, static_dir: Optional[str] = None,
     server_scenarios.register(app, lab)
     server_resources.register(app, lab)
     server_takeover.register(app, lab)
+    server_debug.register(app)  # only with ROSHANAVI_DEBUG_TRACEMALLOC=1
     _register_ws(app, lab, live_period)
     if static_dir and os.path.isfile(os.path.join(static_dir, 'index.html')):
         app.mount('/', StaticFiles(directory=static_dir, html=True), name='static')

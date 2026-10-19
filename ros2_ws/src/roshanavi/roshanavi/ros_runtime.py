@@ -35,6 +35,7 @@ can live in one process and be shut down independently.
 
 import logging
 import threading
+import weakref
 from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple
 
 import rclpy
@@ -139,6 +140,7 @@ class RosRuntime:
         self._node: Optional[Node] = None
         self._executor: Optional[MultiThreadedExecutor] = None
         self._thread: Optional[threading.Thread] = None
+        self._groups: 'weakref.WeakSet[CallbackGroup]' = weakref.WeakSet()  # non-default groups
 
     # ---- lifecycle -------------------------------------------------------
     def start(self) -> None:
@@ -191,14 +193,41 @@ class RosRuntime:
         return self._node is not None
 
     # ---- entity facade ---------------------------------------------------
+    def prune_dead_entities(self) -> int:
+        """Forget the callback groups' weak references to entities that no longer exist.
+
+        rclpy adds a ``weakref`` per timer / subscription / client / event handler to its callback
+        group's ``entities`` set and never removes it again: a long-running server that creates
+        and destroys entities (echo, viewers, class-node calls, ...) grows that set by ~300 bytes
+        per cycle for good. Only references whose entity is already gone are dropped, so a
+        callback that is still executing (it holds a strong reference) is never affected.
+        Called with the runtime lock held. Returns how many were dropped.
+        """
+        dropped = 0
+        groups = [self.node.default_callback_group, *list(self._groups)]
+        for group in groups:
+            entities = getattr(group, 'entities', None)
+            if not isinstance(entities, set):  # another rclpy: nothing to prune
+                continue
+            dead = [ref for ref in tuple(entities) if ref() is None]
+            entities.difference_update(dead)
+            dropped += len(dead)
+        return dropped
+
+    def _track_group(self, group: Optional[CallbackGroup]) -> None:
+        if group is not None:
+            self._groups.add(group)
+
     def create_timer(self, period_sec: float, callback: Callable[[], None],
                      group: Optional[CallbackGroup] = None) -> Any:
         with self._lock:
+            self._track_group(group)
             return self.node.create_timer(period_sec, callback, callback_group=group)
 
     def destroy_timer(self, timer: Any) -> None:
         with self._lock:
             if self._node is not None:
+                self.prune_dead_entities()
                 timer.cancel()
                 self._node.destroy_timer(timer)
 
@@ -209,12 +238,14 @@ class RosRuntime:
     def destroy_publisher(self, publisher: Any) -> None:
         with self._lock:
             if self._node is not None:
+                self.prune_dead_entities()
                 self._node.destroy_publisher(publisher)
 
     def create_subscription(self, msg_type: type, topic: str, callback: Callable[[Any], None],
                             qos: QoSProfile, raw: bool = False,
                             group: Optional[CallbackGroup] = None) -> Any:
         with self._lock:
+            self._track_group(group)
             return self.node.create_subscription(msg_type, topic, callback, qos, raw=raw,
                                                  callback_group=group,
                                                  event_callbacks=NO_SUBSCRIPTION_EVENTS)
@@ -222,16 +253,19 @@ class RosRuntime:
     def destroy_subscription(self, subscription: Any) -> None:
         with self._lock:
             if self._node is not None:
+                self.prune_dead_entities()
                 self._node.destroy_subscription(subscription)
 
     def create_client(self, srv_type: type, service: str,
                       group: Optional[CallbackGroup] = None) -> Any:
         with self._lock:
+            self._track_group(group)
             return self.node.create_client(srv_type, service, callback_group=group)
 
     def destroy_client(self, client: Any) -> None:
         with self._lock:
             if self._node is not None:
+                self.prune_dead_entities()
                 self._node.destroy_client(client)
 
     # ---- graph queries ---------------------------------------------------

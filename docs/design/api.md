@@ -70,6 +70,7 @@
 | GET | `/api/resources` | リソース監視の最新の全体 ([resources.md](resources.md)): `{available, reason?, hostname, ncpu, own_user_only, host{cpu, mem, disk, nics, udp, gpu}, breakdown, processes[], others[], nodes{node: {pid, pids, confidence, source, shared, scope, cpu_pct, rss, uss, threads, fds, read_bps, write_bps, gpu_mem, leak}}, connections[], events[], diagnostics[], sampler}`。停止中は `available: false` + `reason: starting\|off` |
 | GET | `/api/resources/history?node=\|scope=self\|host` | 直近 5 分 (1 秒ごと) の `{t, cpu_pct, rss, read_bps, write_bps, gpu_mem, connections}`。`node` を付けると `current` (そのノードの今の値) と `connections` (接続先) も返す |
 | WS | `/ws/resources` | リソースタブ用。1 秒ごとに `/api/resources` と同じ全体を push |
+| GET | `/api/_debug/memory?top=&objects=&trim=&snapshot=&find=&collect=` | **`ROSHANAVI_DEBUG_TRACEMALLOC=1` (tracemalloc つき) か `route` (経路だけ) で起動したときだけ存在する** (既定では 404): RSS・tracemalloc の現在値・GC が管理するオブジェクト数・スレッド数・fd 数。`snapshot=1` で前回から増えた確保箇所、`objects=1` で型ごとの数、`find=型名` でその型を持っているものの参照元、`collect=1` で完全 GC、`trim=1` で `malloc_trim` ([resources.md](resources.md#roshanavi-自身のメモリの増え方-調査の結果))。 |
 
 - 記録モードの間、`POST /api/inject`・`DELETE /api/inject/{id}`・`POST /api/targets/{id}/start|stop|restart` は成功した操作を記録に足す ([scenarios.md#UI での作り方: 記録モード](scenarios.md#ui-での作り方-記録モード-主軸))。
 - `/ws/live` は `targets` (起動対象の一覧) と `build` (ビルドの状態)、`recording` (録画中ならその状態、なければ null)、`resources` (地図のバッジ用: ノードごとの `cpu_pct`・`rss`・`confidence`・`shared`・`scope`・`leak`、PC 全体、roshanavi 自身、リソースの診断) も毎秒送る。

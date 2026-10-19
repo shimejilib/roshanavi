@@ -25,6 +25,12 @@ DEFAULT_STATIC_DIR = os.environ.get('ROSHANAVI_STATIC_DIR') or PACKAGE_STATIC_DI
 
 LOG = logging.getLogger('roshanavi')
 
+# permessage-deflate keeps a zlib compressor (~150 KB) alive per WebSocket for the life of the
+# connection object, and the connection objects are reference cycles that only a full garbage
+# collection frees. The server is for localhost, so the compression buys nothing.
+# docs/design/resources.md (メモリの増え方).
+WS_PER_MESSAGE_DEFLATE = False
+
 
 def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(prog='roshanavi server',
@@ -152,6 +158,11 @@ def _bootstrap(args: argparse.Namespace) -> None:
 
 
 def main(argv: Optional[List[str]] = None) -> int:
+    from .gc_janitor import freeze_startup_objects
+    from .malloc_tuning import limit_malloc_arenas
+    limit_malloc_arenas()  # before any thread exists (docs/design/resources.md, メモリの増え方)
+    from .server_debug import start_if_enabled
+    start_if_enabled()  # ROSHANAVI_DEBUG_TRACEMALLOC=1 only: before anything allocates
     args = parse_args(argv)
     logging.basicConfig(level=args.log_level.upper(),
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
@@ -191,7 +202,9 @@ def main(argv: Optional[List[str]] = None) -> int:
     try:
         app = create_app(lab, static_dir=args.static_dir, allowed_hosts=args.allowed_host,
                          allowed_origins=args.allowed_origin)
-        uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level)
+        freeze_startup_objects()  # the periodic full GC then skips the ~100k start-up objects
+        uvicorn.run(app, host=args.host, port=args.port, log_level=args.log_level,
+                    ws_per_message_deflate=WS_PER_MESSAGE_DEFLATE)
     except (_Stopped, KeyboardInterrupt):
         pass  # the signal uvicorn re-raised after shutting down (uvicorn 0.29+)
     finally:

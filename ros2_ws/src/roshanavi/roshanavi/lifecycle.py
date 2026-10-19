@@ -115,6 +115,14 @@ class LifecycleService:
         with self._lock:
             self._cache[node] = (self._clock(), label)
 
+    def _expire(self) -> None:
+        """Drop expired entries: nodes come and go, the cache must not remember every name."""
+        now = self._clock()
+        with self._lock:
+            for node in [n for n, (at, _label) in self._cache.items()
+                         if now - at >= STATE_CACHE_SEC]:
+                del self._cache[node]
+
     def _cached(self, node: str) -> Tuple[bool, Optional[str]]:
         with self._lock:
             entry = self._cache.get(node)
@@ -134,6 +142,7 @@ class LifecycleService:
         """``{node: state label or None}``, querying in parallel (cached briefly)."""
         result: Dict[str, Optional[str]] = {}
         pending = []
+        self._expire()
         for node in nodes:
             hit, label = self._cached(node)
             if hit:

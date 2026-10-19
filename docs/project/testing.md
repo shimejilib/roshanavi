@@ -457,6 +457,9 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | Q-18 | メモリリークの疑いが地図・診断パネルに出る (実プロセス) | 17 分以上メモリを一定の速さで増やし続けるノードで「リークの疑い」 | ⬜ (判定は Q-01 の単体テストのみ。実時間で 17 分以上かかるため自動テストなし) |
 | Q-19 | UDP 受信バッファ溢れの案内 (実環境) | 大きな画像を `--monitor-heavy` で監視し、受信バッファを小さくして溢れさせると `net.core.rmem_max` の案内 | ⬜ (判定は Q-06 の単体テストのみ。E2E のコンテナでは RcvbufErrors が実際に増え、リソースタブに橙色で出ることを目視で確認 👀) |
 | Q-20 | 自分以外のユーザーのプロセスを一覧しない (非 root) | 非 root で起動すると他のユーザーのプロセスが一覧に出ない | 🟡 (単体テストの読み取り関数で確認。Docker は root で動くため実機は未確認 👀) |
+| Q-21 | roshanavi 自身のメモリが接続・ノードの出入りで増え続けない ([resources.md](../design/resources.md#roshanavi-自身のメモリの増え方-調査の結果)) | 閉じた接続の残骸 (循環参照 + 100 KB 超のバッファ) は 60 秒ごとの完全 GC (`GcJanitor`) で回収され、housekeeping が呼ぶ。起動時のオブジェクトは `gc.freeze()` で GC の対象から外れる (完全 GC が走査する数が 1/10 未満)。サーバーは WebSocket の圧縮を提案しない (本物の uvicorn + 本物の WebSocket クライアントで握手を確認、圧縮ありと対比)。glibc のアリーナを `mallopt` で 2 つに制限 (利用者の `MALLOC_ARENA_MAX` が優先、glibc でなければ何もしない、子プロセスで本物の glibc に対して成功)。購読・クライアント・タイマー・パブリッシャーを 200 回作って壊しても rclpy の callback group の集合は +30 未満 (処置なしでは +1000)、生きている購読は届き続け、生きているエンティティは消さない。lifecycle の状態キャッシュは消えたノードを忘れる、逆引き DNS のキャッシュは上限を超えない | ✅ (`test_memory_bounded.py`) |
+| Q-22 | メモリ診断の経路 `/api/_debug/memory` は `ROSHANAVI_DEBUG_TRACEMALLOC` があるときだけ | 変数なしでは 404。`route` では経路だけ (tracemalloc は動かない)、`1` で tracemalloc も。Host の検査が掛かる、`collect` / `find` / `top` の検証 | ✅ (`test_memory_bounded.py`) |
+| Q-23 | 負荷の再現 (`scripts/churn_harness.py`、隔離したスタックで手動実行) | 操作の種類ごとに 1 種類だけ繰り返し、RSS の傾き (MB / 100 回) と tracemalloc の増分を表にする。結果は resources.md | ✅ (この PC での実測。再実行は手動) |
 
 ### R. ディストロ対応
 

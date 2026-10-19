@@ -16,6 +16,7 @@ import psutil
 from . import graph, rates, sample_media
 from .echo import EchoManager
 from .fd_guard import FdGuard
+from .gc_janitor import GcJanitor
 from .injector import Injector
 from .launch_import.importer import LaunchImporter
 from .launch_import.takeover import TakeoverService
@@ -106,6 +107,7 @@ class Lab:
         self._timer: Any = None
         self.housekeeping_runs = 0
         self._fd_guard = FdGuard()
+        self._gc_janitor = GcJanitor()
         # Scenarios (docs/design/scenarios.md): files next to the current project file.
         self.scenarios = ScenarioService(self, lambda: self.launcher.project.path)
 
@@ -133,6 +135,7 @@ class Lab:
             self.traffic.tick()
             self.tracing.poll()
             self._fd_guard.check()
+            self._gc_janitor.tick()
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')

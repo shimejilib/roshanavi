@@ -33,6 +33,7 @@ TCP_STATES = {'01': 'ESTABLISHED', '02': 'SYN_SENT', '03': 'SYN_RECV', '04': 'FI
               '05': 'FIN_WAIT2', '06': 'TIME_WAIT', '07': 'CLOSE', '08': 'CLOSE_WAIT',
               '09': 'LAST_ACK', '0A': 'LISTEN', '0B': 'CLOSING'}
 MAX_EVENTS = 300
+MAX_RDNS_CACHE = 1024  # remote hosts remembered; a scan of many addresses must not grow it
 MAX_PER_PROCESS = 100
 TABLE_REFRESH_SEC = 5.0
 
@@ -223,8 +224,9 @@ class ReverseDns:
     def __init__(self, resolve: Callable[[str], str] = lambda ip: socket.gethostbyaddr(ip)[0],
                  ttl_sec: float = 600.0, negative_ttl_sec: float = 300.0, workers: int = 2,
                  max_pending: int = 64, clock: Callable[[], float] = time.monotonic,
-                 enabled: bool = True):
+                 enabled: bool = True, max_cache: int = MAX_RDNS_CACHE):
         self._resolve = resolve
+        self._max_cache = max_cache
         self._ttl, self._neg_ttl = ttl_sec, negative_ttl_sec
         self._clock = clock
         self._cache: Dict[str, Tuple[Optional[str], float]] = {}
@@ -271,6 +273,19 @@ class ReverseDns:
             with self._lock:
                 self._cache[ip] = (name, self._clock() + ttl)
                 self._pending.discard(ip)
+                self._trim_cache()
+
+    def _trim_cache(self) -> None:
+        """Keep at most ``max_cache`` entries: expired ones first, then the soonest to expire."""
+        if len(self._cache) <= self._max_cache:
+            return
+        now = self._clock()
+        for ip in [i for i, (_n, until) in self._cache.items() if until <= now]:
+            del self._cache[ip]
+        excess = len(self._cache) - self._max_cache
+        if excess > 0:
+            for ip in sorted(self._cache, key=lambda i: self._cache[i][1])[:excess]:
+                del self._cache[ip]
 
     def close(self) -> None:
         for _ in self._threads:
