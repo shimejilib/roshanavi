@@ -2,6 +2,7 @@
 
 import type { TrafficEntry } from '../api/types';
 import { t } from '../i18n';
+import { Term } from '../lib/Term';
 import { useAppState } from '../state/AppState';
 import { groupByNode } from './endpoints';
 import { DirectionLabel, RateCells, RowBasisBadge, TraceInfo } from './EndpointCells';
@@ -15,7 +16,7 @@ export function NodeTrafficView({ entries }: { entries: TrafficEntry[] }) {
         <tr>
           <th>{t('traffic.byNode.node')}</th>
           <th>{t('traffic.byNode.dir')}</th>
-          <th>{t('traffic.topic')}</th>
+          <th>{t('traffic.topic')} <Term term="topic" /></th>
           <th className="num">{t('traffic.hz')}</th>
           <th className="num">{t('traffic.bandwidth')}</th>
           <th>{t('traffic.byNode.basis')}</th>

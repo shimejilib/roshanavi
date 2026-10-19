@@ -34,10 +34,10 @@ export function PubSubFigure() {
           <path d="M0 0 L10 5 L0 10 z" className="primer-arrowhead" />
         </marker>
       </defs>
-      <Box x={14} y={34} label={t('primer.sender', { n: 'A' })} sub={t('primer.node')} />
-      <Box x={14} y={150} label={t('primer.sender', { n: 'B' })} sub={t('primer.node')} />
-      <Box x={W - 134} y={34} label={t('primer.receiver', { n: 'C' })} sub={t('primer.node')} />
-      <Box x={W - 134} y={150} label={t('primer.receiver', { n: 'D' })} sub={t('primer.node')} />
+      <Box x={14} y={34} label={t('primer.sender')} sub={t('primer.node', { n: 'A' })} />
+      <Box x={14} y={150} label={t('primer.sender')} sub={t('primer.node', { n: 'B' })} />
+      <Box x={W - 134} y={34} label={t('primer.receiver')} sub={t('primer.node', { n: 'C' })} />
+      <Box x={W - 134} y={150} label={t('primer.receiver')} sub={t('primer.node', { n: 'D' })} />
       <ellipse className="primer-topic" cx={cx} cy={cy} rx={78} ry={34} />
       <text className="primer-topic-name" x={cx} y={cy - 2} textAnchor="middle">/chatter</text>
       <text className="primer-topic-sub" x={cx} y={cy + 16} textAnchor="middle">{t('primer.channel')}</text>

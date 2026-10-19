@@ -410,6 +410,7 @@ class ClassSpec(_Strict):
 # ---- where function / class node code comes from (docs/design/user-code.md) ---------------------
 MAX_CODE_PATHS = 20
 MAX_INSTALLED_MODULES = 50
+MAX_TRAFFIC_MONITOR = 500
 
 
 # A code path: any directory path without control characters (checked further when used).
@@ -470,6 +471,10 @@ class ProjectSpec(_Strict):
     classes: List[ClassSpec] = Field(default_factory=list, max_items=100)
     watch_topics: List[constr(min_length=1, max_length=256)] = Field(default_factory=list,
                                                                      max_items=200)
+    # Per-topic traffic monitoring chosen by the user (topic -> on / off); wins over the heavy-type
+    # default, survives a restart (#61).
+    # (the count is capped where it grows: Launcher.set_traffic_monitor; the file is <= 1 MB.)
+    traffic_monitor: Dict[constr(min_length=1, max_length=256), bool] = Field(default_factory=dict)
     # Opt-in places for function / class node code besides the workspace (scope B / C).
     code_paths: List[CodePath] = Field(default_factory=list, max_items=MAX_CODE_PATHS)
     installed_modules: List[InstalledModule] = Field(default_factory=list,

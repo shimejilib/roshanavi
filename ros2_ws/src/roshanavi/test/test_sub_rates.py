@@ -41,6 +41,8 @@ def test_no_publisher_and_unmonitored_topic():
              'publishers': []}
     subs = topic_subscribers(entry, [pub('/a'), sub('/s')])
     assert subs[0]['hz'] is None and subs[0]['delivered']
+    # not measured is not "nothing arrives" (#61): its own basis, never a delivery verdict
+    assert subs[0]['basis'] == 'not_monitored'
 
 
 def test_annotate_traffic_adds_subscribers_and_skips_self():

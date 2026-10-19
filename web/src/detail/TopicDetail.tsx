@@ -1,17 +1,20 @@
 import { useState } from 'react';
-import { api, describeError } from '../api/client';
+import { describeError } from '../api/client';
 import type { GraphSnapshot, TrafficEntry } from '../api/types';
 import { diagnosticText } from '../graph/diagnosticsText';
 import { t } from '../i18n';
 import { formatBytes, formatMs, formatPercent, formatRate } from '../lib/format';
 import { hzBasisHelp, rateText, windowLabel } from '../timing/timing';
-import { isHiddenNode, topicPath } from '../lib/topics';
+import { isHiddenNode } from '../lib/topics';
+import { NotMeasured, setTopicMonitor } from '../traffic/NotMeasured';
+import { isNotMeasured, notMeasuredBandwidth, notMeasuredHz, tracedTopicHz } from '../traffic/notMeasured';
 import { useAppState } from '../state/AppState';
 import { AudioViewer } from './AudioViewer';
 import { EchoView } from './EchoView';
 import { ImageViewer } from './ImageViewer';
 import { useMediaTypes } from '../media/useMediaTypes';
 import { NodeLinks } from './NodeLinks';
+import { Term } from '../lib/Term';
 
 interface TopicDetailProps {
   topic: string;
@@ -45,12 +48,27 @@ function Stats({ entry }: { entry: TrafficEntry }) {
   );
 }
 
+/** A topic nobody subscribes to: say so (with 計測する), plus the traced Hz in 詳細計測モード (#61). */
+function NotMeasuredStats({ entry }: { entry: TrafficEntry }) {
+  return (
+    <div data-testid="detail-not-measured">
+      <NotMeasured entry={entry} />
+      {tracedTopicHz(entry) != null && (
+        <dl className="stats">
+          <div><dt>{t('traffic.hz')}</dt><dd>{notMeasuredHz(entry)} <span className="muted small">{t('monitor.traced')}</span></dd></div>
+          <div><dt>{t('traffic.bandwidth')}</dt><dd>{notMeasuredBandwidth(entry)}</dd></div>
+        </dl>
+      )}
+    </div>
+  );
+}
+
 function MonitorToggle({ topic, entry }: { topic: string; entry: TrafficEntry }) {
   const [error, setError] = useState<string | null>(null);
   const toggle = async (enabled: boolean) => {
     setError(null);
     try {
-      await api.setMonitor(`${topicPath('/api/traffic', topic)}/monitor`, enabled);
+      await setTopicMonitor(topic, enabled);
     } catch (err) {
       setError(describeError(err));
     }
@@ -77,9 +95,9 @@ export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
   const viewKind = types.length === 1 ? media?.supported.find((s) => s.type === types[0])?.kind : undefined;
   return (
     <div className="detail-body">
-      <div className="eyebrow">{t('detail.topic')}</div>
+      <div className="eyebrow">{t('detail.topic')} <Term term="topic" /></div>
       <h3 className="mono" data-testid="detail-title">{topic}</h3>
-      <div className="muted small">{t('detail.types')}: {info?.types.join(', ') ?? entry?.type ?? t('common.unknown')}</div>
+      <div className="muted small">{t('detail.types')} <Term term="msgType" />: {info?.types.join(', ') ?? entry?.type ?? t('common.unknown')}</div>
       <button type="button" className="primary" onClick={() => openInject(topic)} data-testid="detail-inject">
         {t('detail.inject')}
       </button>
@@ -93,13 +111,14 @@ export function TopicDetail({ topic, graph, entry }: TopicDetailProps) {
           </ul>
         </section>
       )}
-      <NodeLinks title={t('detail.publishers')} edges={edges.filter((e) => e.dir === 'pub')} />
-      <NodeLinks title={t('detail.subscribers')} edges={edges.filter((e) => e.dir === 'sub')} />
+      <NodeLinks title={t('detail.publishers')} edges={edges.filter((e) => e.dir === 'pub')} term="publisher" />
+      <NodeLinks title={t('detail.subscribers')} edges={edges.filter((e) => e.dir === 'sub')} term="subscriber" />
       {entry && (
         <section>
           <h4>{t('detail.stats')}</h4>
           <MonitorToggle topic={topic} entry={entry} />
           {entry.monitored && <Stats entry={entry} />}
+          {isNotMeasured(entry) && <NotMeasuredStats entry={entry} />}
         </section>
       )}
       {viewKind === 'image' && <ImageViewer key={`img-${topic}`} topic={topic} />}

@@ -37,7 +37,7 @@
   - `hz_source`: publisher 側レート。publisher (gid) ごとに source_timestamp 間隔から算出して合算。連番が単調ならロスした分も publish 数に数える。全サンプルの source_timestamp が 0/未対応なら null で、`hz`/`jitter_ms` は受信側にフォールバック (`hz_basis="receive"`)。`jitter_ms` は source 間隔の標準偏差 (publish ジッタ)。
   - `dropped`/`drop_ratio`: ウィンドウ内の publication_sequence_number の欠番 (publisher ごと)。連番が 0 / 非単調 (publisher 再起動、gid 無しでの複数 publisher の混在、RMW が未設定) の場合は `null`。
   - `latency_ms`: mean(received_timestamp - source_timestamp)。publisher と subscriber が同一ホスト (同一クロック) の場合のみ意味を持つ。
-- 重い型 (`sensor_msgs/msg/Image`, `CompressedImage`, `PointCloud2`, `PointCloud`。LaserScan は含まない) は既定で購読せず `status:"not_monitored"`, `monitored:false` で一覧に残す (グラフ情報は表示)。`--monitor-heavy` で全て監視、`PUT /api/traffic/{topic}/monitor` `{"enabled": bool}` でトピック単位に実行時切替 (既定より優先、任意のトピックを無効化も可)。購読の張り替えは次回の housekeeping (<=1 s) で反映され、`monitored` は即時に更新される。
+- 重い型 (`sensor_msgs/msg/Image`, `CompressedImage`, `PointCloud2`, `PointCloud`。LaserScan は含まない) は既定で購読せず `status:"not_monitored"`, `monitored:false` で一覧に残す (グラフ情報は表示)。`--monitor-heavy` で全て監視、`PUT /api/traffic/{topic}/monitor` `{"enabled": bool}` でトピック単位に実行時切替 (既定より優先、任意のトピックを無効化も可)。購読の張り替えは次回の housekeeping (<=1 s) で反映され、`monitored` は即時に更新される。**この切り替えはプロジェクトファイルの `traffic_monitor: {<トピック>: true|false}` に保存され** (`Lab.set_topic_monitoring` → `Launcher.set_traffic_monitor`、自動保存)、再起動やプロジェクトの切り替え・読み直しで復元される (`TopicSelector.replace_overrides`。housekeeping が、プロジェクト側の値が変わったときだけ適用し直す)。エントリには `heavy` (型が上の重い型か) も付く。
 - 除外: 正規表現リスト (既定で `/rosout`, `/parameter_events`, `/events/write_split`, `*/transition_event` は統計対象だが UI で畳む)。型解決できないトピックは `unsupported` として記録し購読しない。
 - 消えたトピックは購読解除。
 - **送信元ごとの値 (`rates.py`, 純関数)**: `/api/traffic` と `/ws/live` の各エントリに `source_count` と `publishers:[{node, hz, bps, basis}]` を付ける。
@@ -46,6 +46,8 @@
   - 注入ジョブ (`dummy:<id>`): 実際に送った件数から求めた送信レート (`Job.send_rate`、直近 5 秒、bytes/s は最初のメッセージのシリアライズ後サイズ × Hz) → `basis:"exact"`。恒久ダミーノード: 設定の `rate_hz` → `"configured"`。
   - それ以外の送信元が 1 つだけ: ダミーが無ければトピック合計そのもの (`"measured"`)、あれば `max(0, 合計 − ダミーの合計)` (`"estimated"`、UI に「推定」と説明)。bytes/s はダミー全員のサイズが分かるときだけ分ける。
   - それ以外の送信元が 2 つ以上: 分けられないので `"unknown"` (エッジに数値を出さず、トピックに「合計 X Hz / 送信元 N」)。受信側のエッジ (topic → sub) は常にトピック合計。
+  - **計測していないトピック** (`status:"not_monitored"`、#61): 数字が無いのは「分けられない」のではなく「見ていない」なので、`"unknown"` になる送信元は `"not_monitored"` にする (注入ジョブ・恒久ダミーの既知の値はそのまま)。受信側の行も、数字が無ければ `basis:"not_monitored"` (`delivered` は QoS の判定のまま)。
+  - **詳細計測モード** ([measurement.md](measurement.md)) がオンのとき、計測していないトピックの送信元の行は、トレースが数えた送信回数 (`hz_traced`) を Hz にする (`basis:"traced"`、帯域は `null`)。エントリには全送信元がトレースされたときだけ合計の `hz_traced` を付ける。受信側は従来どおり、ノードの中で数えた受信 Hz (`"measured"`)。データの大きさと関係なく測れるが、帯域は測れない。
 
 ## 送受信ごとのトラフィック・遅いトピック (P4.5b)
 - **受信者ごとの理論値** (`sub_rates.py`, 純関数): 受信側のノードの中で実際に受け取った量は外から測れない ([ui.md#ライブ通信マップ](ui.md#ライブ通信マップ-graph-タブ))。受信者の値は、QoS が合う送信者が送っている量 = 届くはずの量: 全送信者が合う → トピック全体の実測、一部だけ → 合う送信者の値 (rates.py の分割) の和 (分けられなければ null)、1 つも合わない → 0 と `delivered: false`。計測ノードの経路 ([measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) では、全送信者が合うときも送信者ごとの実測値の和を使う (止まった送信者の分がすぐ消える)。同じノードが同じトピックに複数の publisher を持っていても 1 回だけ数える。`basis` は `theoretical` / `not_delivered`。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) でトレースが対象のノードを測れていれば `measured` に置き換わる (理論値は `hz_expected` に残る)。

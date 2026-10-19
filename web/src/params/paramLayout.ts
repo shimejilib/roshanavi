@@ -1,6 +1,6 @@
 // How the parameter dialog lists a node's parameters: the node's own settings first (a class
 // node in the order of its `__init__` arguments, other nodes alphabetically), and the settings
-// ROS adds to every node folded into a collapsed 「ROS の内部の設定値」 section.
+// ROS adds to every node folded into a collapsed 「ROS の内部のパラメータ」 section.
 
 import type { ParamInfo } from '../api/nodeTypes';
 

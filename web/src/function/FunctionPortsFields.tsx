@@ -81,7 +81,7 @@ export function InputRows({ call, inputs, trigger, argName, idPrefix, triggerTes
   );
 }
 
-/** 「チャンネルは地図で線を引いてつなぐ」: empty every topic (ports that are wired on the map later). */
+/** 「トピックは地図で線を引いてつなぐ」: empty every topic (ports that are wired on the map later). */
 export function MapLaterButton({ onClick, testId }: { onClick: () => void; testId: string }) {
   return (
     <p className="row wrap small">

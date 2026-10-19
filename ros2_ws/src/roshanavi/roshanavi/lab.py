@@ -85,6 +85,10 @@ class Lab:
         self.traffic = TrafficService(self.runtime, probe=probe, window_sec=window_sec,
                                       exclude=traffic_exclude, clock=clock,
                                       monitor_heavy=monitor_heavy)
+        # The saved per-topic monitoring on / off of the project (#61), applied again whenever
+        # the project's choices change (a project switch or reload) in housekeeping.
+        self._applied_monitor: Dict[str, bool] = self.launcher.traffic_monitor
+        self.traffic.selector.replace_overrides(self._applied_monitor)
         self.tracing = TracingService(tracing, rt_per_cpu=trace_buffer_per_cpu)
         self._node_pids: Dict[str, Optional[int]] = {}
         self.injector = Injector(self.runtime, data_dir, clock=clock,
@@ -124,6 +128,7 @@ class Lab:
             self._node_pids = {n: info.get('pid') for n, info in node_info.items()}
             self.graph.update(raw, self.injector.list(), node_info,
                               self.launcher.manager.action_topics())
+            self._apply_saved_monitoring()
             self.traffic.sync(raw)
             self.traffic.tick()
             self.tracing.poll()
@@ -131,6 +136,18 @@ class Lab:
             self.housekeeping_runs += 1
         except Exception:  # keep the loop alive but make failures visible
             LOG.exception('housekeeping failed')
+
+    def _apply_saved_monitoring(self) -> None:
+        saved = self.launcher.traffic_monitor
+        if saved != self._applied_monitor:
+            self._applied_monitor = saved
+            self.traffic.selector.replace_overrides(saved)
+
+    def set_topic_monitoring(self, topic: str, enabled: bool) -> None:
+        """Turn a topic's measurement on / off now and remember it in the project file (#61)."""
+        self.launcher.set_traffic_monitor(topic, enabled)  # first: housekeeping reads it back
+        self._applied_monitor = self.launcher.traffic_monitor
+        self.traffic.set_monitored(topic, enabled)
 
     def _resource_context(self) -> ResourceContext:
         """Read by the resource sampler thread once per second (all calls are thread-safe)."""

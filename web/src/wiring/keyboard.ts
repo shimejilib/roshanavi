@@ -5,7 +5,6 @@
 import type { GraphTopic, Target } from '../api/types';
 import type { KindCatalog } from '../datakind/kinds';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import type { WireStatus } from './compat';
 import { checkTypes, planConnect } from './edit';
 import { suggestTopic, type NodePorts, type Port } from './ports';
@@ -29,7 +28,7 @@ export function wireOptions(np: NodePorts, p: Port, target: Target, topics: read
   const options: WireOption[] = [];
   if (p.ref.side === 'out') {
     const name = suggestTopic(np, p, new Set(topics.map((tp) => tp.name)));
-    options.push({ id: 'new', choice: { kind: 'new', topic: name }, label: t('wiring.option.new', { channel: termPair('topic') }), detail: name, status: 'same', disabled: false, current: false });
+    options.push({ id: 'new', choice: { kind: 'new', topic: name }, label: t('wiring.option.new'), detail: name, status: 'same', disabled: false, current: false });
   }
   const listed = topics.map((tp): WireOption => {
     const current = tp.name === p.topic;

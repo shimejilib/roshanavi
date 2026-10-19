@@ -1,5 +1,6 @@
 import type { GraphEdge } from '../api/types';
 import { t } from '../i18n';
+import { Term, type TermName } from '../lib/Term';
 import { useAppState } from '../state/AppState';
 
 function qosText(e: GraphEdge): string {
@@ -9,11 +10,11 @@ function qosText(e: GraphEdge): string {
 }
 
 /** List of endpoints; clicking one selects that node or topic. */
-export function NodeLinks({ title, edges, showTopic = false }: { title: string; edges: GraphEdge[]; showTopic?: boolean }) {
+export function NodeLinks({ title, edges, showTopic = false, term }: { title: string; edges: GraphEdge[]; showTopic?: boolean; term?: TermName }) {
   const { select } = useAppState();
   return (
     <section>
-      <h4>{title}</h4>
+      <h4>{title}{term && <> <Term term={term} /></>}</h4>
       {edges.length === 0 ? (
         <p className="muted small">{t('common.none')}</p>
       ) : (

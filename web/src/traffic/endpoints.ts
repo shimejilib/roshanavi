@@ -9,6 +9,7 @@ import type { SubscriberTrace } from '../api/tracingTypes';
 import type { TrafficEntry } from '../api/types';
 import { t, tDynamic } from '../i18n';
 import { formatHz, formatRate } from '../lib/format';
+import { isNotMeasured, NO_VALUE } from './notMeasured';
 
 export type Direction = 'pub' | 'sub';
 
@@ -21,6 +22,8 @@ export interface EndpointRow {
   bps: number | null;
   basis: string;
   delivered: boolean;
+  /** The topic is measured (subscribed by roshanavi); false = no number from that, only the trace (#61). */
+  topicMeasured: boolean;
   /** Subscriber rows: trace values (詳細計測モード). */
   trace?: SubscriberTrace;
   /** Publisher rows: sends counted by the trace. */
@@ -36,7 +39,7 @@ const byNode = (a: EndpointRow, b: EndpointRow) => a.node.localeCompare(b.node);
 
 /** Publisher rows (by node) then subscriber rows (by node) of one topic. */
 export function topicEndpoints(entry: TrafficEntry): EndpointRow[] {
-  const base = { topic: entry.topic, type: entry.type };
+  const base = { topic: entry.topic, type: entry.type, topicMeasured: !isNotMeasured(entry) };
   const pubs: EndpointRow[] = (entry.publishers ?? []).map((p) => ({
     ...base, node: p.node, dir: 'pub', hz: p.hz, bps: p.bps, basis: p.basis, delivered: true, hzTraced: p.hz_traced,
   }));
@@ -61,9 +64,10 @@ export function groupByNode(entries: Iterable<TrafficEntry>): NodeTraffic[] {
     .sort((a, b) => a.node.localeCompare(b.node));
 }
 
-/** Badge key: a subscriber measured by the trace reads 実測(トレース). */
+/** Badge key: a row measured by the trace reads 実測(トレース) (a subscriber's receive count, a publisher's send count). */
 export function displayBasis(row: Pick<EndpointRow, 'dir' | 'basis'>): string {
-  return row.dir === 'sub' && row.basis === 'measured' ? 'traced' : row.basis;
+  if (row.dir === 'sub' && row.basis === 'measured') return 'traced';
+  return row.dir === 'pub' && row.basis === 'traced' ? 'traced_pub' : row.basis;
 }
 
 export function basisLabel(basis: string): string {
@@ -76,12 +80,14 @@ export function basisHelp(basis: string): string {
 
 export function endpointHz(row: Pick<EndpointRow, 'hz' | 'delivered'>): string {
   if (!row.delivered) return t('traffic.notDelivered');
-  return row.hz == null ? '—' : formatHz(row.hz);
+  return row.hz == null ? NO_VALUE : formatHz(row.hz);
 }
 
-export function endpointBandwidth(row: Pick<EndpointRow, 'bps' | 'delivered'>): string {
+export function endpointBandwidth(row: Pick<EndpointRow, 'bps' | 'delivered' | 'hz' | 'topicMeasured'>): string {
   if (!row.delivered) return formatRate(0);
-  return row.bps == null ? '—' : formatRate(row.bps);
+  if (row.bps != null) return formatRate(row.bps);
+  // A Hz from the trace on a topic nobody subscribes to: say why there is no bandwidth.
+  return !row.topicMeasured && row.hz != null ? t('monitor.noBandwidth') : NO_VALUE;
 }
 
 export function toggleTopic(expanded: ReadonlySet<string>, topic: string): Set<string> {

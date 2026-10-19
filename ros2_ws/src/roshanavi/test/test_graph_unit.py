@@ -113,3 +113,25 @@ def test_rmw_companion_topics_are_never_listed():
     runtime = RosRuntime.__new__(RosRuntime)
     runtime._node, runtime._lock = Node(), threading.Lock()
     assert runtime.topic_names_and_types() == [('/audio', ['a/msg/A'])]
+
+
+def _cam_graph(*subscribers):
+    # a heavy image topic as the viewer / echo / probe / scenario runner of roshanavi see it
+    return RawGraph(
+        nodes=[('camera', '/'), ('roshanavi', '/'), ('roshanavi_probe', '/'), ('viewer', '/')],
+        topics={'/cam': ['sensor_msgs/msg/Image']},
+        publishers={'/cam': [Endpoint('/camera', QOS)]},
+        subscribers={'/cam': [Endpoint(n, QOS) for n in subscribers]})
+
+
+def test_no_subscriber_marker_counts_real_subscribers_only():
+    # #61: roshanavi's own viewer / echo / traffic / probe subscriptions are not receivers
+    selfs = ('/roshanavi', '/roshanavi_probe', '/roshanavi_scenario')
+    for show_self in (False, True):
+        snap = build_snapshot(_cam_graph(*selfs), show_self=show_self)
+        assert [(d['code'], d['topic']) for d in snap['diagnostics']] == [('no_subscriber', '/cam')]
+
+
+def test_a_real_subscriber_removes_the_marker_whatever_roshanavi_measures():
+    snap = build_snapshot(_cam_graph('/roshanavi', '/roshanavi_probe', '/viewer'))
+    assert snap['diagnostics'] == []

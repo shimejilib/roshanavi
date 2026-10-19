@@ -23,7 +23,7 @@ cd ~/ros2_ws/src
 git clone https://github.com/shimejilib/roshanavi.git
 ```
 
-colcon は `src/` の下を奥まで探してパッケージを見つけます。取ってきたリポジトリの中の `ros2_ws/src/` にある 6 つのパッケージが見つかりますが、**使うのに必要なのは 3 つだけ**です (roshanavi 本体 `roshanavi`、計測ノード `roshanavi_probe`、内部用のデータの形 `roshanavi_msgs`)。残りはサンプル (`roshanavi_examples`、`roshanavi_examples_msgs`) とテスト用 (`roshanavi_test_nodes`) で、余計な依存が増えるので、以下の手順ではビルドしません。
+colcon は `src/` の下を奥まで探してパッケージを見つけます。取ってきたリポジトリの中の `ros2_ws/src/` にある 6 つのパッケージが見つかりますが、**使うのに必要なのは 3 つだけ**です (roshanavi 本体 `roshanavi`、計測ノード `roshanavi_probe`、内部用のメッセージ型 `roshanavi_msgs`)。残りはサンプル (`roshanavi_examples`、`roshanavi_examples_msgs`) とテスト用 (`roshanavi_test_nodes`) で、余計な依存が増えるので、以下の手順ではビルドしません。
 
 ### 2. 依存を入れる (rosdep)
 
@@ -65,8 +65,8 @@ ros2 run roshanavi app
 
 ブラウザで http://localhost:6871 を開きます (いまは、ブラウザが自動では開きません)。
 
-- **必ず、自分のワークスペースを source した端末で起動します。** 自分のパッケージの独自のデータの形 (メッセージ型) や、ランチャー、ビルドボタンが、同じ環境で動く必要があるためです。
-- 自分のプロジェクトの起動セット (launch ファイル) を引き取って動かすなら `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>` ([既存の起動セットごと動かす](takeover.md))。
+- **必ず、自分のワークスペースを source した端末で起動します。** 自分のパッケージの独自のメッセージ型や、ランチャー、ビルドボタンが、同じ環境で動く必要があるためです。
+- 自分のプロジェクトの launch ファイルを引き取って動かすなら `ros2 run roshanavi app --launch <パッケージ> <launch ファイル>` ([既存の launch ファイルごと動かす](takeover.md))。
 - 設定の保存先は、`--project` (既定は `<ワークスペース>/roshanavi.yaml`。ワークスペースは `--workspace`、既定はいまのフォルダ)、録画や送るファイルは `--data-dir` (既定は `/data`。ネイティブでは自分で指定してください。例: `--data-dir ~/roshanavi_data`) です。
 - ポートを変えるときは `--port`。別のマシンから見るときは [SSH のポート転送](remote-ssh.md) を使います。
 

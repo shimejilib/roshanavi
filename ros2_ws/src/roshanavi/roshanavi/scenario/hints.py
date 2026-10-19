@@ -51,11 +51,11 @@ def hints(raw: RawGraph, inputs: Sequence[str] = (), outputs: Sequence[str] = ()
     for topic in outputs:
         if _others(raw.publishers.get(topic, [])):
             continue
-        text = (f'{topic} に送信しているノードがいません (ノードが起動していない・落ちた、チャンネル (トピック) の名前の'
-                '打ち間違い、名前の付け替え (リマップ) 忘れなど)。')
+        text = (f'{topic} に送信しているノードがいません (ノードが起動していない・落ちた、トピックの名前の'
+                '打ち間違い、リマップ忘れなど)。')
         similar = _similar(topic, published)
         if similar:
-            text += f'似た名前で送信されているチャンネル: {", ".join(similar)}。'
+            text += f'似た名前で送信されているトピック: {", ".join(similar)}。'
         result.append(_hint('no_publisher', topic, text))
     for topic in inputs:
         if _others(raw.subscribers.get(topic, [])):
@@ -63,7 +63,7 @@ def hints(raw: RawGraph, inputs: Sequence[str] = (), outputs: Sequence[str] = ()
         text = f'{topic} を受信しているノードがいません (送っても誰も受け取りません)。'
         similar = _similar(topic, subscribed)
         if similar:
-            text += f'似た名前で受信されているチャンネル: {", ".join(similar)}。'
+            text += f'似た名前で受信されているトピック: {", ".join(similar)}。'
         result.append(_hint('no_subscriber', topic, text))
     topics = list(dict.fromkeys([*inputs, *outputs]))
     for pair in incompatible_pairs(_edges(raw, topics)):
@@ -71,7 +71,7 @@ def hints(raw: RawGraph, inputs: Sequence[str] = (), outputs: Sequence[str] = ()
                            f'受信側 {r["sub"]}' for r in pair['reasons'])
         result.append(_hint('qos_incompatible', pair['topic'],
                             f'{pair["topic"]}: {_node_label(pair["publisher"])} → '
-                            f'{_node_label(pair["subscriber"])} は届け方の設定 (QoS) が合わないためつながりません '
+                            f'{_node_label(pair["subscriber"])} は QoS が合わないためつながりません '
                             f'({reasons})。'))
     for topic in topics:
         types = sorted(set(raw.topics.get(topic, [])))

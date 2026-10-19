@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Diagnostic } from '../api/types';
-import { chatterGraph, entry, NOW_MS } from '../test/fixtures';
+import { chatterGraph, entry, heavyOffEntry, NOW_MS } from '../test/fixtures';
 import { borderWidth, buildElements, edgeRate, edgeState, edgeWidth, filterSnapshot, type EdgeData } from './model';
 
 const edgesOf = (els: ReturnType<typeof buildElements>): EdgeData[] =>
@@ -196,5 +196,45 @@ describe('subscriber edge rate', () => {
     });
     expect(edgeRate({ node: '/picky', dir: 'sub' }, e)).toMatchObject({ hz: 1, bw: 100 });
     expect(edgeRate({ node: '/other', dir: 'sub' }, e)).toMatchObject({ hz: 3, bw: 300 });
+  });
+});
+
+describe('a heavy topic that is not measured (#61)', () => {
+  const graph = () => {
+    const g = chatterGraph();
+    return { ...g, topics: [{ name: '/chatter', types: ['sensor_msgs/msg/Image'] }] };
+  };
+
+  it('has no rate label and a note that it is not measured; the edge is dotted (not_monitored)', () => {
+    const off = heavyOffEntry('/chatter', {
+      publishers: [{ node: '/talker', hz: null, bps: null, basis: 'not_monitored' }],
+      subscribers: [{ node: '/listener', hz: null, bps: null, basis: 'not_monitored', delivered: true, sources: ['/talker'] }],
+    });
+    const edges = edgesOf(buildElements(graph(), new Map([['/chatter', off]]), NOW_MS));
+    const pub = edges.find((e) => e.dir === 'pub')!;
+    expect(pub).toMatchObject({ label: '', state: 'not_monitored', rateBasis: 'not_monitored' });
+    expect(pub.rateNote).toContain('計測していません');
+    expect(edges.find((e) => e.dir === 'sub')).toMatchObject({ label: '', state: 'not_monitored' });
+  });
+
+  it('shows the traced send rate of the publisher in 詳細計測モード, without bandwidth', () => {
+    const traced = heavyOffEntry('/chatter', {
+      publishers: [{ node: '/talker', hz: 30, bps: null, basis: 'traced', hz_traced: 30 }],
+      subscribers: [],
+    });
+    const pub = edgesOf(buildElements(graph(), new Map([['/chatter', traced]]), NOW_MS)).find((e) => e.dir === 'pub')!;
+    expect(pub.label).toBe('30.0 Hz');
+    expect(pub.rateNote).toContain('詳細計測モード');
+  });
+
+  it('a real subscriber is not turned into 受信なし by the traffic state (that marker comes from the graph only)', () => {
+    const off = heavyOffEntry('/chatter');
+    const els = buildElements(graph(), new Map([['/chatter', off]]), NOW_MS);
+    const topic = els.find((e) => e.group === 'nodes' && e.data.kind === 'topic')!;
+    expect(topic.data.label).toBe('/chatter');
+    // The graph diagnostics are the only source of the marker: with a diagnostic it appears.
+    const quiet: Diagnostic = { code: 'no_subscriber', severity: 'info', topic: '/chatter', nodes: [], detail: {} };
+    const withMarker = buildElements({ ...graph(), diagnostics: [quiet] }, new Map([['/chatter', off]]), NOW_MS);
+    expect(withMarker.find((e) => e.group === 'nodes' && e.data.kind === 'topic')!.data.label).toBe('/chatter\n受信なし');
   });
 });

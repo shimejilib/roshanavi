@@ -109,6 +109,7 @@ classes:                  # クラスノード (docs/design/nodes.md)。id は�
     outputs: [{topic: /average, kind: float}]   # dict を返すなら各出力に key:
   actions: [reset]                   # 操作メソッド: /<node>/reset (std_msgs/Empty) とボタンで呼ぶ
 watch_topics: [/chat]
+traffic_monitor: {/camera/image: true}   # トラフィックの計測を利用者が切り替えたトピック (on/off)。既定より優先
 ```
 - pydantic のスキーマで検証する。未知のキーは拒否し、エラーはパス付き (`targets.0.colour: extra fields not permitted`、YAML の構文エラーは行・列付き)。
 - 保存は同じディレクトリの一時ファイル → fsync → `os.replace` (原子的)。キーはスキーマ順、空の値は省いて書く (差分が安定し、git で読みやすい)。

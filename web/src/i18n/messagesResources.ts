@@ -57,7 +57,7 @@ export const resourcesJa = {
   'res.host.diskLevel.warn': '少ない (録画すると警告)',
   'res.host.diskLevel.stop': '不足 (録画は自動で止まります)',
   'res.host.nic': 'ネットワーク (PC の外との通信)',
-  'res.host.nicHelp': '物理的な通信口ごとの送受信量です。同じ PC の中の ROS 通信はここには現れません (チャンネル (トピック) の帯域は「トラフィック」タブで見ます)。',
+  'res.host.nicHelp': '物理的な通信口ごとの送受信量です。同じ PC の中の ROS 通信はここには現れません (トピックの帯域は「トラフィック」タブで見ます)。',
   'res.host.nicNone': 'loopback 以外の通信口がありません',
   'res.host.nicRow': '受信 {rx} / 送信 {tx}',
   'res.host.nicErr': 'エラー {err}・取りこぼし {drop}',

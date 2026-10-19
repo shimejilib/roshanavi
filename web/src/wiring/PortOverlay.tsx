@@ -9,7 +9,6 @@ import type { GraphTopic, Target } from '../api/types';
 import { kindLabel, type KindCatalog } from '../datakind/kinds';
 import { nodeElementId, portFraction, topicElementId } from '../graph/model';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { useLatestMessages } from '../transform/useLatestMessages';
 import { planDisconnect } from './edit';
 import { dropOutcome, hitAt, notesOf, refusalOf, type DragSource, type DropContext, type DropOutcome } from './drop';
@@ -375,7 +374,7 @@ export function PortOverlay({ cy, nodes, targets, topics, catalog, wiring, selec
 }
 
 function hintOf(outcome: DropOutcome): string {
-  if (outcome.kind === 'ask') return t('wiring.hint.newChannel', { channel: termPair('topic') });
+  if (outcome.kind === 'ask') return t('wiring.hint.newChannel');
   if (outcome.kind === 'steps') return t('wiring.hint.connect');
   return '';
 }

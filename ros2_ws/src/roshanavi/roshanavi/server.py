@@ -132,7 +132,7 @@ def _register_rest(app: FastAPI, lab: Lab) -> None:
     @app.put('/api/traffic/{topic:path}/monitor')
     def put_monitor(topic: str, req: MonitorRequest) -> Dict[str, Any]:
         topic = '/' + topic.strip('/')
-        lab.traffic.set_monitored(topic, req.enabled)
+        lab.set_topic_monitoring(topic, req.enabled)
         return {'topic': topic, 'enabled': req.enabled}
 
     @app.get('/api/types')

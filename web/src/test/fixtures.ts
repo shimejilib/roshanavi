@@ -50,3 +50,15 @@ export function chatterGraph(): GraphSnapshot {
     diagnostics: [],
   };
 }
+
+/** A heavy topic roshanavi does not subscribe to (the default for images, #61). */
+export function heavyOffEntry(topic = '/turtle_viz/image', over: Partial<TrafficEntry> = {}): TrafficEntry {
+  return entry(topic, {
+    type: 'sensor_msgs/msg/Image', status: 'not_monitored', monitored: false, heavy: true, hz: 0, bytes_per_sec: 0,
+    avg_size: 0, jitter_ms: 0, jitter_recv_ms: 0, dropped: null, drop_ratio: null, latency_ms: null, last_seen: null,
+    total_count: 0, recent_count: 0, history: [],
+    publishers: [{ node: '/viz_a', hz: null, bps: null, basis: 'not_monitored' }, { node: '/viz_b', hz: null, bps: null, basis: 'not_monitored' }],
+    subscribers: [{ node: '/consumer', hz: null, bps: null, basis: 'not_monitored', delivered: true, sources: ['/viz_a', '/viz_b'] }],
+    ...over,
+  });
+}

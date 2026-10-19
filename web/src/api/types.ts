@@ -150,6 +150,10 @@ export interface TrafficEntry {
   publishers?: PublisherRate[];
   /** Subscribers and their theoretical rate (sum of QoS-compatible publishers, backend sub_rates.py). */
   subscribers?: SubscriberRate[];
+  /** The type is one that is not measured by default (images, point clouds). */
+  heavy?: boolean;
+  /** Not monitored topics with 詳細計測モード: send rate counted by the trace (sum over the publishers), null if not all covered. */
+  hz_traced?: number | null;
   /** probe = C++ measurement node (per publisher), python = fallback monitor (per topic). */
   measurement?: 'probe' | 'python';
   /** Probe only: one row per publisher gid (node is null when the RMW gid did not match). */
@@ -187,13 +191,14 @@ export interface Measurement {
 
 /** exact = counted by roshanavi, configured = dummy node setting, measured = counted per
  * publisher by the probe (or the only publisher: topic total), estimated = total minus
- * known, unknown = cannot split. */
-export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown';
+ * known, unknown = cannot split, not_monitored = the topic is not measured (no number, not a limit),
+ * traced = the send count of 詳細計測モード on a topic that is not monitored (no bandwidth). */
+export type RateBasis = 'exact' | 'configured' | 'measured' | 'estimated' | 'unknown' | 'not_monitored' | 'traced';
 
 /** theoretical = what compatible publishers send (not measured inside the subscriber);
  * not_delivered = no QoS-compatible publisher; measured = counted inside the node by the trace
  * (詳細計測モード). */
-export type SubscriberBasis = 'theoretical' | 'not_delivered' | 'measured';
+export type SubscriberBasis = 'theoretical' | 'not_delivered' | 'measured' | 'not_monitored';
 
 export interface SubscriberRate extends SubscriberTrace {
   node: string;
@@ -380,6 +385,8 @@ export interface ProjectState {
     transforms?: TransformSpec[];
     functions?: FunctionSpec[];
     watch_topics?: string[];
+    /** Per-topic measurement on / off chosen by the user (kept in the project file). */
+    traffic_monitor?: Record<string, boolean>;
   };
 }
 

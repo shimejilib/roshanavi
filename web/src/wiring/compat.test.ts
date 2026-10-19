@@ -25,13 +25,13 @@ describe('plain reasons', () => {
   it('refuses an image channel into a text input with a plain sentence', () => {
     const sender = { kind: null, type: 'sensor_msgs/msg/Image' };
     const receiver = { kind: 'string' as const, type: null };
-    expect(verdictText(wireCompat(sender, receiver, tk), sender, receiver, tk, true)).toBe('文字列の入力口に、画像のチャンネル (トピック) はつなげません');
+    expect(verdictText(wireCompat(sender, receiver, tk), sender, receiver, tk, true)).toBe('文字列の入力口に、画像のトピックはつなげません');
   });
 
   it('words an output that cannot be sent to a channel from the port side', () => {
     const sender = { kind: 'string' as const, type: null };
     const receiver = { kind: null, type: 'std_msgs/msg/Float64' };
-    expect(verdictText(wireCompat(sender, receiver, tk), sender, receiver, tk, false)).toBe('文字列の出力口は、数値 (小数)のチャンネル (トピック) にはつなげません');
+    expect(verdictText(wireCompat(sender, receiver, tk), sender, receiver, tk, false)).toBe('文字列の出力口は、数値 (小数)のトピックにはつなげません');
   });
 
   it('notes a conversion and says nothing for an exact match', () => {

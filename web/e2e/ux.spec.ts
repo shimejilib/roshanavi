@@ -31,7 +31,7 @@ test('blank-area menu -> create an input node on a new topic -> it appears on th
 
   const dialog = page.getByTestId('create-input-dialog');
   await dialog.getByTestId('input-topic').fill('/e2e_new_topic');
-  await expect(dialog).toContainText('新しいチャンネル (トピック) です');
+  await expect(dialog).toContainText('新しいトピックです');
   await dialog.getByTestId('input-name').fill(INPUT_ID);
   await dialog.getByTestId('input-content-expression').check();
   await dialog.getByTestId('input-rate').fill('2');
@@ -65,8 +65,8 @@ test('node menu: parameters of talker; external node is read-only', async ({ pag
   await page.screenshot({ path: `${SHOTS}menu-node.png` });
   await menu.getByTestId('menu-params').click();
   const dialog = page.getByTestId('params-dialog');
-  // ROS's own settings are folded away (「ROS の内部の設定値」); open them to see use_sim_time.
-  await expect(dialog.getByTestId('params-internal')).toContainText('ROS の内部の設定値', { timeout: 10_000 });
+  // ROS's own settings are folded away (「ROS の内部のパラメータ」); open them to see use_sim_time.
+  await expect(dialog.getByTestId('params-internal')).toContainText('ROS の内部のパラメータ', { timeout: 10_000 });
   await expect(dialog.locator('[data-param="use_sim_time"]')).toBeHidden();
   await dialog.getByTestId('params-internal').locator('summary').click();
   await expect(dialog.locator('[data-param="use_sim_time"]')).toBeVisible();

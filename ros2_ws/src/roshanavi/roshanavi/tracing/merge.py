@@ -5,6 +5,11 @@ with ``hz_recv`` (successful takes), ``hz_processed`` (finished callbacks)
 and ``cb_ms {avg, p95, max}``; the theoretical value is kept as
 ``hz_expected``. Everything else stays theoretical.
 
+**Topics that are not monitored** (images by default, #61): nothing is subscribed, so the
+publisher rows carry only what the trace saw. The send rate counted at the publishers
+(``hz_traced``, the sum over the publishers) becomes the row's Hz (basis ``traced``) and the topic's
+``hz_traced``; bandwidth stays ``None`` (the trace does not know message sizes).
+
 **処理が追いついていない**: rclcpp takes a message only right before running
 its callback, so takes ≈ callbacks even when the node is overloaded — the
 backlog is dropped inside the DDS queue, before any take. The incoming rate
@@ -18,6 +23,7 @@ from typing import Any, Callable, Dict, Iterable, List, Mapping, Optional, Seque
 from ..ros_runtime import is_self_node
 
 BASIS_MEASURED = 'measured'
+BASIS_TRACED = 'traced'  # a publisher counted by the trace on a topic that is not monitored
 BEHIND_MIN_HZ = 0.5      # below this nothing is called "behind"
 BEHIND_ABS_HZ = 0.5
 BEHIND_RATIO = 0.1       # processed < 90 % of incoming
@@ -92,6 +98,21 @@ def _measured_sub(sub: Mapping[str, Any], traced: List[Mapping[str, Any]], windo
     return result
 
 
+def _traced_pub(pub: Mapping[str, Any], hz: Optional[float], entry: Mapping[str, Any]
+                ) -> Dict[str, Any]:
+    """A publisher row with the trace's send count; for a topic nobody measures it is the row's Hz."""
+    result = {**pub, 'hz_traced': hz}
+    if entry.get('status') == 'not_monitored' and pub.get('hz') is None and hz is not None:
+        result.update(hz=hz, bps=None, basis=BASIS_TRACED)
+    return result
+
+
+def _topic_hz_traced(pubs: Sequence[Mapping[str, Any]]) -> Optional[float]:
+    """Topic send rate from the trace: the sum when every publisher is covered, else None."""
+    rates = [p.get('hz_traced') if p.get('basis') != 'exact' else p.get('hz') for p in pubs]
+    return _sum(rates)
+
+
 def apply_trace(entries: Sequence[Mapping[str, Any]], snap: Optional[Mapping[str, Any]],
                 window: Optional[float]) -> List[Dict[str, Any]]:
     """Copy of the annotated traffic entries with trace values on covered endpoints."""
@@ -112,8 +133,11 @@ def apply_trace(entries: Sequence[Mapping[str, Any]], snap: Optional[Mapping[str
         for pub in entry.get('publishers') or []:
             traced = pubs.get((pub['node'], topic))
             hz = _sum([(t['windows'].get(key) or {}).get('hz') for t in traced or []])
-            new_pubs.append({**pub, 'hz_traced': hz} if traced else dict(pub))
-        result.append({**entry, 'subscribers': new_subs, 'publishers': new_pubs})
+            new_pubs.append(_traced_pub(pub, hz, entry) if traced else dict(pub))
+        merged = {**entry, 'subscribers': new_subs, 'publishers': new_pubs}
+        if entry.get('status') == 'not_monitored':
+            merged['hz_traced'] = _topic_hz_traced(new_pubs)
+        result.append(merged)
     return result
 
 

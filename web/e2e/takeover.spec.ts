@@ -85,7 +85,7 @@ test('the launch file changes -> banner -> diff -> re-import adds the node', asy
   const file = join(SRC, PKG, 'launch', 'pair.launch.py');
   writeFileSync(file, readFileSync(file, 'utf-8').replace(LAUNCH(''), LAUNCH(LISTENER)));
   const banner = page.getByTestId('takeover-changed-banner');
-  await expect(banner).toContainText('起動セット (launch ファイル) が変更されました。取り込み直しますか?', { timeout: 30_000 });
+  await expect(banner).toContainText('launch ファイルが変更されました。取り込み直しますか?', { timeout: 30_000 });
   await page.screenshot({ path: `${SHOTS}takeover-changed-banner.png` });
   await page.getByTestId('takeover-show-diff').click();
   const dialog = page.getByTestId('takeover-diff-dialog');
@@ -113,7 +113,7 @@ test('delete with confirmation, then undo restores and restarts it', async ({ pa
   const confirm = page.getByTestId('confirm-dialog');
   await expect(confirm).toContainText(DUMMY);
   await expect(confirm).toContainText('削除すると止まります');
-  await expect(confirm).toContainText('ソースコード・パッケージ・設定値のファイル (パラメータファイル)・録画は消えません');
+  await expect(confirm).toContainText('ソースコード・パッケージ・パラメータファイル・録画は消えません');
   await page.screenshot({ path: `${SHOTS}node-list-delete.png` });
   await page.getByTestId('confirm-ok').click();
   await expect(page.getByTestId('nodes-delete-message')).toContainText('1 件を削除しました');

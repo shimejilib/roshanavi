@@ -20,7 +20,7 @@ describe('wiring options (the list the keyboard path shows)', () => {
     const chatter = options.find((o) => o.label === '/chatter')!;
     const image = options.find((o) => o.label === '/image')!;
     expect(chatter.disabled).toBe(false);
-    expect(image).toMatchObject({ disabled: true, status: 'refuse', detail: '文字列の入力口に、画像のチャンネル (トピック) はつなげません' });
+    expect(image).toMatchObject({ disabled: true, status: 'refuse', detail: '文字列の入力口に、画像のトピックはつなげません' });
     expect(options.indexOf(chatter)).toBeLessThan(options.indexOf(image));
     expect(options.some((o) => o.choice.kind === 'new')).toBe(false); // inputs do not create channels
   });

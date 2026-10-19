@@ -28,8 +28,8 @@ from .errors import LauncherError
 from .manager import ProcessManager
 from .proc_record import ProcessRecord, describe, find_leftovers, stop_leftovers
 from .project import DEFAULT_FILE_NAME, ProjectStore
-from .schema import (ClassSpec, CodeSettings, DummySpec, FunctionSpec, ProjectSpec, QosSpec,
-                     TakeoverSpec, TargetSpec, TransformSpec, api_dict)
+from .schema import (MAX_TRAFFIC_MONITOR, ClassSpec, CodeSettings, DummySpec, FunctionSpec,
+                     ProjectSpec, QosSpec, TakeoverSpec, TargetSpec, TransformSpec, api_dict)
 
 LOG = logging.getLogger(__name__)
 
@@ -70,6 +70,7 @@ class Launcher:
         self._created = clock()
         self._autostart_pending = autostart
         self._watch_topics: List[str] = []
+        self._traffic_monitor: Dict[str, bool] = {}
         self.takeover: Optional[TakeoverSpec] = None  # set by the launch takeover
         self.load_error: Optional[str] = None
         self.save_error: Optional[str] = None
@@ -91,6 +92,7 @@ class Launcher:
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
+        self._traffic_monitor = dict(spec.traffic_monitor)
         self.takeover = spec.takeover
         return self.project_state()
 
@@ -117,6 +119,7 @@ class Launcher:
                            functions=self.manager.functions(),
                            classes=self.manager.classes(),
                            watch_topics=self._watch_topics,
+                           traffic_monitor=self._traffic_monitor,
                            code_paths=list(self.manager.code.code_paths),
                            installed_modules=list(self.manager.code.installed_modules),
                            takeover=self.takeover)
@@ -133,6 +136,7 @@ class Launcher:
         self.manager.replace_all([*spec.targets, *spec.dummies, *spec.transforms,
                                   *spec.functions, *spec.classes])
         self._watch_topics = list(spec.watch_topics)
+        self._traffic_monitor = dict(spec.traffic_monitor)
         self.takeover = spec.takeover
         return self.save_project()
 
@@ -178,6 +182,19 @@ class Launcher:
 
     def set_watch_topics(self, topics: Sequence[str]) -> None:
         self._watch_topics = list(topics)
+
+    @property
+    def traffic_monitor(self) -> Dict[str, bool]:
+        """The user's per-topic monitoring choices (topic -> on / off) of the current project."""
+        return dict(self._traffic_monitor)
+
+    def set_traffic_monitor(self, topic: str, enabled: bool) -> None:
+        """Remember a topic's monitoring on / off in the project file (autosaved, #61)."""
+        if topic not in self._traffic_monitor and len(self._traffic_monitor) >= MAX_TRAFFIC_MONITOR:
+            raise LauncherError('invalid_request', 'too many monitored-topic settings in the '
+                                f'project (max {MAX_TRAFFIC_MONITOR})')
+        self._traffic_monitor[topic] = enabled
+        self.autosave()
 
     # ---- graph integration (housekeeping thread) ---------------------------
     def observe(self, node_ids: Iterable[str]) -> Dict[str, Dict[str, Any]]:

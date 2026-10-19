@@ -73,6 +73,12 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | B-19 | 止まったトピックの Hz 表示 (vitest) | hz 0 / `stale` のとき「(受信時刻で概算)」を付けない | ✅ (`timing.test.ts`) |
 | B-20 | 計測の経路の表示・実測バッジ (vitest) | 「計測: C++ 計測ノード (CPU x%)」、再起動中・RMW の制限・Python の理由、`measured` は「実測」 | ✅ (`traffic/measurement.test.ts`) |
 | B-21 | E2E: talker + 1 Hz の入力ノードが /chatter | 地図の talker の辺が約 1 Hz で「推定」が付かない。トラフィックタブで talker が約 1 Hz の「実測」、入力ノードが約 1 Hz、ツールバーに「C++ 計測ノード」 | ✅ (`e2e/smoke.spec.ts`) |
+| B-22 | 計測していないトピックは「分けられない」ではない (#61, pytest) | 重い型・オフにしたトピックの送信元は `basis: not_monitored`、受信側の数字なしも `not_monitored`、`heavy` が付く。注入ジョブ・恒久ダミーの既知の値は残る。計測中・`unsupported` は従来の根拠のまま | ✅ (`test_rates.py`, `test_sub_rates.py`) |
+| B-23 | 計測していない重いトピックの Hz はトレースから (#61, pytest) | 詳細計測モードで、送信元の行が `traced` の Hz (帯域は null)、全送信元がトレースされたときだけ合計の `hz_traced`、一部だけなら null。受信側はノードの中の受信 Hz。計測中のトピックは変わらない | ✅ (`test_tracing_merge.py`) |
+| B-24 | 計測の on/off をプロジェクトに保存 (#61, pytest) | `traffic_monitor` に保存・自動保存、新しい Lab で復元、プロジェクトの切り替え・読み直しで置き換わる、REST の往復、`PUT /api/project` で置き換わる | ✅ (`test_project.py`) |
+| B-25 | 地図の「受信なし」は本物の受信側だけで決まる (#61, pytest) | roshanavi 自身 (`roshanavi` / `roshanavi_probe` / `roshanavi_scenario`) の購読は受信側に数えない (`show_self` でも)。本物の受信側がいれば出ない | ✅ (`test_graph_unit.py`) |
+| B-26 | 計測していない行の表示 (#61, vitest) | 「計測していません (画像などの重いデータは既定でオフ)」+「計測する」、軽いトピックは理由なし、数字の欄は 0 Hz でなく —、「受信なし」「未受信」「分けられない」が出ない。詳細計測モードは Hz とトレース表記・「— (詳細計測では帯域は測れません)」。計測中で本当に未受信なら「未受信」 | ✅ (`traffic/notMeasured.test.ts`, `graph/model.test.ts`) |
+| B-27 | E2E: 画像のトピック (#61) | `/e2e_viz/image` (roshanavi の外の画像送信ノード) の行・展開行・詳細に「計測していません (…)」と「計測する」、地図の「受信なし」が出ない → 押すと数字が出る → 別プロジェクトに切り替えると戻り、元に戻すと保存から復元される。詳細計測モードでは中継ノードの出力コピーの Hz がトレースで出て、帯域は「— (詳細計測では帯域は測れません)」 | ✅ (`e2e/monitor.spec.ts`。再起動は「プロジェクトの切り替えで読み直し」で代用。プロセスの再起動は pytest B-21) |
 
 ### C. ダミー注入
 
@@ -256,7 +262,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | J-18 | 「入出力だけ表示」「上流・下流だけ表示」 | ノードと直接のトピックだけ / トピックを通る経路だけ | ✅ (vitest `isolate.test.ts`) |
 | J-19 | ラベル (最終更新・計算期間・Hz の計測方法)、パラメータ入力、エッジの理由、初回の案内、パッケージの絞り込み | 「最終更新 09:05:07 (2 秒前)」、5 秒超で警告、「直近 5 秒の平均」、受信時刻ベースのときだけ「(受信時刻で概算)」 | ✅ (vitest `timing` / `paramValue` / `edgeInfo` / `guide` / `packages`) |
 | J-20 | E2E: 空白の右クリック → 新しいトピックに入力ノードを作る | ノードとトピックが地図に出て、右ペインでエコーが見える。入力ノードのメニューに一時停止・変更 | ✅ (`e2e/ux.spec.ts`) |
-| J-21 | E2E: talker のパラメータ / 外部ノード | 「ROS の内部の設定値」(折りたたみ) を開くと talker の `use_sim_time` が見えて編集できる。external_talker は停止が無効、パラメータは閲覧のみ | ✅ |
+| J-21 | E2E: talker のパラメータ / 外部ノード | 「ROS の内部のパラメータ」(折りたたみ) を開くと talker の `use_sim_time` が見えて編集できる。external_talker は停止が無効、パラメータは閲覧のみ | ✅ |
 | J-22 | E2E: 型の定義とノードの入出力 | /chatter の定義に `string data`。/listener の「受信しているデータ」に /chatter と Hello World | ✅ |
 | J-23 | E2E: 初回の案内 | 起動リストが空なら案内が出て、「試しに talker を起動してみる」で talker が動き、案内が消える | ✅ |
 | J-24 | E2E: デモ構成 | talker = 自分、listener = 依存 (lab が起動)、external_talker = その他 (/external/chatter)、ROS 標準パッケージは既定で非表示 | ✅ (`smoke` / `launcher.spec.ts`) |
@@ -265,7 +271,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | J-27 | 最終更新の警告色 (WS の切断) | 5 秒以上フレームが届かないと警告色 | 🟡 (判定は unit、切断の実操作は 👀) |
 | J-28 | サービスの待ち時間と読み取りのやり直し (unit、偽のクライアント) | 既定の待ち時間は 5 秒 (パラメータ・ライフサイクル)。応答が来ないと一覧・describe・get は 1 回だけやり直して 2 回目の答えを返し、それでも来なければ `param_timeout`。`set_parameters` はやり直さない (1 回だけ呼ぶ)。サービスが無い (`unavailable`) ときはやり直さない。`--service-timeout` は既定 5、0 は拒否 | ✅ (`test_service_call.py`) |
 | J-29 | パラメータの並び順 (サーバー) | クラスノードの `GET .../parameters` に `init_order` (`__init__` の引数の書いた順)。クラスでないノード・未登録・読めないモジュールは `null` でエラーにならない | ✅ (`test_params.py`) |
-| J-30 | パラメータのダイアログの並べ方・折りたたみ (vitest) | クラスノードは `__init__` の順、引数に無いものは最後に名前順、それ以外のノードは名前順。`use_sim_time`・`start_type_description_service`・`qos_overrides.*` は「ROS の内部の設定値」に入り、入力は変わらない | ✅ (`params/paramLayout.test.ts`) |
+| J-30 | パラメータのダイアログの並べ方・折りたたみ (vitest) | クラスノードは `__init__` の順、引数に無いものは最後に名前順、それ以外のノードは名前順。`use_sim_time`・`start_type_description_service`・`qos_overrides.*` は「ROS の内部のパラメータ」に入り、入力は変わらない | ✅ (`params/paramLayout.test.ts`) |
 
 ### K. ノード一覧・lifecycle・launch の分解取り込み・送受信ごとのトラフィック (P4.5b)
 
@@ -370,7 +376,7 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 |---|---|---|---|
 | N-01 | 種類 ↔ 型の対応表 (unit) | 9 種類の型が設計どおり、音声は audio_common_msgs が無ければ Int16MultiArray、未知の種類は `unknown_kind`、互換の型 (Float32 → 数値、Int32 → 整数、*MultiArray → 数値の並び、UInt8MultiArray → バイト列)、専用の型は None、明示の型は種類に合うこと | ✅ (`test_data_kinds.py`) |
 | N-02 | 詳細設定モードの並び (unit + API) | よく使う型 → ワークスペースの独自型 → パッケージごと (名前順だけにしない)、`GET /api/types` の `groups`、`GET /api/data-kinds` | ✅ (`test_data_kinds.py`、`test_server.py`) |
-| N-03 | Python の値との変換 (unit) | 文字列・数値・整数・ON/OFF・数値の並び・JSON・バイト列の往復、numpy の数値も可、bool を数値として受けない・整数でない float を拒否、互換の型は自分の型のまま、画像 rgb8 / mono8 / bgr8 の往復 (uint8 以外・4 チャンネルは拒否)、音声 int16、専用の型は dict、型の合わない戻り値は「関数は str を返しました」 | ✅ (`test_data_kinds.py`) |
+| N-03 | Python の値との変換 (unit) | 文字列・数値・整数・ON/OFF・数値の並び・JSON・バイト列の往復、numpy の数値も可、bool を数値として受けない・整数でない float を拒否、互換の型は自分の型のまま、画像 rgb8 / mono8 / bgr8 の往復 (uint8 以外・4 トピックは拒否)、音声 int16、専用の型は dict、型の合わない戻り値は「関数は str を返しました」 | ✅ (`test_data_kinds.py`) |
 | N-04 | 入力ノードの種類 (unit + schema) | 種類ごとの中身 (数値・整数・ON/OFF・カンマ区切り・JSON の検査・式 `sin(t)` → `${sin(t)}`)、画像・音声はファイルだけ、種類を変えたら最初の値も変わる (利用者の入力は残す)、`DummySpec.kind` は型に合わないと拒否 | ✅ (`input/inputForm.test.ts`、`test_data_kinds.py`) |
 | N-05 | 種類の選択の表示 (vitest) | 既存の型の表示「文字列 (std_msgs/String)」「専用の型: geometry_msgs/Twist」、既存の String を JSON として扱う選択は保つ、検索で型を絞ってもグループの順は変えない、詳細設定モードの記憶 (ストレージが例外を投げても OFF で動く) | ✅ (`datakind/kinds.test.ts`) |
 | N-06 | E2E: 文字列の入力ノードを ROS の型を見ずに作る | 新しいトピック → 9 種類が並ぶ、数値を選ぶと値の欄 (YAML なし)、文字列に戻す、画面に `std_msgs` / `/msg/` が出ない、エコーに届く、プロジェクトに `kind: string`、同じトピックでは選択の代わりに「このトピックは 文字列 (std_msgs/String) です」 | ✅ (`e2e/datakind.spec.ts`) |
@@ -567,23 +573,24 @@ Jazzy・Lyrical が正式対応、Kilted は動作確認のみ (2026-10-18 に 1
 
 | ID | 項目 | 期待結果 | 状態 |
 |---|---|---|---|
-| V-01 | 種類の互換性 (pytest + vitest、共有の表) | 同じ種類はつながる、整数 → 小数・文字列 ↔ JSON は注記つきで許可、小数 → 整数は「小数点以下が失われる」で拒否、専用の型は同じ型だけ、まだ無いチャンネルは常に可。`GET /api/data-kinds` の `conversions` が同じ表 | ✅ (`test_wiring.py`、`wiring/compat.test.ts`) |
-| V-02 | 入力口の変換 (pytest) | 整数のチャンネル (`Int64`) を小数の入力口が受けると `float` で関数に渡る。出力口は変換できる型を受け付けない (仕様の検査で拒否) | ✅ (`test_wiring.py`) |
-| V-03 | つながっていない口 (pytest) | チャンネル名が空の口は仕様の検査・`validate_function` / `validate_class` を通る、2 つの空の入力は重複にならない、`trigger` にできない、出力が空なら関数は呼ばれて送らない (`skipped`)、コードの書き出しは 409 `unwired_ports` | ✅ (`test_wiring.py`) |
+| V-01 | 種類の互換性 (pytest + vitest、共有の表) | 同じ種類はつながる、整数 → 小数・文字列 ↔ JSON は注記つきで許可、小数 → 整数は「小数点以下が失われる」で拒否、専用の型は同じ型だけ、まだ無いトピックは常に可。`GET /api/data-kinds` の `conversions` が同じ表 | ✅ (`test_wiring.py`、`wiring/compat.test.ts`) |
+| V-02 | 入力口の変換 (pytest) | 整数のトピック (`Int64`) を小数の入力口が受けると `float` で関数に渡る。出力口は変換できる型を受け付けない (仕様の検査で拒否) | ✅ (`test_wiring.py`) |
+| V-03 | つながっていない口 (pytest) | トピック名が空の口は仕様の検査・`validate_function` / `validate_class` を通る、2 つの空の入力は重複にならない、`trigger` にできない、出力が空なら関数は呼ばれて送らない (`skipped`)、コードの書き出しは 409 `unwired_ports` | ✅ (`test_wiring.py`) |
 | V-04 | つながっていない口で実際に動く (pytest, ROS) | 出力が空の関数ノードが受信して呼ばれ、送らない。全部空の関数ノードとクラスノードも `running` になる (起動時のログで落ちない) | ✅ (`test_wiring.py`) |
-| V-05 | つなぎ口のモデル (vitest) | 関数・クラス・変換・入力ノードだけに口、引数名と種類、クラスはメソッドごと + 操作メソッドのボタン、地図にいないノードは出さない、新しいチャンネル名の提案 (`/<ノード>/out`、重なれば `_2`)、箱の大きさと線の端 (`tep` / `sep`) | ✅ (`wiring/ports.test.ts`) |
-| V-06 | 仕様の書き換え (vitest) | 既存のチャンネルの型を採用、新しいチャンネルは種類の既定の型、変換の注記、拒否の理由 (種類・自己ループ・重複・ほかのメソッドの出力・名前)、`trigger` の追従と外したときの `any`、変換ノードは同じ型だけ・入力ノードは同じ種類だけ、変換・入力ノードの口は外せない | ✅ (`wiring/edit.test.ts`) |
-| V-07 | 離した先 (vitest) | チャンネル → つなぐ、空いているところ (出力) → 名前を聞く、入力口を空いているところ・ノードへ → 理由、外部ノード → 「コードの中で決まっている」、出力口 → 入力口はチャンネルを通す、同じ向きの口どうしは拒否 | ✅ (`wiring/drop.test.ts`) |
-| V-08 | キーボードの手順 (vitest) | 一覧は全チャンネル (つなげないものは理由つきで選べない・後ろ)、出力口は先頭に新しいチャンネル、つながっていれば「外す」、↑↓ は選べるものだけ、Enter → 確認 → Enter、Esc で戻る・閉じる、新しい名前の編集 | ✅ (`wiring/keyboard.test.ts`) |
+| V-05 | つなぎ口のモデル (vitest) | 関数・クラス・変換・入力ノードだけに口、引数名と種類、クラスはメソッドごと + 操作メソッドのボタン、地図にいないノードは出さない、新しいトピック名の提案 (`/<ノード>/out`、重なれば `_2`)、箱の大きさと線の端 (`tep` / `sep`) | ✅ (`wiring/ports.test.ts`) |
+| V-06 | 仕様の書き換え (vitest) | 既存のトピックの型を採用、新しいトピックは種類の既定の型、変換の注記、拒否の理由 (種類・自己ループ・重複・ほかのメソッドの出力・名前)、`trigger` の追従と外したときの `any`、変換ノードは同じ型だけ・入力ノードは同じ種類だけ、変換・入力ノードの口は外せない | ✅ (`wiring/edit.test.ts`) |
+| V-07 | 離した先 (vitest) | トピック → つなぐ、空いているところ (出力) → 名前を聞く、入力口を空いているところ・ノードへ → 理由、外部ノード → 「コードの中で決まっている」、出力口 → 入力口はトピックを通す、同じ向きの口どうしは拒否 | ✅ (`wiring/drop.test.ts`) |
+| V-08 | キーボードの手順 (vitest) | 一覧は全トピック (つなげないものは理由つきで選べない・後ろ)、出力口は先頭に新しいトピック、つながっていれば「外す」、↑↓ は選べるものだけ、Enter → 確認 → Enter、Esc で戻る・閉じる、新しい名前の編集 | ✅ (`wiring/keyboard.test.ts`) |
 | V-09 | 呼ばれ方 (vitest) | 入力 1 つ / 複数 (どれでも・1 つだけ) / 周期 / 変換 / 入力ノードの文、図の行 (呼ぶ・最新の値を使う)、作成画面の値からの組み立て、つながっていない入力はきっかけにできない | ✅ (`wiring/timing.test.ts`) |
-| V-10 | 用語集 (vitest) | すべての UI の文言で、ROS の用語が「平易な言葉 (ROS の用語)」の外に出ていない (コード表示と差し込みは除く)。用語集は日本語と英語で同じ構造、`<Term>` の説明は用語集から | ✅ (`i18n/glossary.test.ts`) |
-| V-11 | 作成画面 (vitest) | チャンネルが空の口で関数・クラスの仕様が作れる (形の悪い名前は拒否) | ✅ (`functionForm.test.ts`、`classForm.test.ts`) |
-| V-12 | E2E: ひな形 → 線でつなぐ → 大文字 | ひな形の関数をチャンネル空で作る (呼ばれ方「この入力が届くたびに呼ばれます」) → `/chatter` の取っ手から入力口へ引く → 出力口を空いているところへ引き `/wire_fn/out` を作る → エコーと出力口のツールチップに `HELLO WORLD` | ✅ (`e2e/wiring.spec.ts`) |
-| V-13 | E2E: 断られる線 | 数値の入力ノードのチャンネルを文字列の入力口へ引くと「文字列の入力口に、数値 (小数)のチャンネル (トピック) はつなげません」、離しても保存されない | ✅ (`e2e/wiring.spec.ts`) |
-| V-14 | E2E: キーボード | 入力口で Delete → 外れる (再起動のあともフォーカスは口に戻る)、Enter → 一覧 (数値のチャンネルは選べず理由つき) → ↓ で `/chatter` → Enter → Enter → つながる | ✅ (`e2e/wiring.spec.ts`) |
+| V-10 | 用語集 (vitest) | ROS の用語は公式の言葉 1 つだけ。すべての UI の文言 (ⓘ の説明 `term.*` を除く) と `web/src` のソースに、昔の平易な言葉 (チャンネル・設定値・起動セット・届け方の設定・データの形・名前の付け替え) が出ない (コード表示は除く)。用語集は日本語と英語で同じ構造で、説明は用語で始まる。`<Term>` の説明は用語集から | ✅ (`i18n/glossary.test.ts`) |
+| V-11 | 作成画面 (vitest) | トピックが空の口で関数・クラスの仕様が作れる (形の悪い名前は拒否) | ✅ (`functionForm.test.ts`、`classForm.test.ts`) |
+| V-12 | E2E: ひな形 → 線でつなぐ → 大文字 | ひな形の関数をトピック空で作る (呼ばれ方「この入力が届くたびに呼ばれます」) → `/chatter` の取っ手から入力口へ引く → 出力口を空いているところへ引き `/wire_fn/out` を作る → エコーと出力口のツールチップに `HELLO WORLD` | ✅ (`e2e/wiring.spec.ts`) |
+| V-13 | E2E: 断られる線 | 数値の入力ノードのトピックを文字列の入力口へ引くと「文字列の入力口に、数値 (小数)のトピックはつなげません」、離しても保存されない | ✅ (`e2e/wiring.spec.ts`) |
+| V-14 | E2E: キーボード | 入力口で Delete → 外れる (再起動のあともフォーカスは口に戻る)、Enter → 一覧 (数値のトピックは選べず理由つき) → ↓ で `/chatter` → Enter → Enter → つながる | ✅ (`e2e/wiring.spec.ts`) |
 | V-15 | E2E: クラスノード・1 枚絵 | デモの `moving_average` に `process` の口と reset ボタン (押すと呼ばれる)、凡例から 1 枚絵が開き Esc で閉じる、チュートリアル「画面の見方」の 2 手順目に 1 枚絵 | ✅ (`e2e/wiring.spec.ts`、`e2e/tour.spec.ts`) |
 | V-16 | Chromium 以外・タッチでのドラッグ | Firefox / Safari、タッチ操作 (pointer events) でつなげる | 👀 (未確認: E2E は Chromium のみ) |
 | V-17 | スクリーンリーダーの実機確認 | NVDA / VoiceOver でつなぎ口の名前と一覧が読まれる | 👀 (未確認: 読み上げ用の名前は E2E で検査) |
+| V-18 | 用語の方針 (pytest `test_wording.py`) | サーバーが画面に返す文 (シナリオのヒント・エラー、クラスノードのパラメータの問題、ひな形の README) に、昔の平易な言葉が出ない | ✅ (`test_wording.py`) |
 
 ### W. 中継パイプラインのサンプル・composable container (#51, #22)
 

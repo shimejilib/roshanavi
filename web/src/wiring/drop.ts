@@ -5,7 +5,6 @@ import type { Core, NodeSingular } from 'cytoscape';
 import type { GraphTopic, Target } from '../api/types';
 import { typeForKind, type KindCatalog } from '../datakind/kinds';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { planConnect, type WirePlan } from './edit';
 import { findPort, suggestTopic, type NodePorts, type Port } from './ports';
 
@@ -71,7 +70,7 @@ export function connectStep(ctx: DropContext, node: NodePorts, port: Port, topic
 
 function externalReason(ctx: DropContext, nodeId: string): string {
   const owned = ctx.nodes.some((np) => np.nodeId === nodeId);
-  return owned ? t('wiring.dropOnPort') : t('wiring.refuse.external', { node: nodeId, channel: termPair('topic') });
+  return owned ? t('wiring.dropOnPort') : t('wiring.refuse.external', { node: nodeId });
 }
 
 /** Output port `out` to input port `inp`: through `out`'s channel, or a new one named after it. */
@@ -115,7 +114,7 @@ export function dropOutcome(ctx: DropContext, source: DragSource, hit: DropHit):
     case 'node':
       return { kind: 'refuse', reason: externalReason(ctx, hit.nodeId) };
     default:
-      if (from.port.ref.side === 'in') return { kind: 'refuse', reason: t('wiring.dropInputBlank', { channel: termPair('topic') }) };
+      if (from.port.ref.side === 'in') return { kind: 'refuse', reason: t('wiring.dropInputBlank') };
       return { kind: 'ask', port: source.key, suggestion: suggestTopic(from.node, from.port, new Set(ctx.topics.map((tp) => tp.name))) };
   }
 }

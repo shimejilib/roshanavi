@@ -8,7 +8,6 @@ import type { TransformSpec } from '../api/transformTypes';
 import type { DummySpec, Target } from '../api/types';
 import { normalizeType, type KindCatalog, type PortKind } from '../datakind/kinds';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { TOPIC_RE } from '../function/functionForm';
 import { typeFits, verdictText, wireCompat, type WireEnd, type WireVerdict } from './compat';
 import type { NodePorts, Port } from './ports';
@@ -70,7 +69,7 @@ function wiredPort<T extends FunctionPortSpec>(old: T, p: Port, topic: string, t
 }
 
 const LOOP = () => t('wiring.refuse.loop');
-const DUPLICATE = () => t('wiring.refuse.duplicate', { channel: termPair('topic') });
+const DUPLICATE = () => t('wiring.refuse.duplicate');
 
 function wiredTopics(ports: readonly { topic: string }[]): string[] {
   return ports.map((x) => x.topic).filter(Boolean);

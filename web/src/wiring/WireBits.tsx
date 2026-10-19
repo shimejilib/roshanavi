@@ -3,7 +3,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { TOPIC_RE } from '../function/functionForm';
 import { findPort, type NodePorts } from './ports';
 
@@ -68,7 +67,7 @@ export function NewChannelPrompt({ x, y, suggestion, onCreate, onCancel }: {
   }, []);
   const valid = TOPIC_RE.test(name.trim());
   return (
-    <form className="wire-prompt" style={{ left: x + 8, top: y + 8 }} data-testid="wire-prompt" role="dialog" aria-label={t('wiring.prompt.title', { channel: termPair('topic') })}
+    <form className="wire-prompt" style={{ left: x + 8, top: y + 8 }} data-testid="wire-prompt" role="dialog" aria-label={t('wiring.prompt.title')}
       onSubmit={(e) => {
         e.preventDefault();
         if (valid) onCreate(name.trim());
@@ -80,7 +79,7 @@ export function NewChannelPrompt({ x, y, suggestion, onCreate, onCancel }: {
         }
       }}>
       <label className="small">
-        {t('wiring.prompt.title', { channel: termPair('topic') })}
+        {t('wiring.prompt.title')}
         <input ref={ref} value={name} onChange={(e) => setName(e.target.value)} spellCheck={false} data-testid="wire-prompt-name" aria-invalid={!valid} />
       </label>
       {!valid && <span className="error-text small" role="alert">{t('wiring.refuse.name', { name: name || '—' })}</span>}

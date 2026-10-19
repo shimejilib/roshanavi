@@ -4,6 +4,8 @@ import type { IoItem } from './nodeIO';
 import { t } from '../i18n';
 import { useAppState } from '../state/AppState';
 import { rateText } from '../timing/timing';
+import { NotMeasured } from '../traffic/NotMeasured';
+import { isNotMeasured, NO_VALUE } from '../traffic/notMeasured';
 import { AudioViewer } from './AudioViewer';
 import { EchoView } from './EchoView';
 import { ImageViewer } from './ImageViewer';
@@ -24,7 +26,8 @@ function Body({ item, viewKind }: Pick<Props, 'item' | 'viewKind'>) {
 
 export function TopicIOItem({ item, open, viewKind, onToggle }: Props) {
   const { select } = useAppState();
-  const hz = item.entry && item.entry.monitored ? rateText(item.entry) : t('io.notMonitored');
+  const entry = item.entry;
+  const hz = entry && isNotMeasured(entry) ? <NotMeasured entry={entry} compact /> : entry?.monitored ? rateText(entry) : NO_VALUE;
   return (
     <li className={`io-item${item.blocked ? ' blocked' : ''}`} data-testid={`io-${item.key}`}>
       <div className="io-head">

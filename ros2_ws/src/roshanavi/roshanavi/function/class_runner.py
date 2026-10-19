@@ -110,7 +110,7 @@ class ClassRunner:
             actual = ros_value(node.get_parameter(param.name).value)
             return UNSET if actual is None else class_params.to_python(kind, actual, param.name)
         except Exception as exc:  # a bad override (--ros-args -p) or an unusable value
-            self.core.report(Problem('param', f'設定値 (パラメータ) {param.name} を使えません: {exc}', None))
+            self.core.report(Problem('param', f'パラメータ {param.name} を使えません: {exc}', None))
             return value
 
     def _resync_params(self, declarations: List[Tuple[InitParam, Any]]) -> None:

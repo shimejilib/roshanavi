@@ -71,6 +71,8 @@ const RATE_NOTES: Partial<Record<RateBasis, () => string>> = {
   configured: () => t('graph.rate.configuredHelp'),
   estimated: () => t('graph.rate.estimatedHelp'),
   unknown: () => t('graph.rate.unknownHelp'),
+  not_monitored: () => t('graph.rate.notMonitoredHelp'),
+  traced: () => t('graph.rate.tracedHelp'),
 };
 
 function rateLabel(hz: number, bps: number | null, basis: RateBasis): string {

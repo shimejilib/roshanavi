@@ -30,7 +30,7 @@
 - [design/security.md](design/security.md): セキュリティ上の判断の索引 (ネットワーク・式・パス・サブプロセス・他人のプロセス)。新しい機能を足す前の確認に。
 - [design/scenarios.md](design/scenarios.md): シナリオ (P6): ファイルの形式・判定のルール・CLI / Python API・サーバー・記録モード。
 - [design/resources.md](design/resources.md): リソース監視 (Lv1, 同じ PC): ノード ⇄ プロセスの対応づけ、CPU・メモリ・ディスク・ネットワーク・GPU、メモリリークと UDP 受信バッファ溢れの診断、シナリオの `resources` / `mem_growth`。負荷やリークを調べる機能を触るとき。
-- [design/wiring.md](design/wiring.md): 地図の上での配線 (つなぎ口、ドラッグとキーボードでつなぐ、種類の互換性の規則、つながっていない口、反映は再起動)、用語集 (ROS の用語 → 平易な言葉) と言葉の総点検、pub/sub の 1 枚絵。地図でつなぐ機能や画面の言葉を触るとき。
+- [design/wiring.md](design/wiring.md): 地図の上での配線 (つなぎ口、ドラッグとキーボードでつなぐ、種類の互換性の規則、つながっていない口、反映は再起動)、用語集 (ROS の公式の用語をそのまま使う方針、ⓘ の説明) と言葉の総点検、pub/sub の 1 枚絵。地図でつなぐ機能や画面の言葉を触るとき。
 
 ## planned — 未実装の設計
 

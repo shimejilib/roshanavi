@@ -221,8 +221,8 @@ class ClassCore:
             if value is not UNSET:
                 kwargs[p.name] = value
             elif p.required:
-                hint = f'設定値 (パラメータ) {p.name} を設定してください' if p.kind else \
-                    f'{p.name} は ROS の設定値 (パラメータ) にできない型なので既定値が必要です'
+                hint = f'パラメータ {p.name} を設定してください' if p.kind else \
+                    f'{p.name} は ROS のパラメータにできない型なので既定値が必要です'
                 raise _InitValueError(f'__init__ の引数 {p.name} の値がありません。{hint}')
         return cls(**kwargs)
 
@@ -426,7 +426,7 @@ class ClassCore:
         try:
             return self.executor.run(lambda: self._apply_job(changes), APPLY_TIMEOUT_SEC)
         except TimeoutError:
-            return False, 'クラスの処理が終わらないため、設定値 (パラメータ) を反映できませんでした'
+            return False, 'クラスの処理が終わらないため、パラメータを反映できませんでした'
 
     def _apply_job(self, changes: Dict[str, Any]) -> Tuple[bool, str]:
         s = self._s

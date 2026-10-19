@@ -98,7 +98,7 @@ describe('map menu for topics, edges and the blank area', () => {
     const entry = { monitored: true } as TrafficEntry;
     const items = menuItems({ kind: 'topic', topic: '/t' }, ctx({ traffic: entry, topicTypes: ['std_msgs/msg/String'] }));
     expect(actions(items)).toEqual(['view', 'tryInject', 'createInput', 'createTransform', 'record', 'monitorOff', 'typeDef', 'flowOnly']);
-    expect(items.find((i) => i.action === 'createTransform')?.label).toBe('このチャンネル (トピック) を受けて変換するノードを作る');
+    expect(items.find((i) => i.action === 'createTransform')?.label).toBe('このトピックを受けて変換するノードを作る');
     const heavy = menuItems({ kind: 'topic', topic: '/img' }, ctx({ traffic: { monitored: false } as TrafficEntry, topicTypes: ['a/msg/A', 'b/msg/B'] }));
     expect(actions(heavy)).toContain('monitorOn');
     expect(enabled(heavy, 'typeDef')).toBe(false);

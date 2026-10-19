@@ -7,7 +7,7 @@ import { formatBytes, formatHz, formatMs } from '../lib/format';
 
 /** Benchmark summary shown in the explanation dialog (docs/design/measurement.md, measured). */
 export const BENCH_SUMMARY =
-  '100 Hz × 10 チャンネル (トピック) (毎秒 1,000 メッセージ・約 6,000 件の記録) で、計測されるノードの CPU の増加は測定のばらつき (±2%) の範囲内、遅延は +5 µs 程度。roshanavi 側は CPU 約 16% (解析 13% + LTTng のデーモン 3%)、ディスク 1 MB 未満、取りこぼし 0。720p 画像 30 Hz では対象ノードへの影響は見えず、roshanavi 側は約 6%。';
+  '100 Hz × 10 トピック (毎秒 1,000 メッセージ・約 6,000 件の記録) で、計測されるノードの CPU の増加は測定のばらつき (±2%) の範囲内、遅延は +5 µs 程度。roshanavi 側は CPU 約 16% (解析 13% + LTTng のデーモン 3%)、ディスク 1 MB 未満、取りこぼし 0。720p 画像 30 Hz では対象ノードへの影響は見えず、roshanavi 側は約 6%。';
 
 /** Why the toggle is disabled (install guidance etc.), or null when it can be used. */
 export function tracingUnavailableText(s: TracingStatus | null | undefined): string | null {

@@ -179,3 +179,59 @@ def test_autosave_is_off_for_a_project_that_failed_to_load(tmp_path, data_dir):
         assert proj.read_text() == broken
     finally:
         lab.launcher.close()
+
+
+IMAGE = 'sensor_msgs/msg/Image'
+
+
+def test_topic_monitoring_toggle_is_saved_in_the_project_and_restored(tmp_path, data_dir):
+    # #61: the per-topic on / off of the traffic table survives a restart
+    from roshanavi.lab import Lab
+    proj = tmp_path / 'roshanavi.yaml'
+    first = Lab(data_dir=str(data_dir), workspace=str(tmp_path), project_path=str(proj),
+                autostart=False)
+    try:
+        assert first.traffic.selector.is_monitored('/cam', IMAGE) is False  # heavy: off by default
+        first.set_topic_monitoring('/cam', True)
+        first.set_topic_monitoring('/chatter', False)
+        assert first.traffic.selector.is_monitored('/cam', IMAGE) is True
+        assert yaml.safe_load(proj.read_text())['traffic_monitor'] == {'/cam': True,
+                                                                      '/chatter': False}
+        assert first.launcher.project_state()['dirty'] is False
+    finally:
+        first.launcher.close()
+    second = Lab(data_dir=str(data_dir), workspace=str(tmp_path), project_path=str(proj),
+                 autostart=False)
+    try:
+        assert second.traffic.selector.is_monitored('/cam', IMAGE) is True
+        assert second.traffic.selector.is_monitored('/chatter', 'std_msgs/msg/String') is False
+        assert second.launcher.project_state()['project']['traffic_monitor'] == {
+            '/cam': True, '/chatter': False}
+    finally:
+        second.launcher.close()
+
+
+def test_project_switch_replaces_the_monitoring_choices(tmp_path, data_dir):
+    from roshanavi.lab import Lab
+    proj = tmp_path / 'roshanavi.yaml'
+    proj.write_text('traffic_monitor: {/cam: true}\n')
+    lab = Lab(data_dir=str(data_dir), workspace=str(tmp_path), project_path=str(proj),
+              autostart=False)
+    try:
+        assert lab.traffic.selector.is_monitored('/cam', IMAGE) is True
+        proj.write_text('traffic_monitor: {/other: true}\n')
+        lab.launcher.reload_project()
+        lab._apply_saved_monitoring()  # what the next housekeeping run does
+        assert lab.traffic.selector.is_monitored('/cam', IMAGE) is False
+        assert lab.traffic.selector.is_monitored('/other', IMAGE) is True
+    finally:
+        lab.launcher.close()
+
+
+def test_monitoring_choices_round_trip_through_the_rest_api(client, lab):
+    assert client.put('/api/traffic/cam/monitor', json={'enabled': True}).status_code == 200
+    state = client.get('/api/project').json()
+    assert state['project']['traffic_monitor'] == {'/cam': True} and state['dirty'] is False
+    body = parse_project('version: 1\n').model_dump()
+    assert client.put('/api/project', json=body).status_code == 200  # a replaced project resets it
+    assert 'traffic_monitor' not in client.get('/api/project').json()['project']

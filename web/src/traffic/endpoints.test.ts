@@ -37,7 +37,7 @@ describe('traffic endpoints', () => {
 
   it('labels the basis and explains theoretical values', () => {
     expect(basisLabel('theoretical')).toBe('理論値');
-    expect(basisLabel('configured')).toBe('設定値');
+    expect(basisLabel('configured')).toBe('パラメータ');
     expect(basisLabel('measured')).toBe('実測');
     expect(basisLabel('probe')).toBe('probe');
     expect(basisHelp('theoretical')).toContain('受信側のノードの中で数えた値ではありません');

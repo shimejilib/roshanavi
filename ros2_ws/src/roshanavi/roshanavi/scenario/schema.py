@@ -64,13 +64,13 @@ def check_topic(value: str) -> str:
     """Absolute ROS topic names only (``/a/b``); validated with rclpy's own rules."""
     if not isinstance(value, str) or not TOPIC_RE.match(value) or '//' in value \
             or (len(value) > 1 and value.endswith('/')) or len(value) > 256:
-        raise ValueError(f'チャンネル (トピック) の名前は /my_topic のような絶対名にしてください: {value!r}')
+        raise ValueError(f'トピックの名前は /my_topic のような絶対名にしてください: {value!r}')
     from rclpy.exceptions import InvalidTopicNameException
     from rclpy.validate_full_topic_name import validate_full_topic_name
     try:
         validate_full_topic_name(value)
     except InvalidTopicNameException as exc:
-        raise ValueError(f'チャンネル (トピック) の名前が不正です: {value!r} ({exc})') from exc
+        raise ValueError(f'トピックの名前が不正です: {value!r} ({exc})') from exc
     return value
 
 

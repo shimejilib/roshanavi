@@ -88,3 +88,40 @@ def test_job_send_rate_counts_actual_sends():
     hz, bps = job.send_rate(now=now)
     assert hz == 1.0 and bps == 10.0
     assert job.send_rate(now=now + 30) == (0.0, 0.0)  # nothing in the window any more
+
+
+CAM = [{'node': '/cam_a', 'topic': '/cam', 'dir': 'pub'},
+       {'node': '/cam_b', 'topic': '/cam', 'dir': 'pub'},
+       {'node': '/viewer', 'topic': '/cam', 'dir': 'sub'}]
+
+
+def not_monitored(topic='/cam', type_name='sensor_msgs/msg/Image'):
+    return {'topic': topic, 'type': type_name, 'status': 'not_monitored', 'monitored': False,
+            'hz': 0.0, 'bytes_per_sec': 0.0}
+
+
+def test_not_monitored_topic_is_not_unknown_but_not_measured():
+    # #61: the publisher rows of a heavy topic say "not measured", not "cannot be split"
+    out = annotate_traffic([not_monitored()], CAM, {})[0]
+    assert [p['basis'] for p in out['publishers']] == ['not_monitored', 'not_monitored']
+    assert all(p['hz'] is None and p['bps'] is None for p in out['publishers'])
+    assert out['subscribers'][0]['basis'] == 'not_monitored' and out['subscribers'][0]['delivered']
+    assert out['heavy'] is True
+
+
+def test_not_monitored_light_topic_and_known_dummy_rates():
+    out = annotate_traffic([not_monitored('/chatter', 'std_msgs/msg/String')],
+                           [{'node': '/a', 'topic': '/chatter', 'dir': 'pub'},
+                            {'node': DUMMY, 'topic': '/chatter', 'dir': 'pub'}],
+                           {DUMMY: KnownRate(2.0, 20.0)})[0]
+    assert out['heavy'] is False
+    by_node = {p['node']: p for p in out['publishers']}
+    assert by_node['/a']['basis'] == 'not_monitored'
+    assert by_node[DUMMY]['basis'] == 'exact' and by_node[DUMMY]['hz'] == 2.0  # still known
+
+
+def test_monitored_heavy_topic_and_broken_topics_keep_their_basis():
+    on = {**not_monitored(), 'status': 'ok', 'monitored': True, 'hz': 5.0, 'bytes_per_sec': 50.0}
+    assert annotate_traffic([on], CAM, {})[0]['publishers'][0]['basis'] == 'unknown'
+    broken = {**not_monitored(), 'status': 'unsupported', 'monitored': True}
+    assert annotate_traffic([broken], CAM, {})[0]['publishers'][0]['basis'] == 'unknown'

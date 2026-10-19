@@ -117,7 +117,7 @@ test('wire a function on the map by drag and by keyboard; incompatible channels 
   await page.waitForTimeout(1500);
   await fit();
   await drag(page, await center(page, `port-${FN}-out-0-0`), await blankNear(page, `n:/${FN}`), false);
-  await expect(page.getByTestId('wire-hint')).toContainText('新しいチャンネル');
+  await expect(page.getByTestId('wire-hint')).toContainText('新しいトピック');
   await page.mouse.up();
   const prompt = page.getByTestId('wire-prompt');
   await expect(prompt.getByTestId('wire-prompt-name')).toHaveValue(`/${FN}/out`);
@@ -146,7 +146,7 @@ test('wire a function on the map by drag and by keyboard; incompatible channels 
   await page.waitForTimeout(1500);
   await fit();
   await drag(page, await center(page, `port-${FN}-in-0-0`), await elementPoint(page, `t:/${NUM}`), false);
-  await expect(page.getByTestId('wire-hint')).toContainText('文字列の入力口に、数値 (小数)のチャンネル (トピック) はつなげません');
+  await expect(page.getByTestId('wire-hint')).toContainText('文字列の入力口に、数値 (小数)のトピックはつなげません');
   await page.screenshot({ path: `${SHOTS}wiring-refused.png` });
   await page.mouse.up();
   await expect(page.getByTestId('wire-notice')).toContainText('つなげません');
@@ -183,7 +183,7 @@ test('wire a function on the map by drag and by keyboard; incompatible channels 
 
   // 6. The pub/sub primer opens from the legend.
   await page.getByTestId('legend-primer').click();
-  await expect(page.getByTestId('primer')).toContainText('名前付きのチャンネル (トピック)');
+  await expect(page.getByTestId('primer')).toContainText('名前付きのトピック');
   await page.getByTestId('primer').screenshot({ path: `${SHOTS}wiring-primer.png` });
   await page.keyboard.press('Escape');
   await expect(page.getByTestId('primer')).toHaveCount(0);

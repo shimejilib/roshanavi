@@ -6,6 +6,8 @@ import { t, type MessageKey } from '../i18n';
 import { ageSec, formatBytes, formatHz, formatMs, formatPercent, formatRate } from '../lib/format';
 import { hzBasisHelp, hzBasisNote, rateText } from '../timing/timing';
 import { trafficErrorText } from './measurement';
+import { NotMeasured } from './NotMeasured';
+import { isNotMeasured, NO_VALUE, notMeasuredBandwidth, notMeasuredHz, tracedTopicHz } from './notMeasured';
 import { Sparkline } from './Sparkline';
 
 export function isStale(entry: TrafficEntry, nowMs: number): boolean {
@@ -48,6 +50,21 @@ function DropCell({ entry }: { entry: TrafficEntry }) {
   );
 }
 
+/** Numbers of a topic nobody measures: no `0 Hz`, no `未受信`; with 詳細計測モード the traced Hz (#61). */
+function NotMeasuredCells({ entry }: { entry: TrafficEntry }) {
+  return (
+    <>
+      <td className="num" data-testid={`off-hz-${entry.topic}`}>
+        {notMeasuredHz(entry)}
+        {tracedTopicHz(entry) != null && <span className="muted small"> {t('monitor.traced')}</span>}
+      </td>
+      <td className="num wrap-note">{notMeasuredBandwidth(entry)}</td>
+      {[0, 1, 2, 3, 4].map((i) => <td key={i} className="num">{NO_VALUE}</td>)}
+      <td />
+    </>
+  );
+}
+
 interface RowProps {
   entry: TrafficEntry;
   nowMs: number;
@@ -59,6 +76,7 @@ interface RowProps {
 
 export function TrafficRow({ entry, nowMs, color, onSelect, expanded, onToggle }: RowProps) {
   const stale = isStale(entry, nowMs);
+  const off = isNotMeasured(entry);
   const count = (entry.publishers?.length ?? 0) + (entry.subscribers?.length ?? 0);
   return (
     <tr className={stale ? 'row-stale' : undefined} onClick={onSelect} data-topic={entry.topic}>
@@ -81,16 +99,20 @@ export function TrafficRow({ entry, nowMs, color, onSelect, expanded, onToggle }
           <span className="muted small">{t('traffic.endpointCount', { n: count })}</span>
         </div>
         <div className="muted small">{entry.type}</div>
-        <StatusBadge entry={entry} stale={stale} />
+        {off ? <NotMeasured entry={entry} /> : <StatusBadge entry={entry} stale={stale} />}
       </td>
-      <td className="num"><HzValue entry={entry} /></td>
-      <td className="num">{formatRate(entry.bytes_per_sec)}</td>
-      <td className="num">{formatBytes(entry.avg_size)}</td>
-      <td className="num">{formatMs(entry.jitter_ms)}</td>
-      <td className="num"><DropCell entry={entry} /></td>
-      <td className="num" title={t('traffic.latencyHelp')}>{formatMs(entry.latency_ms)}</td>
-      <td className="num">{lastSeenText(entry, nowMs)}</td>
-      <td><Sparkline values={entry.history} color={color} /></td>
+      {off ? <NotMeasuredCells entry={entry} /> : (
+        <>
+          <td className="num"><HzValue entry={entry} /></td>
+          <td className="num">{formatRate(entry.bytes_per_sec)}</td>
+          <td className="num">{formatBytes(entry.avg_size)}</td>
+          <td className="num">{formatMs(entry.jitter_ms)}</td>
+          <td className="num"><DropCell entry={entry} /></td>
+          <td className="num" title={t('traffic.latencyHelp')}>{formatMs(entry.latency_ms)}</td>
+          <td className="num">{lastSeenText(entry, nowMs)}</td>
+          <td><Sparkline values={entry.history} color={color} /></td>
+        </>
+      )}
     </tr>
   );
 }

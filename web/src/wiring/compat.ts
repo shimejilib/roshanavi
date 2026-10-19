@@ -3,7 +3,6 @@
 // tested against ros2_ws/src/roshanavi/test/data/wire_compat_cases.json (docs/design/wiring.md).
 
 import { t, type MessageKey } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { kindLabel, normalizeType, shortType, type KindCatalog, type KindId, type PortKind } from '../datakind/kinds';
 
 export type WireStatus = 'same' | 'convert' | 'refuse';
@@ -66,7 +65,7 @@ export function endLabel(end: WireEnd, typeKinds: Readonly<Record<string, KindId
 export function verdictText(verdict: WireVerdict, sender: WireEnd, receiver: WireEnd, typeKinds: Readonly<Record<string, KindId>>, receiverIsPort: boolean): string {
   const [status, code] = verdict;
   if (status === 'same' || !code) return '';
-  const params = { from: endLabel(sender, typeKinds), to: endLabel(receiver, typeKinds), channel: termPair('topic') };
+  const params = { from: endLabel(sender, typeKinds), to: endLabel(receiver, typeKinds) };
   const prefix = status === 'refuse' ? 'wiring.refuse' : 'wiring.note';
   const key = `${prefix}.${code}${status === 'refuse' && code === 'kind_mismatch' && !receiverIsPort ? 'Out' : ''}` as MessageKey;
   return t(key, params);

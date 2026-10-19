@@ -34,7 +34,7 @@ describe('wiring a function node', () => {
 
   it('refuses an incompatible channel with the reason, before anything is saved', () => {
     const plan = planConnect(shout, input, tg('shout'), '/image', ['sensor_msgs/msg/Image'], CATALOG);
-    expect(plan).toEqual({ ok: false, reason: '文字列の入力口に、画像のチャンネル (トピック) はつなげません' });
+    expect(plan).toEqual({ ok: false, reason: '文字列の入力口に、画像のトピックはつなげません' });
   });
 
   it('allows a convertible channel and says what happens', () => {

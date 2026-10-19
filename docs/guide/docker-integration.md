@@ -1,8 +1,8 @@
 # Docker で動いている既存のプロジェクトに入れる
 
-いま Docker (docker compose) で動かしているプロジェクトに、roshanavi を**コンテナ 1 つ足す**だけで入れる方法です。プロジェクトのイメージの上に roshanavi を重ねるので、自分のノードも、自分で定義したデータの形 (メッセージ型) も、そのまま使えます。元の起動方法 (roshanavi なし) も残せます。
+いま Docker (docker compose) で動かしているプロジェクトに、roshanavi を**コンテナ 1 つ足す**だけで入れる方法です。プロジェクトのイメージの上に roshanavi を重ねるので、自分のノードも、自分で定義したメッセージ型も、そのまま使えます。元の起動方法 (roshanavi なし) も残せます。
 
-この章の手順は、小さな実例で確かめたものです (亀のシミュレーター turtlesim を動かす `turtle_patrol` というプロジェクトで、roshanavi が起動セット (launch ファイル) を引き取り、ノードを 1 つずつ操作、関数・クラスノードの追加、シナリオの実行まで通しました)。**手順の一部は手作業が多く、[#42](https://github.com/shimejilib/roshanavi/issues/42) で簡単にする予定です。** 該当する所に「#42 で改善予定」と書いています。
+この章の手順は、小さな実例で確かめたものです (亀のシミュレーター turtlesim を動かす `turtle_patrol` というプロジェクトで、roshanavi が launch ファイルを引き取り、ノードを 1 つずつ操作、関数・クラスノードの追加、シナリオの実行まで通しました)。**手順の一部は手作業が多く、[#42](https://github.com/shimejilib/roshanavi/issues/42) で簡単にする予定です。** 該当する所に「#42 で改善予定」と書いています。
 
 先に、自分の目的に合うか確かめてください。
 
@@ -25,7 +25,7 @@ roshanavi 入りのイメージ (例: myproj-roshanavi:dev)
 ```
 
 - roshanavi は、プロジェクトのイメージの**上**に別の場所 (`/roshanavi_ws`) へ入れます。プロジェクトの `/ws` には触りません。
-- 起動セット (launch ファイル) は書き換えません。roshanavi がその中のノードを 1 つずつ起動するので、ノードごとに止める・再起動・ログ・計測ができます ([既存の起動セットごと動かす](takeover.md))。
+- launch ファイルは書き換えません。roshanavi がその中のノードを 1 つずつ起動するので、ノードごとに止める・再起動・ログ・計測ができます ([既存の launch ファイルごと動かす](takeover.md))。
 - 元の起動方法は、compose の profile (`plain`) に残して切り替えます。
 
 ## 手順
@@ -149,7 +149,7 @@ services:
 大事な点です。
 
 - **ポートは `127.0.0.1:` を付けて開きます。** コンテナの中で `--host 0.0.0.0` にしているのは、Docker の仕組み上そうしないと外から届かないためで、パソコンの外には出しません。別のマシンから見るときは [SSH のポート転送](remote-ssh.md) を使います。
-- **`--launch <パッケージ> <launch ファイル> [引数]`** が引き取る起動セットです。`--mine <ノード名>` は自分が開発しているノード (地図で色が変わります)。
+- **`--launch <パッケージ> <launch ファイル> [引数]`** が引き取る launch ファイルです。`--mine <ノード名>` は自分が開発しているノード (地図で色が変わります)。
 - **`./.roshanavi:/data`** は、roshanavi の設定・録画・シナリオ結果の置き場です。`.gitignore` に入れておくと安心です。
 - **`additional_contexts`** と `base` サービスは、`FROM myproj:dev` の `myproj:dev` を「いま同じ compose でビルドするイメージ」に結びつけるための仕掛けです。これが無いと、docker はレジストリから `myproj:dev` を探しにいって失敗します。
 
@@ -161,7 +161,7 @@ docker compose up -d --build        # dev (roshanavi) を起動
 docker compose logs -f dev           # roshanavi のログ (ノードのログは画面で見ます)
 ```
 
-http://localhost:6871 を開くと、起動セットのノードが全部動いています。以降の使い方は [既存の起動セットごと動かす](takeover.md) と同じです。
+http://localhost:6871 を開くと、launch ファイルのノードが全部動いています。以降の使い方は [既存の launch ファイルごと動かす](takeover.md) と同じです。
 
 元の起動方法に戻すときです。同時に両方を動かすと、同じ ROS の名前を取り合うので、片方ずつ動かします。
 
@@ -191,8 +191,8 @@ third_party/roshanavi/web/dist
 | 画面のビルドボタンの結果が、コンテナを作り直すと消える | ビルドの結果はコンテナの中に作られます。`docker compose up --force-recreate` や、イメージの作り直しで元に戻ります。ソース (`./ros2_ws/src`) は残るので、必要なら画面で再度ビルドします。**#42 で改善予定** |
 | イメージのビルド順 | `dev` は `base` (プロジェクトのイメージ) に依存します。`additional_contexts` を書き忘れると、`FROM` が解決できず失敗します |
 | 画面 (Web UI) を作る段が必要 | 上のとおり、いまは自分のイメージの中で画面をビルドします。**#42 で不要にする予定** |
-| 「自動で起動する」の関数・クラスノードがあると | `docker compose restart dev` のあと、起動セットのノードと同じ役のノードが二重に動くことがあります。片方を止めてください |
-| launch ファイルの動作が一部元どおりにならない | ノードを 1 つずつ動かすため、`on_exit=Shutdown()` やイベントは働かないことがあります。画面に一覧が出ます。必要なら `--launch-mode whole` ([既存の起動セットごと動かす](takeover.md)) |
+| 「自動で起動する」の関数・クラスノードがあると | `docker compose restart dev` のあと、launch ファイルのノードと同じ役のノードが二重に動くことがあります。片方を止めてください |
+| launch ファイルの動作が一部元どおりにならない | ノードを 1 つずつ動かすため、`on_exit=Shutdown()` やイベントは働かないことがあります。画面に一覧が出ます。必要なら `--launch-mode whole` ([既存の launch ファイルごと動かす](takeover.md)) |
 | ポートの重なり | roshanavi を複数動かすときは、`ports:` と `--port` を別の番号にします。`127.0.0.1:6872:6872` のように両方そろえます |
 
 ## うまくいかないとき
@@ -202,13 +202,13 @@ third_party/roshanavi/web/dist
 | ビルドが `pull access denied` や `not found` で止まる | `additional_contexts` と `base` サービスがあるか。`docker compose build base` を先に |
 | `third_party/roshanavi/...: not found` | `git submodule update --init` を実行したか。`.dockerignore` で除外していないか |
 | 画面が真っ白、または API だけ動く | 画面のビルド済みファイルが `/opt/roshanavi/static` に入っているか (`ROSHANAVI_STATIC_DIR`)。段 1 が成功したか |
-| 地図が空 | `ROS_DOMAIN_ID` がそろっているか。起動セットのノードが起動に失敗していないか (ランチャーのログ) |
+| 地図が空 | `ROS_DOMAIN_ID` がそろっているか。launch ファイルのノードが起動に失敗していないか (ランチャーのログ) |
 | 詳細計測モードが使えない | `lttng-tools` と `python3-bt2` をイメージに入れたか (上の Dockerfile の注を参照)。`shm_size: 512m` を付けたか |
 | 独自のメッセージ型の中身が読めない | `FROM` がプロジェクトのイメージになっているか (型が入っているイメージの上に重ねます) |
 | roshanavi が強制終了して、ノードが残った | `docker restart <コンテナ>` でコンテナごとやり直します (`init: true` が前提) |
 
 ## 仕組みを知りたい人へ
 
-- 起動セットを引き取る仕組み、Docker の場合: [design/integration.md](../design/integration.md)
+- launch ファイルを引き取る仕組み、Docker の場合: [design/integration.md](../design/integration.md)
 - 組み込みの計画と、これからの改善 (#42): [planned/integration.md](../planned/integration.md)
 - 配布の設計: [project/distribution.md](../project/distribution.md)

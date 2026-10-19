@@ -27,7 +27,7 @@ export function RateCells({ row }: { row: EndpointRow }) {
   return (
     <>
       <td className={row.delivered ? 'num' : 'num error-text'}>{endpointHz(row)}</td>
-      <td className="num">{endpointBandwidth(row)}</td>
+      <td className="num wrap-note">{endpointBandwidth(row)}</td>
     </>
   );
 }
@@ -35,7 +35,7 @@ export function RateCells({ row }: { row: EndpointRow }) {
 /** 受信 / 処理 / 処理時間 (+ warning) of a traced subscriber; the trace's send count for publishers. */
 export function TraceInfo({ row }: { row: EndpointRow }) {
   if (row.dir === 'pub') {
-    return row.hzTraced == null ? null : <span className="muted small">{t('tracing.tracedPub', { hz: formatHz(row.hzTraced) })}</span>;
+    return row.hzTraced == null || row.basis === 'traced' ? null : <span className="muted small">{t('tracing.tracedPub', { hz: formatHz(row.hzTraced) })}</span>;
   }
   const cells = traceCells(row.trace, row.basis);
   if (!cells) return null;

@@ -107,3 +107,53 @@ def test_unsupported_nodes_with_reasons():
     ]
     later = merge.unsupported_nodes([{'id': '/old'}], trace, pids, 1000.0, lambda pid: 1100.0)
     assert later == [{'node': '/old', 'reason': 'not_traced', 'pid': 42}]
+
+
+def trace_pub(node, topic, hz):
+    return {'node': node, 'topic': topic, 'pid': 1, 'windows': {'5': {'hz': hz}}}
+
+
+def heavy_entry(pubs, subs=()):
+    return {'topic': '/cam', 'type': 'sensor_msgs/msg/Image', 'status': 'not_monitored',
+            'monitored': False, 'avg_size': 0.0, 'hz': 0.0, 'heavy': True,
+            'publishers': list(pubs), 'subscribers': list(subs)}
+
+
+def off_pub(node):
+    return {'node': node, 'hz': None, 'bps': None, 'basis': 'not_monitored'}
+
+
+def test_heavy_topic_shows_the_traced_send_rate_without_bandwidth():
+    # #61: with 詳細計測モード the Hz of a topic nobody measures comes from the trace
+    out = merge.apply_trace([heavy_entry([off_pub('/cam_a'), off_pub('/cam_b')])],
+                            snap(pubs=[trace_pub('/cam_a', '/cam', 10.0),
+                                       trace_pub('/cam_b', '/cam', 20.0)]), 5)[0]
+    a, b = out['publishers']
+    assert (a['hz'], a['basis'], a['bps'], a['hz_traced']) == (10.0, 'traced', None, 10.0)
+    assert b['hz'] == 20.0
+    assert out['hz_traced'] == 30.0  # the topic's send rate: the sum over the publishers
+    assert out['status'] == 'not_monitored'  # still not measured by subscription
+
+
+def test_heavy_topic_with_an_untraced_publisher_has_no_topic_rate():
+    out = merge.apply_trace([heavy_entry([off_pub('/cam_a'), off_pub('/other')])],
+                            snap(pubs=[trace_pub('/cam_a', '/cam', 10.0)]), 5)[0]
+    assert out['publishers'][0]['basis'] == 'traced'
+    assert out['publishers'][1]['basis'] == 'not_monitored' and out['publishers'][1]['hz'] is None
+    assert out['hz_traced'] is None
+
+
+def test_heavy_topic_subscriber_gets_the_received_rate_from_the_trace():
+    sub = {'node': '/viewer', 'hz': None, 'bps': None, 'basis': 'not_monitored',
+           'delivered': True, 'sources': ['/cam_a']}
+    out = merge.apply_trace([heavy_entry([off_pub('/cam_a')], [sub])],
+                            snap(subs=[trace_sub('/viewer', '/cam', win(9.5, 9.5))]), 5)[0]
+    assert out['subscribers'][0]['basis'] == 'measured'
+    assert out['subscribers'][0]['hz'] == 9.5 and out['subscribers'][0]['bps'] is None
+
+
+def test_monitored_topics_keep_their_own_rows_and_get_no_topic_rate():
+    pubs = [{'node': '/talker', 'hz': 10.0, 'bps': 1.0, 'basis': 'measured'}]
+    out = merge.apply_trace([entry([], pubs)], snap(pubs=[trace_pub('/talker', '/chatter', 9.8)]), 5)[0]
+    assert out['publishers'][0]['basis'] == 'measured' and out['publishers'][0]['hz'] == 10.0
+    assert 'hz_traced' not in out

@@ -30,7 +30,7 @@ ros2 run roshanavi app
 | 検出 | 案内 |
 |---|---|
 | ワークスペースが source されていない / 未ビルドのパッケージがある | source のコマンドを表示 |
-| ROS_DOMAIN_ID・RMW がノードと異なる可能性 | 設定値を表示し、地図に何も出ないときの確認手順を案内 |
+| ROS_DOMAIN_ID・RMW がノードと異なる可能性 | パラメータを表示し、地図に何も出ないときの確認手順を案内 |
 | ポート 6871 が使用中 | `--port` を案内 |
 | `ROS_LOCALHOST_ONLY` / `ROS_AUTOMATIC_DISCOVERY_RANGE` の設定 | 他 PC のノードが見えない理由として案内 |
 | 任意の依存が無い (lttng、audio_common_msgs、colcon、pynvml) | 該当機能が無効であることと導入コマンド |

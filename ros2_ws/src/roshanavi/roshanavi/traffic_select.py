@@ -9,7 +9,7 @@ from the probe to the Python monitor.
 import logging
 import re
 import threading
-from typing import Any, Dict, List, Sequence, Set
+from typing import Any, Dict, List, Mapping, Sequence, Set
 
 from rclpy.qos import ReliabilityPolicy
 
@@ -45,6 +45,16 @@ class TopicSelector:
         with self._lock:
             self._overrides[topic] = enabled
         LOG.info('traffic: monitoring of %s %s', topic, 'enabled' if enabled else 'disabled')
+
+    def overrides(self) -> Dict[str, bool]:
+        with self._lock:
+            return dict(self._overrides)
+
+    def replace_overrides(self, overrides: Mapping[str, bool]) -> None:
+        """Use exactly these per-topic choices (the project's saved ones, #61)."""
+        with self._lock:
+            self._overrides = dict(overrides)
+        LOG.info('traffic: %d per-topic monitoring setting(s) loaded', len(overrides))
 
     def excluded(self, topic: str) -> bool:
         return any(p.search(topic) for p in self._exclude)

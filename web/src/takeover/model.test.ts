@@ -24,12 +24,12 @@ describe('takeover banners', () => {
 
   it('explains carried and lost behaviour in plain words', () => {
     expect(itemText('carried', report.carried[0]!)).toContain('環境変数を、ノードの起動設定に引き継ぎました: TK_COLOR (対象: /a)');
-    expect(itemText('lost', report.lost[0]!)).toContain('起動セット (launch ファイル) 全体を止める');
+    expect(itemText('lost', report.lost[0]!)).toContain('launch ファイル全体を止める');
     expect(itemText('lost', { code: 'brand_new' })).toContain('brand_new');
   });
 
   it('labels diff entries', () => {
     expect(entryText({ id: 'r', label: 'x.launch.py', kind: 'rest' })).toContain('x.launch.py の残りの部分');
-    expect(changedText({ id: 'a', label: '/a', kind: 'node', fields: ['params', 'env'] })).toBe('/a: 設定値 (パラメータ)・環境変数');
+    expect(changedText({ id: 'a', label: '/a', kind: 'node', fields: ['params', 'env'] })).toBe('/a: パラメータ・環境変数');
   });
 });

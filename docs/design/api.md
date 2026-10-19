@@ -5,8 +5,8 @@
 | Method | Path | 内容 |
 |---|---|---|
 | GET | `/api/graph` | グラフスナップショット |
-| GET | `/api/traffic?window=` | 統計一覧 (各エントリに `monitored`, `status`: ok/not_monitored/unsupported/error)。`window` は 1 / 5 / 10 秒 ([map-and-traffic.md#traffic](map-and-traffic.md#traffic)) |
-| PUT | `/api/traffic/{topic}/monitor` | `{"enabled": bool}` でトピック単位の監視 on/off |
+| GET | `/api/traffic?window=` | 統計一覧 (各エントリに `monitored`, `status`: ok/not_monitored/unsupported/error、`heavy` (既定で計測しない型か)、計測していないトピックで詳細計測モードのとき `hz_traced`)。`window` は 1 / 5 / 10 秒 ([map-and-traffic.md#traffic](map-and-traffic.md#traffic)) |
+| PUT | `/api/traffic/{topic}/monitor` | `{"enabled": bool}` でトピック単位の計測 on/off。プロジェクトファイルの `traffic_monitor` に保存され、再起動で復元される (#61) |
 | GET | `/api/types` | 利用可能なメッセージ型一覧 |
 | GET | `/api/data-kinds` | データの種類の一覧 `{kinds[{id, type, available, python}], type_kinds, common_types, conversions[{from, to, note}]}` (`conversions` は地図の配線で許す種類の変換、[wiring.md](wiring.md)) |
 | GET | `/api/types/{pkg}/msg/{name}/template` | テンプレ dict |
@@ -54,7 +54,7 @@
 | POST | `/api/functions/scaffold` | 「ひな形を作る」`{name}` → 201 `{package, directory, module, function, class_name, files[]}`。400 `invalid_package_name`、409 `file_exists` / `name_taken`、403 `not_writable` |
 | GET | `/api/functions/dependency?missing=&module=` | 足りないライブラリの入れ方: rosdep キー (`rosdep resolve` で確かめた apt のキー、確かめられないときは `unavailable` と候補)・`package.xml` に足す 1 行・`rosdep install` のコマンド、または venv の手順。pip は実行しない |
 | POST / PUT | `/api/functions[?start=true]`, `/api/functions/{id}` | 関数ノードの登録 / 更新 (`FunctionSpec`)。404 `unknown_module` |
-| POST | `/api/functions/{id}/export-code` | 関数を包む rclpy ノードのコードを書き出す `{directory}` → `{file, command}`。つながっていない口 (チャンネル名が空) があれば 409 `unwired_ports` |
+| POST | `/api/functions/{id}/export-code` | 関数を包む rclpy ノードのコードを書き出す `{directory}` → `{file, command}`。つながっていない口 (トピック名が空) があれば 409 `unwired_ports` |
 | POST / PUT | `/api/classes[?start=true]`, `/api/classes/{id}` | クラスノードの登録 / 更新 (`ClassSpec`) |
 | POST | `/api/classes/{id}/call` | 操作メソッドを呼ぶ `{method}`: `std_msgs/Empty` を `/<ノード名>/<メソッド名>` に送り、ノードが記録するのを待って `{method, topic, record{count, last_at, ok, result, error}}`。動いていない 409 `not_running`、操作メソッドでない 404 `unknown_action`、5 秒待っても呼ばれない 504 `call_failed`。記録モード中は `call` ステップになる |
 | POST | `/api/classes/{id}/export-code` | クラスを包む rclpy ノード (`lifecycle: true` なら LifecycleNode) のコードを書き出す `{directory, lifecycle?}` → `{file, command}`。つながっていない口があれば 409 `unwired_ports` |

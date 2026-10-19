@@ -15,12 +15,18 @@ what roshanavi knows:
   (basis ``estimated``; ``measured`` when it is the only publisher at all);
 * with two or more other publishers no per-edge number is given
   (basis ``unknown``); the UI then shows the topic total and source count.
+
+A topic that is not measured at all (``status: not_monitored``, e.g. images by default) is not
+"unknown": its publishers get basis ``not_monitored`` (roshanavi did not look), and 詳細計測モード
+can fill in the send rate from the trace (tracing/merge.py). ``heavy`` tells the UI whether
+the type is one that is off by default.
 """
 
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Mapping, Optional, Sequence
 
 from .graph import DUMMY_PREFIX
+from .heavy_types import is_heavy
 from .ros_runtime import is_self_node
 from .sub_rates import topic_subscribers
 
@@ -29,6 +35,7 @@ BASIS_CONFIGURED = 'configured'
 BASIS_ESTIMATED = 'estimated'
 BASIS_UNKNOWN = 'unknown'
 BASIS_MEASURED = 'measured'  # counted per publisher by the probe, or the only publisher
+BASIS_NOT_MONITORED = 'not_monitored'  # the topic is not measured (not a limit of measuring)
 MEASUREMENT_PROBE = 'probe'
 
 
@@ -145,7 +152,11 @@ def annotate_traffic(entries: Sequence[Mapping[str, Any]], edges: Iterable[Mappi
         total_bps = entry.get('bytes_per_sec') if monitored else None
         rates = split_topic_rates(total_hz, total_bps, topic_pubs, known,
                                   measured_rates(entry))
+        if entry.get('status') == 'not_monitored':
+            rates = {n: {**r, 'basis': BASIS_NOT_MONITORED} if r['basis'] == BASIS_UNKNOWN else r
+                     for n, r in rates.items()}
         annotated = {**entry, 'source_count': len(topic_pubs),
+                     'heavy': is_heavy(str(entry.get('type') or '')),
                      'publishers': [{'node': n, **rates[n]} for n in topic_pubs]}
         annotated['subscribers'] = topic_subscribers(annotated, edges)
         result.append(annotated)

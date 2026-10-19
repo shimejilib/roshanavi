@@ -23,7 +23,7 @@
 **通信の見せ方**
 - エッジの太さ ∝ log(帯域)。エッジ上に `10.0 Hz · 1.2 MB/s` のラベルを付ける (ズームに応じて省略)。
 - **流れのアニメーション**: publisher → トピック → subscriber の向きに粒が流れ、粒の頻度が Hz に比例する (上限あり)。1 Hz 以下の低頻度トピックは、受信のたびにエッジを一瞬光らせる。
-- 状態の色分け: 通信中 / 停止 (`last_seen` > 3 s, 破線グレー) / 取りこぼしあり (`drop_ratio` > 0, 橙) / 非監視 (heavy 型, 点線)。
+- 状態の色分け: 通信中 / 停止 (`last_seen` > 3 s, 破線グレー) / 取りこぼしあり (`drop_ratio` > 0, 橙) / 計測していない (heavy 型など、点線)。
 - ノードの縁取りの濃さ = そのノードの入出力帯域の合計。
 
 **ROS 初心者向けの指摘 (診断)**
@@ -38,7 +38,7 @@
 **操作**
 - ノードやトピックをクリックすると、上流・下流の経路を強調し、それ以外を薄くする (フォーカスモード)。右ペインに詳細 (統計、エコー、注入、ログ) を出す。
 - 名前フィルタ、`/rosout` 等の非表示トグル、一時停止 (スナップショットを固定して観察する)。
-- **線でつなぐ** ([wiring.md](wiring.md)): roshanavi が動かす関数・クラス・変換・入力ノードには、左に入力口・右に出力口 (つなぎ口) が出る。チャンネル (トピック) から入力口へ、出力口からチャンネル・空いているところ (新しいチャンネル) へドラッグしてつなぐ。キーボードでも (つなぎ口を Tab で選んで Enter)。外部・ランチャーのノードは、どのチャンネルを使うかがコードで決まっているので口を出さない。
+- **線でつなぐ** ([wiring.md](wiring.md)): roshanavi が動かす関数・クラス・変換・入力ノードには、左に入力口・右に出力口 (つなぎ口) が出る。トピックから入力口へ、出力口からトピック・空いているところ (新しいトピック) へドラッグしてつなぐ。キーボードでも (つなぎ口を Tab で選んで Enter)。外部・ランチャーのノードは、どのトピックを使うかがコードで決まっているので口を出さない。
 
 **計測の限界 (UI に明記する)**
 - 帯域や Hz は、送信側は送信ノードごとの実測 (C++ 計測ノード, [measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)。Python の経路ではトピック単位)。subscriber ごとに実際に届いた量は、外部からは測れない (理論値, [map-and-traffic.md#送受信ごとのトラフィック・遅いトピック](map-and-traffic.md#送受信ごとのトラフィック遅いトピック-p45b))。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) を有効にすると、同じ PC のノードはトレースで受信・処理を実測する。
@@ -61,7 +61,7 @@
 - **差分更新**: 毎秒の要素リストを前回と比較し、追加・削除・data 更新だけを cytoscape に適用する。dagre レイアウトは **トポロジーが変わったときだけ** アニメーション付きで再実行する (統計の変化では位置は動かない)。新しい要素は隣接ノードの位置から生えるように置く。dagre は決定的なので、変化のない部分の位置はほぼ保たれる。**ドラッグした位置は固定 (ピン留め, #8)**: ユーザーがドラッグした頂点 (ノード・トピック) は `dragfree` で位置を記録し、以後の dagre レイアウトでは `transform` でその位置に戻す (他の頂点だけが動く)。一度消えて戻ってきた頂点にも効く。位置は **プロジェクトごと** に localStorage (`roshanavi.mapPins.v1:<プロジェクトのパス>`、最大 500 件、保存・読み込みは try/catch で、使えない環境ではそのページの間だけ有効) に保存し、再読み込みや再起動後も保つ。プロジェクトを切り替えると、そのプロジェクトのピンに差し替える。**空白の右クリック「整列し直す」はすべてのピンを外して** 最初から配置し直す。純ロジックは `graph/pins.ts`、プロジェクトの取得は `graph/useProjectKey.ts`。
 - **流れの粒は canvas オーバーレイで描く**: cytoscape のスタイル (例: `line-dash-offset`) をフレームごとに変えると、そのたびに cytoscape がグラフ全体を再描画するため、200 要素 × 60 fps では重い。オーバーレイなら cytoscape の再描画はデータ更新時 (1 Hz) だけで、粒は色ごとに 1 本の Path2D でまとめて描く。エッジ端点 (モデル座標) はノード移動時だけ再計算してキャッシュし、描画時に pan/zoom で変換する。粒の頻度は `min(6, 1 + sqrt(hz - 1))` 個/秒、総数上限 1200。計測 (Playwright, headless Chromium, 180 要素 + 粒): 約 60 fps (`web/e2e/perf.spec.ts`)。
 - **低頻度 (≤ 1 Hz)**: 連続放出せず、`recent_count > 0` の tick ごとにエッジを光らせて 1 粒流す (実際の受信に同期)。
-- **状態**: 通信中 = 青実線 / 停止 (`last_seen` > 3 s) = 灰破線 / 取りこぼし (`drop_ratio` > 0) = 橙 / 非監視 = 灰点線 / QoS 不一致 = 赤破線 + 終端 T 字。QoS 不一致は受信側エッジ (topic → sub) に付け、ホバーで理由を表示する。粒は流さない。
+- **状態**: 通信中 = 青実線 / 停止 (`last_seen` > 3 s) = 灰破線 / 取りこぼし (`drop_ratio` > 0) = 橙 / 計測していない = 灰点線 / QoS 不一致 = 赤破線 + 終端 T 字。QoS 不一致は受信側エッジ (topic → sub) に付け、ホバーで理由を表示する。粒は流さない。
 - **太さ**: エッジ = `1.5 + 1.2·log10(1 + B/1000)` px (上限 10)、ノード縁取り = `1 + log10(1 + 入出力帯域合計/1000)`。
 - **ラベル**: `10.0 Hz · 1.2 KB/s`。cytoscape の `min-zoomed-font-size` でズームアウト時に自動で省略する。
 - **一時停止**: 表示中のスナップショットと粒を固定する。裏では受信を続け、再開時に最新へ追従する。
@@ -109,7 +109,7 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 
 ## 実装メモ (P4: メディア・ブラウザ入力・録画)
 - タブ: **録画** を追加 (Graph / Traffic / Inject / Launcher / 録画)。
-- **注入タブ**: 送り方に「メディアファイル (画像・動画・音声)」。型の欄は空でもよく、トピックの型の自動判定結果 (または「まだ誰も使っていない」「この型は作れない → bag を使う」) を表示する。ファイルの種類 (画像 / フォルダ / 動画 / 音声) に応じて、周期・fps、区間、リサイズ、ピクセル形式・圧縮形式、frame_id、CameraInfo (送り先を表示) とキャリブレーション、サンプルレート・チャンネル・チャンク長 (何 ms ごとかを表示)、揺らぎ・欠落、AudioInfo を出し分ける (`media/MediaFields.tsx`, 純ロジック `media/buildMediaRequest.ts`)。
+- **注入タブ**: 送り方に「メディアファイル (画像・動画・音声)」。型の欄は空でもよく、トピックの型の自動判定結果 (または「まだ誰も使っていない」「この型は作れない → bag を使う」) を表示する。ファイルの種類 (画像 / フォルダ / 動画 / 音声) に応じて、周期・fps、区間、リサイズ、ピクセル形式・圧縮形式、frame_id、CameraInfo (送り先を表示) とキャリブレーション、サンプルレート・トピック・チャンク長 (何 ms ごとかを表示)、揺らぎ・欠落、AudioInfo を出し分ける (`media/MediaFields.tsx`, 純ロジック `media/buildMediaRequest.ts`)。
 - **ブラウザ入力パネル** (注入タブの右列、`media/CapturePanel.tsx`): マイク / カメラ、デバイス選択、送信先トピック、型 (自動判定 / 対応型から選択)、カメラは解像度・fps とプレビュー、マイクはサンプルレートと入力レベルメーター (RMS → dBFS、-60 dB を 0 %、ゆっくり下がる)。送信数・間引き数と、stamp の遅れの注意書き。AudioWorklet のコードは Blob URL で読み込む (追加のビルド設定なし)。送信の詰まり (bufferedAmount > 2 MB) はフレームを飛ばす。純ロジック: `media/pcm.ts` (float→int16、ダウンミックス、チャンク化)、`media/level.ts`、`media/captureRequest.ts`。
 - **右ペイン (トピック)**: 画像の型なら画像ビューア、音声の型なら波形 (直近 2 秒、canvas に min/max) と再生 (WebAudio で隙間なく予約再生)。開いている間だけサーバーが購読する。音声の型ではエコーは自動で始めない (配列が大きいため)。純ロジック: `media/waveform.ts`。
 - **録画タブ** (`recordings/`): トピックのチェックリスト、プリセット「今の注入・ブラウザ入力のトピック」(実行中のジョブのトピック + CameraInfo / AudioInfo) と「自分のノードの出力」(役割 mine のノードの publish 先、内部トピックを除く) (`recordings/presets.ts`)、名前、録画開始 / 停止、経過時間と空き容量の警告。一覧はサイズ・長さ・メッセージ数・トピックごとの件数、再生 (bag モードのジョブを開始)、削除 (確認ダイアログ)。
@@ -134,7 +134,7 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 | エッジ | QoS の詳細、届かない理由 (両側の QoS の表と、診断・送信者なし・最近流れていない の平易な説明) |
 | 空白 | ここにトピックを追加、ノードを起動 (ランチャーの追加画面へ)、整列し直す、全体を表示 |
 - 無効な項目は理由をツールチップと小さな文で示す。停止・再起動は従来の確認ダイアログ (`useNodeControl`) を通る。「入出力だけ表示」「上流・下流だけ表示」は地図を絞り込み (`graph/isolate.ts`)、ツールバーの「すべて表示」で戻る。
-- **パラメータのダイアログ** (`params/`、「設定値 (パラメータ) を見る・変更する」): 並べ方は `paramLayout.arrangeParams`。クラスノードは `__init__` の引数の書いた順 (サーバーの `init_order`)、それ以外のノードは名前順 (引数に無い設定値は最後に名前順)。ROS がどのノードにも用意する設定値 (`use_sim_time`、`start_type_description_service`、`qos_overrides.*`) は、折りたたんだ「ROS の内部の設定値」(個数つき) にまとめる (開くと同じ表で、変更もできる)。ノード自身の設定値が無いときは「このノード自身の設定値はありません」と出す。
+- **パラメータのダイアログ** (`params/`、「パラメータを見る・変更する」): 並べ方は `paramLayout.arrangeParams`。クラスノードは `__init__` の引数の書いた順 (サーバーの `init_order`)、それ以外のノードは名前順 (引数に無いパラメータは最後に名前順)。ROS がどのノードにも用意するパラメータ (`use_sim_time`、`start_type_description_service`、`qos_overrides.*`) は、折りたたんだ「ROS の内部のパラメータ」(個数つき) にまとめる (開くと同じ表で、変更もできる)。ノード自身のパラメータが無いときは「このノード自身のパラメータはありません」と出す。
 - ダイアログは `AppState.dialog` + `DialogHost` で 1 つずつ出す (入力ノード / パラメータ / 型の定義 / エッジ / launch 書き出し)。
 
 **ノードの入出力 (`detail/NodeIO.tsx`, 純関数 `detail/nodeIO.ts`)**: ノードをクリックすると右ペインに「受信しているデータ」「送信しているデータ」をトピックごとに出す (型・Hz・最新メッセージ。画像はビューア、音声は波形)。表示しているのは **トピックに流れているデータ** であり、そのノードが受け取ったとは限らないことを明記する。QoS 不一致 (診断の subscriber がこのノード) は「このノードには届いていません」。各トピックは折りたたみで、開いている間だけ購読する。最初の 3 つ (heavy 型と届かないものを除く) を自動で開く。heavy 型 (Image など) は開いたときだけ表示する。`/rosout` などの内部トピックは出さない。
@@ -167,7 +167,7 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 - i18n: `i18n/messagesNodes.ts`, `messagesImport.ts`, `messagesTraffic.ts`。スクリーンショット: [`node-list.png`](../images/node-list.png), [`lifecycle.png`](../images/lifecycle.png), [`launch-import-preview.png`](../images/launch-import-preview.png) (`e2e/nodes.spec.ts`)。
 
 ## トラフィックの送受信ごとの表示 (P4.5b)
-- トラフィックタブの各トピック行は ▸ で展開でき (既定は折りたたみ、「すべて展開」で全部)、送信ノードごとの行 (Hz・帯域・根拠: 実測 / 推定 / 設定値 / 分けられない、`publishers[]`) と受信ノードごとの行 (理論値。ⓘ に「受信側のノードの中で数えた値ではない」。QoS が合わなければ「届いていません」、`subscribers[]`) を出す。
+- トラフィックタブの各トピック行は ▸ で展開でき (既定は折りたたみ、「すべて展開」で全部)、送信ノードごとの行 (Hz・帯域・根拠: 実測 / 推定 / パラメータ / 分けられない / 計測していません、`publishers[]`) と受信ノードごとの行 (理論値。ⓘ に「受信側のノードの中で数えた値ではない」。QoS が合わなければ「届いていません」、`subscribers[]`) を出す。
 - 「トピック別 / ノード別」の切り替え: ノード別は同じ行をノードごとにまとめ (送信 → 受信、トピック順)、「このノードが何を送って何を受けているか」を見る。純ロジック `traffic/endpoints.ts`。
 - 地図の受信側エッジの値も同じ理論値を使う (一部の送信者だけ QoS が合うときに表と地図がずれない)。C++ 計測ノード ([measurement.md#C++ 計測ノード](measurement.md#c-計測ノード-roshanavi_probe-p46)) が動いていれば送信側は送信ノードごとの実測 (`実測` バッジ、ⓘ に「このノードが送った分だけ数えた値」)。詳細計測モード ([measurement.md#詳細計測モード](measurement.md#詳細計測モード-トレース計測-p47)) では、トレースが測れた受信行が `basis: measured` になり、バッジは `実測(トレース)`、行に「受信 / 処理 / 処理時間 (平均 / p95 / 最大)」と、追いついていなければ「受け取っていますが処理が追いついていません」を出す。スクリーンショット: `traffic-tracing.png` (`e2e/tracing.spec.ts`)。
 - Hz の後ろの「(受信時刻で概算)」は、止まったトピック (hz 0 / `stale`) には付けない (`timing.hzBasisNote`)。
@@ -213,9 +213,9 @@ scripts/e2e.sh                               # Playwright を隔離スタック�
 
 ## 実装メモ (地図の上での配線, #47)
 設計と決定は [wiring.md](wiring.md)。ここは画面の部品だけ。
-- `web/src/wiring/`: `ports.ts` (つなぎ口のモデル、純関数)、`compat.ts` (種類の互換性。バックエンドの `data_kinds.wire_compat` と同じ規則)、`edit.ts` (仕様を書き換えた新しいコピーを作る。断る理由もここ)、`drop.ts` (離した先の判定と結果)、`keyboard.ts` (キーボードの手順)、`timing.ts` / `CallTiming.tsx` (呼ばれ方)、`useWiring.ts` (保存 → 再起動 → 知らせ)、`useArgNames.ts` (引数名)、`PortOverlay.tsx` (地図に重ねるつなぎ口・取っ手・仮の線・ツールチップ・知らせ)、`WireDialog.tsx` (つなぐ先の一覧)、`WireBits.tsx` (選んだ線の操作、新しいチャンネルの名前)、`PubSubPrimer.tsx` (1 枚絵)。
+- `web/src/wiring/`: `ports.ts` (つなぎ口のモデル、純関数)、`compat.ts` (種類の互換性。バックエンドの `data_kinds.wire_compat` と同じ規則)、`edit.ts` (仕様を書き換えた新しいコピーを作る。断る理由もここ)、`drop.ts` (離した先の判定と結果)、`keyboard.ts` (キーボードの手順)、`timing.ts` / `CallTiming.tsx` (呼ばれ方)、`useWiring.ts` (保存 → 再起動 → 知らせ)、`useArgNames.ts` (引数名)、`PortOverlay.tsx` (地図に重ねるつなぎ口・取っ手・仮の線・ツールチップ・知らせ)、`WireDialog.tsx` (つなぐ先の一覧)、`WireBits.tsx` (選んだ線の操作、新しいトピックの名前)、`PubSubPrimer.tsx` (1 枚絵)。
 - 地図 (`graph/GraphView.tsx`) は `overlay` (cytoscape ができたら重ねる部品) と `onWireTap` (つなぎ口に付いた線のクリック) を受け取る。`graph/model.ts` はつなぎ口のあるノードに `pw` / `ph` (箱の大きさ)、線に `sep` / `tep` (端の位置) と `port` (どの口の線か) を付ける。
-- 作成画面: 「チャンネルは地図で線を引いてつなぐ (ここは空にする)」(`function-map-later` / `class-map-later`)、呼ばれ方の図 (`function-timing`、`class-method-<m>-timing`)。チャンネルが空の口は「つながっていない口」として保存する。
+- 作成画面: 「トピックは地図で線を引いてつなぐ (ここは空にする)」(`function-map-later` / `class-map-later`)、呼ばれ方の図 (`function-timing`、`class-method-<m>-timing`)。トピックが空の口は「つながっていない口」として保存する。
 - 凡例: 「● つなぎ口」と「しくみの 1 枚絵」ボタン (`legend-primer`)。
 - 文言: `i18n/messagesWiring.ts`。用語集: `i18n/glossary.ts` ([wiring.md#4](wiring.md#4-言葉の総点検))。スタイル: `styles-wiring.css`。
 - スクリーンショット (`e2e/wiring.spec.ts`): [`wiring-map.png`](../images/wiring-map.png)、[`wiring-drag.png`](../images/wiring-drag.png)、[`wiring-refused.png`](../images/wiring-refused.png)、[`wiring-keyboard.png`](../images/wiring-keyboard.png)、[`wiring-timing.png`](../images/wiring-timing.png)、[`wiring-class.png`](../images/wiring-class.png)、[`wiring-primer.png`](../images/wiring-primer.png)。

@@ -23,6 +23,7 @@ from .ros_runtime import is_self_node
 
 BASIS_THEORETICAL = 'theoretical'
 BASIS_NOT_DELIVERED = 'not_delivered'
+BASIS_NOT_MONITORED = 'not_monitored'  # the topic is not measured: no number, not "nothing arrives"
 
 
 def _round(value: Optional[float], digits: int) -> Optional[float]:
@@ -62,12 +63,15 @@ def topic_subscribers(entry: Mapping[str, Any], edges: Iterable[Mapping[str, Any
     monitored = entry.get('monitored') and entry.get('status') == 'ok'
     total_hz = entry.get('hz') if monitored else None
     total_bps = entry.get('bytes_per_sec') if monitored else None
+    off = entry.get('status') == 'not_monitored'
     result, seen = [], set()
     for edge in own:
         if edge.get('dir') != 'sub' or edge['node'] in seen:
             continue
         seen.add(edge['node'])
-        result.append({'node': edge['node'], **subscriber_rate(
-            edge.get('qos') or {}, pub_edges, pub_rates, total_hz, total_bps,
-            prefer_sum=entry.get('measurement') == 'probe')})
+        rate = subscriber_rate(edge.get('qos') or {}, pub_edges, pub_rates, total_hz, total_bps,
+                               prefer_sum=entry.get('measurement') == 'probe')
+        if off and rate['basis'] == BASIS_THEORETICAL and rate['hz'] is None:
+            rate = {**rate, 'basis': BASIS_NOT_MONITORED}
+        result.append({'node': edge['node'], **rate})
     return result

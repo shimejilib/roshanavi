@@ -5,7 +5,6 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import type { GraphTopic, Target } from '../api/types';
 import type { KindCatalog } from '../datakind/kinds';
 import { t } from '../i18n';
-import { termPair } from '../i18n/glossary';
 import { flowStep, initialFlow, wireOptions, type FlowKey, type FlowState, type WireChoice } from './keyboard';
 import { portTitle } from './PortOverlay';
 import type { NodePorts, Port } from './ports';
@@ -69,7 +68,7 @@ export function WireDialog({ np, port, target, topics, catalog, onChoose, onClos
             {group && <> — {timingText(group.timing)}</>}</p>
           {state.step === 'choose' ? (
             <>
-              <p className="small" id={`${titleId}-help`}>{t('wiring.dialog.help', { channel: termPair('topic') })}</p>
+              <p className="small" id={`${titleId}-help`}>{t('wiring.dialog.help')}</p>
               <ul ref={listRef} className="wire-options" role="listbox" tabIndex={0} aria-labelledby={titleId} aria-describedby={`${titleId}-help`}
                 aria-activedescendant={`${titleId}-opt-${state.focus}`} data-testid="wire-options">
                 {options.map((o, i) => (
@@ -87,7 +86,7 @@ export function WireDialog({ np, port, target, topics, catalog, onChoose, onClos
             <div className="wire-confirm" data-testid="wire-confirm">
               {chosen.choice.kind === 'new' ? (
                 <label>
-                  {t('wiring.dialog.newName', { channel: termPair('topic') })}
+                  {t('wiring.dialog.newName')}
                   <input value={state.newName} onChange={(e) => dispatch({ type: 'rename', name: e.target.value })} data-testid="wire-new-name" spellCheck={false} />
                 </label>
               ) : chosen.choice.kind === 'disconnect' ? (

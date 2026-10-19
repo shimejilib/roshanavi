@@ -22,7 +22,7 @@ describe('row text', () => {
 
   it('explains why a checkbox is disabled, with the import hint', () => {
     expect(disabledReason(row('/t'))).toBeNull();
-    expect(disabledReason(row('/x', { control: 'none', reason: 'external' }))).toContain('起動セット (launch ファイル) を取り込むと');
+    expect(disabledReason(row('/x', { control: 'none', reason: 'external' }))).toContain('launch ファイルを取り込むと');
     expect(disabledReason(row('/x', { control: 'none', reason: 'invalid', problem: 'gone' }))).toContain('gone');
   });
 });
