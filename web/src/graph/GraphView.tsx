@@ -17,12 +17,15 @@ import { LOW_RATE_HZ } from './particles';
 import { loadPins, NO_PINS, savePins, withPin, type Pins } from './pins';
 import { stylesheet, type Palette } from './style';
 import { useParticles } from './useParticles';
+import { MapZoomControl } from './MapZoomControl';
+import { MAX_ZOOM, MIN_ZOOM } from './zoomMath';
 
 cytoscape.use(dagre);
 
 const FLASH_MS = 350;
 const LAYOUT_MS = 450;
 const MAX_FIT_ZOOM = 1.3; // small graphs should not be blown up to fill the screen
+const FIT_PADDING = 30;
 
 export interface GraphViewProps {
   elements: Element[];
@@ -60,6 +63,12 @@ function capZoom(cy: Core): void {
     cy.zoom(MAX_FIT_ZOOM);
     cy.center();
   }
+}
+
+/** 全体を表示: the top bar button and the zoom control on the map both call this. */
+function fitAll(cy: Core): void {
+  cy.fit(cy.elements(), FIT_PADDING);
+  capZoom(cy);
 }
 
 /** Automatic layout; dragged ("pinned") vertices keep their position. */
@@ -141,8 +150,8 @@ export function GraphView(props: GraphViewProps) {
       container: containerRef.current,
       style: stylesheet(props.palette),
       wheelSensitivity: 0.3,
-      minZoom: 0.1,
-      maxZoom: 4,
+      minZoom: MIN_ZOOM,
+      maxZoom: MAX_ZOOM,
       selectionType: 'single',
     });
     cy.on('tap', (evt: EventObject) => {
@@ -229,10 +238,7 @@ export function GraphView(props: GraphViewProps) {
 
   useEffect(() => {
     const cy = cyRef.current;
-    if (cy && props.fitSignal > 0) {
-      cy.fit(cy.elements(), 30);
-      capZoom(cy);
-    }
+    if (cy && props.fitSignal > 0) fitAll(cy);
   }, [props.fitSignal]);
 
   const edges = useMemo(
@@ -249,6 +255,7 @@ export function GraphView(props: GraphViewProps) {
       <canvas ref={canvasRef} className="graph-particles" aria-hidden="true" />
       <MapOutline elements={props.elements} />
       {cyState && props.overlay?.(cyState)}
+      {cyState && <MapZoomControl cy={cyState} onFit={fitAll} />}
       {menu && props.renderMenu?.(menu, () => setMenu(null))}
       {tooltip && (
         <div className="graph-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y + 12 }}>

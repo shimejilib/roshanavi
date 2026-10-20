@@ -1,0 +1,13 @@
+/* Zoom control in the bottom-right corner of the map (docs/design/ui.md "地図の操作").
+   Below the wiring layer (z-index 1: ports, hints, prompts, notices), so a port or the "作ってつなぐ" prompt
+   that lands on it wins; the layer itself does not take clicks, so the buttons stay usable. */
+.map-zoom {
+  position: absolute; right: 8px; bottom: 8px; z-index: 0; display: grid; gap: 4px; padding: 4px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.12); font-size: 12px;
+}
+.map-zoom-row { display: flex; align-items: center; gap: 4px; }
+.map-zoom button { min-width: 28px; height: 26px; padding: 0 8px; font-size: 12px; line-height: 1; }
+.map-zoom-row:first-child button { font-size: 16px; padding: 0; width: 28px; }
+.map-zoom-row:last-child button:last-child { flex: 1; white-space: nowrap; }
+.map-zoom-percent { flex: 1; min-width: 44px; text-align: center; font-family: var(--mono); font-variant-numeric: tabular-nums; color: var(--text); }

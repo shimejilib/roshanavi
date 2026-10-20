@@ -96,7 +96,7 @@ test('wire a function on the map by drag and by keyboard; incompatible channels 
   await expect(input).toHaveAttribute('aria-label', /入力口 text \(文字列\)、まだつながっていません/);
   await expect(output).toHaveAttribute('aria-label', /出力口 戻り値 \(文字列\)/);
   await page.waitForTimeout(1500); // layout animation
-  const fit = () => page.getByRole('button', { name: '全体を表示' }).click(); // new nodes may land off-screen
+  const fit = () => page.getByTestId('fit-all').click(); // new nodes may land off-screen
   await fit();
 
   // 2. Drag the channel /chatter (its handle) into the input port.

@@ -61,7 +61,7 @@ test('busy_demo multi + default: high CPU on the map, ROS row in the リソー�
   await expect.poll(async () => (await elementData()).label ?? '', { timeout: 20_000 }).toContain('CPU');
   expect((await elementData()).label).not.toContain('推定'); // started by the Launcher: exact
   if (busy) await expect.poll(async () => (await elementData()).load, { timeout: 10_000 }).toMatch(/^(mid|high)$/);
-  await page.getByRole('button', { name: '全体を表示' }).click();
+  await page.getByTestId('fit-all').click();
   await clickElement(page, `n:${BUSY_NODE}`);
   const pane = page.getByTestId('node-resources');
   await expect(pane).toBeVisible({ timeout: 10_000 });

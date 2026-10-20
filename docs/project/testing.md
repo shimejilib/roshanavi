@@ -272,6 +272,8 @@ ROS はホストに入れず、すべて Docker で動かす (詳細は `CLAUDE.
 | J-28 | サービスの待ち時間と読み取りのやり直し (unit、偽のクライアント) | 既定の待ち時間は 5 秒 (パラメータ・ライフサイクル)。応答が来ないと一覧・describe・get は 1 回だけやり直して 2 回目の答えを返し、それでも来なければ `param_timeout`。`set_parameters` はやり直さない (1 回だけ呼ぶ)。サービスが無い (`unavailable`) ときはやり直さない。`--service-timeout` は既定 5、0 は拒否 | ✅ (`test_service_call.py`) |
 | J-29 | パラメータの並び順 (サーバー) | クラスノードの `GET .../parameters` に `init_order` (`__init__` の引数の書いた順)。クラスでないノード・未登録・読めないモジュールは `null` でエラーにならない | ✅ (`test_params.py`) |
 | J-30 | パラメータのダイアログの並べ方・折りたたみ (vitest) | クラスノードは `__init__` の順、引数に無いものは最後に名前順、それ以外のノードは名前順。`use_sim_time`・`start_type_description_service`・`qos_overrides.*` は「ROS の内部のパラメータ」に入り、入力は変わらない | ✅ (`params/paramLayout.test.ts`) |
+| J-31 | 地図のズーム操作の計算 (vitest) | ＋ は ×1.25、− は ÷1.25。最大 4・最小 0.1 に収める。最大で ＋、最小で − が無効。倍率は整数の % (0.8 → 80%)。数でない値は 100% 扱い | ✅ (`graph/zoomMath.test.ts`) |
+| J-32 | E2E: 地図の右下のズーム操作 | ＋ で倍率が上がり % が合う (中心は動かない)、− で下がる、100% で 100%、全体を表示でツールバーの同名ボタンと同じ結果、ホイールでも % が追従、最大で ＋・最小で − が無効。右下に収まり凡例と重ならない、Tab で届いてフォーカスの輪郭が出る、ダーク配色でも出る。スクリーンショット `docs/images/map-zoom-controls.png` | ✅ (`e2e/map-zoom.spec.ts`) |
 
 ### K. ノード一覧・lifecycle・launch の分解取り込み・送受信ごとのトラフィック (P4.5b)
 

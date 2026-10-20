@@ -42,7 +42,7 @@ test('perception demo: video -> image_filter -> blob_detector, viewer shows the 
   await expect(outline.locator('[data-id="n:/blob_count"]')).toHaveAttribute('data-role', 'transform');
   await expect(outline.locator('[data-id="t:/camera/detections"]')).toHaveCount(1, { timeout: 30_000 });
   await page.waitForTimeout(3000); // layout animation
-  await page.getByRole('button', { name: '全体を表示' }).click();
+  await page.getByTestId('fit-all').click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOTS}perception-demo-map.png` });
 

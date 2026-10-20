@@ -13,6 +13,7 @@ import './styles-tour.css';
 import './styles-resources.css';
 import './styles-takeover.css';
 import './styles-wiring.css';
+import './styles-zoom.css';
 
 const root = document.getElementById('root');
 if (!root) throw new Error('#root element missing from index.html');

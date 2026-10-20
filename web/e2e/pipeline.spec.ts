@@ -60,7 +60,7 @@ test('medium pipeline: 20 nodes on the map with flowing edges, one process each'
   await expect(outline.locator('[data-id="e:pub:/src_0:/pipe/src_0"]')).toContainText('Hz', { timeout: 30_000 });
   await expect(outline.locator('[data-id="e:pub:/relay_3_2:/pipe/relay_3_2"]')).toContainText('Hz', { timeout: 30_000 });
   await page.waitForTimeout(3000); // layout animation + particles
-  await page.getByRole('button', { name: '全体を表示' }).click();
+  await page.getByTestId('fit-all').click();
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${SHOTS}pipeline-medium-map.png` });
 

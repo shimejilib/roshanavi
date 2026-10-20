@@ -114,7 +114,7 @@ export function GraphTab({ active }: { active: boolean }) {
         <button type="button" onClick={() => setPaused(!paused)} aria-pressed={paused}>
           {paused ? `▶ ${t('graph.resume')}` : `⏸ ${t('graph.pause')}`}
         </button>
-        <button type="button" onClick={commands.fit}>{t('graph.fit')}</button>
+        <button type="button" onClick={commands.fit} data-testid="fit-all">{t('graph.fit')}</button>
         <WindowSelect />
         {paused && <span className="paused-banner">{t('graph.paused')}</span>}
         <IsolationBanner />

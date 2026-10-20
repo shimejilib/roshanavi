@@ -124,7 +124,7 @@ h1, h2, h3, h4 { margin: 0; }
 }
 .legend {
   position: absolute; left: 8px; bottom: 8px; margin: 0; padding: 6px 10px; list-style: none;
-  display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 16px); font-size: 11px; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 4px 12px; max-width: calc(100% - 196px); font-size: 11px; color: var(--muted);
   background: color-mix(in srgb, var(--surface) 85%, transparent); border: 1px solid var(--border); border-radius: var(--radius);
 }
 .legend li { display: inline-flex; align-items: center; gap: 4px; }
